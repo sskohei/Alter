@@ -1,0 +1,28 @@
+# GitHub Issueバックログ（実装開始順）
+
+1 Issueは1〜2日でレビューできる粒度。ラベルは`area:web|api|db|worker|bot|design`、`phase:P1..P4`、`priority:P0..P2`。受け入れ基準をテスト可能な形で書き、依存Issueをリンクする。担当記号は [チーム運営](17-team-development.md)。
+
+| 順 | Issue / 主担当 | 成果物と受け入れ | 依存 |
+|---:|---|---|---|
+| 1 | Monorepo/CI雛形 B | uv/pnpm、Ruff/TypeScript/pytest、空DB migration CIが通る | なし |
+| 2 | ブランド・UIトークン D | Figmaの色/文字/余白、Button/Form/Card 4状態、PC/mobile | なし |
+| 3 | AuthとユーザーAPI契約 B | OpenAPI `GET/PATCH /users/me`、401/200/所有権例 | 1 |
+| 4 | Next.js SSRとログイン F | Google/GitHubのコールバック、ログアウト、401復帰のMock/E2E | 1,3 |
+| 5 | DB基礎DDL/RLS B | profiles/agents/profile/settings、匿名直接DML拒否、FK/UNIQUE | 1 |
+| 6 | オンボーディングFigma D | 設問、公開同意、手動入力、エラー/空/モバイル | 2 |
+| 7 | AI作成/承認API B | 下書き/版/承認、未承認AIは交流不可 | 3,5 |
+| 8 | AI作成・編集UI F | Mock APIで下書き→確認→承認、409/422表示 | 4,6,7の契約 |
+| 9 | ダッシュボードFigma D | 状態/履歴/予算/通知の4状態 | 2 |
+| 10 | 会話/ジョブDDLとScheduler B | 15分Cron、同意/ブロック/費用/同時実行で1件予約 | 5,7 |
+| 11 | Worker会話生成 B | 偽LLMで8ターン上限、保存、再試行、費用停止 | 10 |
+| 12 | 会話/通知API B | 参加者のみ一覧/詳細、完了通知1件 | 10,11 |
+| 13 | 会話・設定画面 F | 15〜30秒Polling、停止/予算、空/エラー/モバイル | 8,9,12の契約 |
+| 14 | Discord同意/連携設計 D | ギルド別公開確認、不可逆投稿注意、連携状態 | 2 |
+| 15 | Discord OAuth/コマンド B | ID紐付け、pause/resume、管理者setup、未連携拒否 | 5,7 |
+| 16 | Discord outbox投稿 B | 両者ギルド同意だけ投稿、停止復帰、送信不明を保留 | 11,15 |
+| 17 | Discord設定UI F | 連携/解除/ギルド別同意状態とBotコマンド案内、権限・エラー状態 | 14,15の契約 |
+| 18 | 10人MVP E2E F | 作成→交流→Web/Discord表示、他人データ不可、停止/復旧 | 11〜17 |
+| 19 | 記憶/関係性簡易版 B | 出典つき要約、削除、回数再集計 | 11 |
+| 20 | 記憶/関係性UI F | 削除確認と相手リスト、0件/エラー | 19の契約 |
+
+最初の並行着手はB: Issue 1/3/5、F: Issue 4の画面骨格とMock、D: Issue 2/6/9。Bの実装待ちでもFはIssue 3のOpenAPI契約で進める。P3のDiscord公開はIssue 16を完了条件とし、Botを単に接続するだけではMVP完了としない。

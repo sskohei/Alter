@@ -1,0 +1,63 @@
+# Local credentials and environment overrides. Keep .env.example files tracked.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+.envrc
+
+# Node.js / Next.js / Vercel
+node_modules/
+.next/
+.turbo/
+.vercel/
+out/
+dist/
+build/
+*.tsbuildinfo
+*.log
+coverage/
+playwright-report/
+test-results/
+
+# Python / uv / tests
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Supabase CLI local state (migrations remain tracked)
+.supabase/
+supabase/.branches/
+supabase/.profiles/
+supabase/.temp/
+
+# Local databases, backups, and secrets
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+*.pem
+*.p12
+*.pfx
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Lockfiles such as pnpm-lock.yaml and uv.lock must be committed.
