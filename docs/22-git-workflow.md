@@ -71,3 +71,15 @@ git push
 ## Issueと変更順
 
 Issueには主担当、目的、受け入れ条件、依存Issue、影響するAPI/DB/Figmaを記す。API契約やDB migrationを先に小さなPRで確定し、フロントは同じ契約のMockで並行実装する。破壊的なDB変更は、追加→アプリ移行→旧列削除を別PR・別デプロイで進める。仕様判断が変わるPRでは [ADR](decisions/architecture-decisions.md) と関連する仕様書を同時に更新する。
+
+## GitHub設定と必須チェック（Issue #3）
+
+2026-11-02に[MainRule](https://github.com/sskohei/Alter/rules/26346738)を確認・更新した。作成直後は`disabled`で、承認数0・必須CIなしだった。現在は`active`、対象は`refs/heads/main`、bypass対象はなし。次をGitHub側で強制する。
+
+- PR経由の変更、作成者以外1名の承認、追加push時の古い承認の破棄、レビュー会話の解決。
+- 必須チェック **`CI required`**（GitHub Actions提供）。ベースブランチの最新変更を取り込んでからマージする。全5ジョブ成功が必要で、検査内容と将来の追加項目は[テスト戦略](16-testing-strategy.md)を参照。
+- `main`の削除・force push禁止とlinear history。PRのマージ方法はSquashのみ。
+
+リポジトリ全体もSquash mergeだけを許可し、マージ後のブランチ自動削除を有効化した。`Restrict updates`はPRマージも禁止してしまうため使用せず、必須PR規則で直接pushを禁止する。署名コミット必須化は本Issueの要件に含めず、署名環境を前提にしない。必須チェック名を変更する場合は、同時にMainRuleのチェック名を更新し、GitHub Actionsのチェック結果と一致することを確認する。
+
+PR本文には[テンプレート](../.github/pull_request_template.md)を使い、Issue・受け入れ条件・実行結果・未検証事項・UI/API/DB差分を埋める。Actionsが成功しても別の担当者の承認前にはマージしない。GitHub標準secret scanningが利用できない制約とGitleaksによる代替運用は[テスト戦略](16-testing-strategy.md)に記録している。
