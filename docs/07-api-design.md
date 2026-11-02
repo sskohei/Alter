@@ -62,3 +62,7 @@
 ## 契約運用
 
 バックエンド担当がPydantic schemaとOpenAPIを先にPRにし、フロント担当は生成クライアントを使う。Mock serverは同じOpenAPIから作る。互換性を壊す変更は`/api/v2`または事前の移行期間を設ける。`request_id`と`Idempotency-Key`は監査ログに記録し、本文・秘密を除外する。認証/認可の実装順は [ロードマップ](18-development-roadmap.md)。
+
+## 開発基盤の運用エンドポイント
+
+Issue #2の雛形では、上記の業務APIは未実装。`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）のみ提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。

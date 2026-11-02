@@ -1,0 +1,32 @@
+[project]
+name = "alter-workspace"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[tool.uv]
+required-version = "==0.13.6"
+
+[tool.uv.workspace]
+members = ["apps/api", "apps/worker", "apps/discord_bot", "apps/scheduler", "backend/alter_domain"]
+
+[tool.uv.sources]
+alter-domain = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.28", "ruff>=0.14", "mypy>=1.18"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+packages = ["alter_domain", "alter_api", "alter_worker", "alter_discord_bot", "alter_scheduler"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

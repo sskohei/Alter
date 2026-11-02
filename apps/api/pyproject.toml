@@ -1,0 +1,12 @@
+[project]
+name = "alter-api"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = ["alter-domain", "fastapi>=0.120", "uvicorn[standard]>=0.38"]
+
+[project.scripts]
+alter-api = "alter_api.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

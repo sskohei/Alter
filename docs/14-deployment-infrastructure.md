@@ -13,14 +13,16 @@ packages/api-client/      OpenAPI生成TypeScriptクライアント
 supabase/migrations/      SQL/RLS唯一のDDL正本
 docs/                     本仕様と意思決定
 .github/workflows/        lint/test/OpenAPI差分
-render.yaml               Render Blueprint
+render.yaml               Render Blueprint（デプロイIssueで追加予定）
 pnpm-workspace.yaml
 pyproject.toml            uv workspace
-docker-compose.yml        ローカル補助（必要時）
-.env.example              変数名のみ
+docker-compose.yml        ローカル補助（任意、現在は未使用）
+.env.example              ダミー値・取得先・必須/任意
 ```
 
 `uv`でPythonの共通パッケージをworkspace依存にし、Render各サービスはrepo rootをbuild contextとして同じlockfileを使う。`pnpm`もlockfileをrootに置く。ローカルはSupabase CLIでDB/Authを起動し、`uv run`でAPI/Worker/Bot（Botはテスト用ギルド）、`pnpm --filter web dev`でWebを起動する。`docker-compose.yml`は任意の`api`/`worker`/`bot`プロファイルと環境変数読み込みを定義し、DB/AuthはSupabase CLIのローカル環境を参照する。Compose内に別のDBを作らない。CIではRuff、mypy、pytest、ESLint、TypeScript、Vitest、Playwrightの必要ゲートを実行する。
+
+Issue #2で開発用雛形を配置済み。固定バージョン、初回設定、起動・停止・reset、Mockの制約は[README](../README.md#ローカル開発最初に実行)を参照。現時点の各入口は起動確認用で、業務処理・認証・本番デプロイは後続Issueで実装する。
 
 ## 配置と起動
 
