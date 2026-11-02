@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-02。`docs/`が実装契約で、現在はIssue #2の開発用Monorepo雛形を実装済み。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
+更新日: 2026-11-02。`docs/`が実装契約で、現在は開発用Monorepo雛形とIssue #3のCI・PR品質ゲートを実装済み。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
 
 ## ローカル開発（最初に実行）
 
@@ -85,10 +85,16 @@ uv run --all-packages pytest
 pnpm api:generate
 pnpm lint
 pnpm typecheck
+pnpm test             # Vitest + Testing Library
 pnpm build
+# 初回のみChromiumとOS依存を準備
+pnpm --filter web exec playwright install --with-deps chromium
+pnpm test:e2e         # 本番buildを起動、PC/375pxでMock APIを検査
 # API変更時は再生成し差分を同じPRに含める
 # packages/api-client/openapi.json と src/schema.d.ts が生成物
 ```
+
+GitHub Actionsの必須チェックは`CI required`。Python/Web/API生成差分/空Supabase migration/secret scanningの検査範囲は[テスト戦略](docs/16-testing-strategy.md)、`MainRule`の承認・保護設定は[Git運用](docs/22-git-workflow.md)を参照。
 
 OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生成し、業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
 
