@@ -21,6 +21,8 @@ FastAPIからはSupabase Postgresに直接接続する。`supabase-py`はAuth管
 
 着手時にNext.js、Python、discord.pyなどのサポート版をロックファイルに固定し、CIで更新を検証する。特定のメジャーバージョンに依存するSupabase SSRのProxy/Middleware命名は導入版に合わせる。[Supabase SSR公式資料](https://supabase.com/docs/guides/auth/server-side/creating-a-client)ではNext.js 16以降に`proxy.ts`、15以前に`middleware.ts`を用いる。OpenAPIはFastAPIから生成し、`packages/api-client`にTypeScript型を生成する。API変更PRは生成差分を含める。
 
+Issue #2の雛形ではNode.js 24.18.0 / Python 3.13.12 / pnpm 10.34.9 / uv 0.13.6を固定した。Next.js 16.4.3 / React 19.3.1 / Supabase CLI 2.122.0を採用し、全依存の解決結果は`pnpm-lock.yaml` / `uv.lock`で管理する。画面部品、認証・フォーム等のライブラリは利用機能の実装時に追加する。
+
 ## 比較の結論
 
 | 論点 | 採用 | 今は採用しない理由 / 再検討条件 |

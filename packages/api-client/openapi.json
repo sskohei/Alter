@@ -1,0 +1,63 @@
+{
+  "components": {
+    "schemas": {
+      "Health": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "mock",
+              "live"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "service": {
+            "const": "api",
+            "default": "api",
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "const": "ok",
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "Health",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Alter API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "get_health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "operations"
+        ]
+      }
+    }
+  }
+}

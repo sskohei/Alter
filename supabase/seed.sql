@@ -1,0 +1,2 @@
+-- Local development seed only. No application tables exist yet.
+-- Add deterministic non-sensitive fixtures after the initial schema migration.

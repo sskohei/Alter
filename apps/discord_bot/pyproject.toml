@@ -1,0 +1,12 @@
+[project]
+name = "alter-discord-bot"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = ["alter-domain", "discord.py>=2.6"]
+
+[project.scripts]
+alter-bot = "alter_discord_bot.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

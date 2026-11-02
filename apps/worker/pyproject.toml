@@ -1,0 +1,12 @@
+[project]
+name = "alter-worker"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = ["alter-domain"]
+
+[project.scripts]
+alter-worker = "alter_worker.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
