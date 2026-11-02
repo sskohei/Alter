@@ -25,7 +25,7 @@ CIは本番LLMや本番Discordへアクセスしない。会話文章の完全�
 |---|---|---|
 | Python | Ruff lint/format、strict mypy、pytest | READMEのPython検証コマンド |
 | Web | ESLint、TypeScript、Vitest + Testing Library、Next本番build、Playwright Chromium（PC/375px） | `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e` |
-| API contract | FastAPIからOpenAPIとTypeScript schemaを再生成し、コミット済み生成物との差分で失敗 | `pnpm api:generate && git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts` |
+| API contract | FastAPIからOpenAPIとTypeScript schemaを再生成し、生成物のGit追跡と再生成差分を検査 | `pnpm api:generate && git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts` |
 | Migrations | 空のローカルSupabase PostgreSQL 17を起動し、全migrationを順に適用、public schemaのSQL lint | `pnpm exec supabase db start` → `pnpm exec supabase db reset --local --no-seed` → `pnpm exec supabase db lint --local --schema public --fail-on error` |
 | Secrets | checksum固定のGitleaks 8.30.1で取得済みGit履歴全体を検査、検出値を100%伏せて失敗 | 同じバージョンの`gitleaks git --redact=100 --no-banner --log-opts="--all" .` |
 

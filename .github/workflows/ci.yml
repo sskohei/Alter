@@ -80,7 +80,9 @@ jobs:
       - run: uv sync --all-packages --locked
       - run: pnpm api:generate
       - name: Reject stale OpenAPI and TypeScript schema
-        run: git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts
+        run: |
+          git ls-files --error-unmatch -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts > /dev/null
+          git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts
 
   migrations:
     name: Migrations
