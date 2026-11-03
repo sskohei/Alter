@@ -4,7 +4,7 @@
 
 DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`UUID DEFAULT gen_random_uuid()`、Discord snowflakeは`TEXT`、金額は`NUMERIC(12,6)` USD。全業務テーブルは`public`スキーマ、`created_at NOT NULL DEFAULT now()`を共通列とする。以下で`!`はNOT NULL、`?`はNULL可。`id uuid! PK`は明記省略時の共通主キー。`updated_at`は編集可能テーブルのみ必須。JSONはPydanticでスキーマ検証し、無制限の任意キーを認めない。すべてのFKに索引を付ける。
 
-`profiles.id`は`auth.users.id`と同値。最初の認証済み`GET /users/me`でAPIが`INSERT ... ON CONFLICT DO NOTHING`により作成し、認証イベントの配送順に依存しない。AuthのIDをメールで推測・結合しない。
+`profiles.id`は`auth.users.id`と同値。JWT・招待・停止/削除状態の検証を通った最初の`GET /users/me`でAPIが`INSERT ... ON CONFLICT DO NOTHING`により作成し、認証イベントの配送順に依存しない。AuthのIDをメールで推測・結合しない。招待外・削除要求済みの利用者をこの初期化で作成/復活させない。許可リストはサーバー専用設定とし、[招待契約](23-invitation-consent-operations.md)に従う。
 
 ## テーブル（型・制約・索引・削除）
 
@@ -50,6 +50,6 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 - 予約: 対象AIを行ロックし、双方の当日利用量と同時実行を確認して`background_jobs`と`conversations`を同じトランザクションで作る。
 - 発言: `(conversation_id,turn_no)`を冪等キーとして保存。使用量は同一トランザクションに追加。
 - 完了: `status=completed`、要約、通知、許可された配信outboxを同時確定する。
-- 削除: まず新規交流と配信を停止し、対象会話→記憶→通知→AI→プロフィール→Authユーザーの順で削除する。外部Discord投稿の削除試行は別ジョブで記録する。
+- 削除: まず新規交流と配信を停止し、対象会話→記憶→通知→AI→プロフィール→Authユーザーの順で削除する。外部Discord投稿の削除試行は別ジョブで記録する。会話CASCADE前に配送IDを本文なしで削除ジョブへ引き渡す。要求時から関連会話・派生記憶/通知を双方の参照対象外とし、招待失効後にAuthを削除する。保持期限と30日以内パージ・匿名化・復元時の扱いは[運用契約](23-invitation-consent-operations.md)に従う。
 
 [ER図](diagrams/er-diagram.md)・[認可設計](06-authentication-authorization.md)を参照。

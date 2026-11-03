@@ -2,6 +2,12 @@
 
 基点`/api/v1`、JSON、UTC ISO 8601、UUID。OpenAPIの`operationId`は固定し、FastAPIから`/openapi.json`を生成して`packages/api-client`に型・クライアントを生成する。エラー共通形は`{"error":{"code":"FORBIDDEN","message":"...","request_id":"uuid"}}`。一覧は`limit`（1〜50、既定20）と不透明`cursor`、返却は`{items,next_cursor}`。全書込はCSRF/CORSとBearer検証を通し、削除・開始・公開操作には`Idempotency-Key`を受け付ける。共通エラー: 401認証なし/期限切れ、403権限不足、404対象なし、409競合、422入力不正、429制限、503外部依存不可。利用画面の略号は [画面仕様](12-frontend-screens.md) のURLを指す。
 
+## 招待・停止・削除の共通認可（実装引き渡し）
+
+`/health`を除く一般業務APIは[招待契約](23-invitation-consent-operations.md)の共通認可を通す。無効JWTは401 `UNAUTHENTICATED`、有効JWTでも招待外は403 `INVITATION_REQUIRED`、停止/削除要求済みは403 `ACCOUNT_INACTIVE`、招待判定障害は503 `AUTHORIZATION_UNAVAILABLE`。`GET /users/me`も例外ではなく、拒否時にプロフィールを作成しない。削除要求の本人向け状況確認は最小限の状態だけを返す専用経路とし、#30/#31でPydantic/OpenAPIを確定する。
+
+このPRは将来の認証実装 #7 への仕様決定で、現在の実装済みOpenAPIは`/health`のみ。実装追加時にPydantic/OpenAPIと生成TypeScriptを同時更新する。
+
 ## スキーマ（公開API）
 
 | 名称 | 必須フィールド | 任意フィールド・制約 |
@@ -26,7 +32,7 @@
 
 | Method / Path | 目的・認可 | 要求 → 応答 | 主エラー | DB | 画面 |
 |---|---|---|---|---|---|
-| `GET /users/me` | 自分を作成/取得 | — → `Profile` | 401 | profiles | `/onboarding`, `/settings/account` |
+| `GET /users/me` | 招待・有効状態を確認して自分を作成/取得 | — → `Profile` | 401,403,503 | profiles | `/onboarding`, `/settings/account` |
 | `PATCH /users/me` | 本人情報更新 | `display_name` → `Profile` | 422 | profiles | `/settings/account` |
 | `POST /users/me/deletion` | 本人の削除要求 | `confirm:true` → `202 DeletionRequest` | 409 | deletion_requests, agents | `/settings/account` |
 | `GET /agents/me` | 自分のAI取得 | — → `Agent`または404 | 404 | agents, agent_settings | `/dashboard`, `/agent` |
