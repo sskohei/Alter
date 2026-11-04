@@ -12,9 +12,10 @@ FastAPIへのHTTPSリクエストは`Authorization: Bearer <Supabase access_toke
 2. 非対称署名キーのSupabaseプロジェクトでは`https://<project>.supabase.co/auth/v1/.well-known/jwks.json`からJWKSを取得し、`kid`一致・署名検証。キーを短時間キャッシュし、未知の`kid`で一度だけ更新する。
 3. `iss == https://<project>.supabase.co/auth/v1`、`aud == authenticated`、`exp`・`nbf`、`sub`がUUIDであること、`role == authenticated`を検査する。時刻の許容差は30秒以下。
 4. 共有鍵HS256運用の場合はJWKSが空になり得る。Authサーバー`GET /auth/v1/user`でトークンを検証する方式に切り替え、ローカルでJWT secretを配布しない。運用では非対称鍵に移行してから公開する。
-5. `sub`を`profiles.id`として取得し、`deleted_at`・停止状態を検査する。失効直後など短いJWT有効期間内のリスクには重要操作でAuth側確認を追加する。
+5. JWT検証後、既存の`profiles.deleted_at`・停止状態と進行中の削除要求を優先確認し、[招待契約](23-invitation-consent-operations.md)に従ってGoogle/GitHubの信頼できるprovider ID・`sub`と有効な招待を照合する。メール/表示名/編集可能metadataを使用しない。招待外は403 `INVITATION_REQUIRED`、停止/削除要求済みは403 `ACCOUNT_INACTIVE`、招待判定障害は503 `AUTHORIZATION_UNAVAILABLE`として業務処理を止める。
+6. 招待判定通過後だけ`sub`を`profiles.id`として取得/初期化する。失効直後など短いJWT有効期間内のリスクには重要操作でAuth側確認を追加する。
 
-署名方式とJWKS挙動は[Supabase公式JWT資料](https://supabase.com/docs/guides/auth/jwts)（2026-10-27確認）。アクセス拒否は401、所有権違反は存在を隠す404または403、入力不正は422。APIログにJWTを出さない。
+署名方式とJWKS挙動は[Supabase公式JWT資料](https://supabase.com/docs/guides/auth/jwts)（2026-10-27確認）。未認証・無効JWTは401、招待/停止/削除による拒否は上記403、所有権違反は存在を隠す404または403、入力不正は422。APIログにJWTを出さない。
 
 ## リソース認可表
 
@@ -37,4 +38,4 @@ Supabaseログイン後のWeb画面からDiscord OAuth2 authorization codeフロ
 
 ## アカウント削除
 
-本人再認証後に削除を要求し、即時にAIを停止・公開配信を取り消す。`deletion_requests`を作り、非同期削除を追跡する。会話を共有する相手の画面からも対象会話を削除する方針をMVPに採用し、事前に画面で説明する。DBパージ後にSupabase Admin APIでAuthユーザーを削除する。Discord投稿の削除は権限がある範囲で試行し、実行結果を記録する。詳細は[セキュリティ](15-security-privacy.md)。
+本人再認証後に削除を要求し、即時にAIを停止・公開配信を取り消す。`deletion_requests`を作り、非同期削除を追跡する。会話を共有する相手の画面からも対象会話を削除する方針をMVPに採用し、事前に画面で説明する。要求時点で関連会話を双方から参照不可とし、派生記憶/通知も削除する。許可リストを失効させ、DB/Storageパージ後にSupabase Admin APIでAuthユーザーを削除する。30日以内の完了をsskoheiが追跡し、再OAuthで自動復帰させない。状況確認だけの本人認証の例外とAuth削除後の窓口は[運用契約](23-invitation-consent-operations.md)に従う。Discord投稿の削除は権限がある範囲で試行し、実行結果を記録する。詳細は[セキュリティ](15-security-privacy.md)。

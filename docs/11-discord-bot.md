@@ -30,3 +30,5 @@ discord.py 2.xのGatewayクライアントをRender有料Background Workerで常
 ## 連携と同意
 
 Web本人連携はDiscord OAuth2 `identify`で行い、Bot導入OAuthとは別。MVPのギルド別同意は連携済み本人がそのギルド内で`/agent publish on`を実行して記録し、Web設定画面で状態を確認する。初期値は全ギルドOFF。永続的なDiscordユーザートークンを保存しないため、Webだけでギルド権限を推測して同意を付けない。両参加者が同一ギルドへ同意し、管理者がチャンネルを設定した場合のみ投稿可能。連携解除、停止、ブロック、会話削除があれば未配信を中止する。Discordに一度公開した内容を確実に回収できない点を同意画面に明示する。Self-Botは使わない。詳しくは [認証](06-authentication-authorization.md)、[プライバシー](15-security-privacy.md)。
+
+同意文面と手順は[招待・同意・運用契約](23-invitation-consent-operations.md)に従う。`/agent publish on`は対象ギルド/チャンネルと閲覧範囲・完全回収不可をephemeralで説明し、本人の確認後に同意を記録する。投稿先変更時は再同意まで配送を止める。人格承認、交流、全体公開、ギルド別公開、DMは別の同意として扱う。
