@@ -1,2 +1,0 @@
--- Local development seed only.
--- Add deterministic non-sensitive fixtures here. Tests (supabase/tests) create their own data.
