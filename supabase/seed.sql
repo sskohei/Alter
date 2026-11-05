@@ -1,2 +1,2 @@
--- Local development seed only. No application tables exist yet.
--- Add deterministic non-sensitive fixtures after the initial schema migration.
+-- Local development seed only.
+-- Add deterministic non-sensitive fixtures here. Tests (supabase/tests) create their own data.
