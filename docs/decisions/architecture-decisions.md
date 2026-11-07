@@ -43,3 +43,8 @@
 本番FastAPIにはマウントせず、既存`openapi.json`と区別する。これは契約の合意済みを意味しない。
 Bの契約レビュー後に差分を解消し、正式クライアントへ移す。Dのトークン/frame承認までは仮UI。
 依存Issueと未検証事項は各Draft PRに記録し、Mock成功だけでIssue完了・本番公開にしない。
+
+#17の追加契約案・未決定事項は[フロント開発手順](../24-frontend-development.md)に記録。
+人格GETの版選択・競合条件・suggest永続化・onboarded_at更新時点は#7/#15のBレビュー待ち。
+UIは公開項目だけを本人/編集対象/版で分離してsessionStorageへ復元し、私的欄は保存しない。
+#8→#9→#17のDraftは先行ブランチをbaseとし、Squash後にmainへ変更して再検証する。

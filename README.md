@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-02。`docs/`が実装契約で、現在は開発用Monorepo雛形とIssue #3のCI・PR品質ゲートを実装済み。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
+更新日: 2026-11-07（フロント先行実装のDraft）。`docs/`が実装契約で、開発用Monorepo雛形とIssue #3のCI・PR品質ゲートに加え、#8/#9/#17のフロント先行実装を追加。実業務API/確定デザインは依存待ちで、[Mock・実接続の区別と起動手順](docs/24-frontend-development.md)を参照。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
 
 ## ローカル開発（最初に実行）
 
@@ -26,7 +26,7 @@ cp .env.example .env
 ```bash
 pnpm db:start          # 初回はDockerイメージをダウンロードする
 pnpm db:status        # URLとローカルキーを確認（出力は共有しない）
-# WebのAuth実装に必要な公開キー取得（現在はログイン画面未実装）
+# WebのAuth実装に必要な公開キー取得（SSRログイン画面用。実OAuth登録は#33/#35が依存）
 pnpm exec supabase status -o env
 pnpm db:stop           # データを保持して停止
 # 必要時のみ: ローカルDBのデータを削除しmigrations/seedを再適用
@@ -60,7 +60,7 @@ uv run --package alter-discord-bot alter-bot     # 既定は無効、正常終�
 uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
-Webの「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIに業務エンドポイントはまだない。
+Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIに業務エンドポイントはまだない。
 
 ### Mockと無効化
 

@@ -36,3 +36,49 @@ API401では1回だけ更新・再送する。画面からのAPIは同一Origin�
 Draftは依存差分をレビューするため #8 → #9 → #17 のbaseを積む。
 先行PRのSquash後は残りへmainを取り込み、baseをmainに変更して再検証する。
 mainへ直接push/自動mergeは行わない。依存ブランチ向けPRもCIの対象に含める。
+
+## #17 AI分身の作成・編集
+
+依存は#8（PR #44）、#9（PR #45）、#10（Figma待ち）、#15（正式API待ち）。
+/onboardingの3段階質問→/agent/newの手動入力→下書き保存→公開項目/差分確認→
+未チェックの本人承認→/agentを実装する。/agent/editは新しい人格版を保存・承認する。
+RHF/Zodで入力を検査し、生成型を満たす要求を同一Origin BFFへ送る。
+Button/Input/Textarea/AlertDialogはshadcn/uiの構成（Radix/CVA/ローカルソース）を起点にする。
+色・配置・文言の最終承認は#5/#10に残る。
+
+公開可能な項目だけを本人IDと編集対象・版で区切ったsessionStorageへ保存する。
+非公開欄は任意・初期空、編集時の専用APIだけから取得し、通常表示/差分/AI提案のanswers/
+ストレージ/ログへ出さない。ログアウト時に下書きも削除する。私的欄の読込失敗時は
+空で上書きしないよう保存を止め、再試行を案内する。
+
+任意提案は下書き保存後だけ呼び出せる。提案の適用は本人操作で行い、再保存・再承認が必要。
+ローカルAPI Mockは503を返すが、成功応答もブラウザE2Eで差し替えて検証する。
+429/503でも手動入力を続けられる。409は入力を保持して最新人格の再読込を案内し、
+422は入力上限の確認、未保存変更は承認を無効化し離脱時に確認する。
+
+契約レビューで確認する点（#7/#15）:
+
+- Agent名の上限80文字はDB仕様に合わせた契約案。プロフィール表示名の最終上限もB確認が必要。
+- revision GETが返す最新下書き/承認済み版の選択、競合409の判定と期待版の伝え方。
+- suggest応答の永続化有無。フロントは提案を採用しても改めてrevisionを保存してから承認する。
+- onboarded_atの更新タイミングはAPI側で確定し、UIから推測して書き換えない。
+- 任意のアイコンStorageアップロードは本画面に追加していない。
+
+Mock成功は実APIの所有権/暗号化/競合保証の証明ではない。本番APIは未実装のまま。
+#15の合意後にpreview契約との差分を解消し、実接続・B/Dレビューを完了してからReadyにする。
+
+ローカルで画面を手動確認する場合（合成データ専用、実キー不要）:
+
+```bash
+# ターミナル1: テスト用Auth/APIを起動
+pnpm --filter web exec tsx e2e/support/mock-service.ts
+# ターミナル2: 127.0.0.1で開く（localhostと混ぜない）
+API_URL=http://127.0.0.1:8001 \
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:8001 \
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=synthetic-public-key \
+NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000 pnpm dev:web --hostname 127.0.0.1
+```
+
+http://127.0.0.1:3000/login で同意→Google/GitHub→テストOAuthのnormalを選ぶ。
+forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現できる。
+テストAuthはセッションごとに状態を分離し、プロセス停止で消える。実ユーザーの情報を入れない。
