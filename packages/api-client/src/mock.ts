@@ -1,3 +1,4 @@
+import { createActivityMock, mockOwnAgentId } from "./mock-activity";
 import type { components } from "./preview-schema";
 
 export const scenarios = [
@@ -44,11 +45,48 @@ export function mockError(status: number, code = errorCodes[status]) {
 }
 
 // Each factory owns its state. Tests/users never share profiles across factories.
-export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
+export function createMockFetch(
+  scenario: Scenario = "normal",
+  options: { seedAgent?: boolean; activity?: boolean } = {},
+): typeof fetch {
+  const activity = createActivityMock(
+    scenario === "empty" || !options.activity,
+  );
   let agent: components["schemas"]["Agent"] | null = null;
   let revisions: components["schemas"]["ProfileRevision"][] = [];
   let privateInfo = "";
   let current = { ...profile };
+  if (options.seedAgent) {
+    agent = {
+      id: mockOwnAgentId,
+      name: "こはる",
+      status: "active",
+      approved_profile_version: 1,
+      created_at: profile.created_at,
+      settings: {
+        autonomy_enabled: false,
+        discord_publish: false,
+        frequency_per_day: 1,
+        daily_budget_usd: 0.2,
+        max_session_usd: 0.02,
+        web_visibility: "participants",
+        updated_at: profile.created_at,
+      },
+    };
+    revisions = [
+      {
+        personality: "穏やか",
+        values_text: "誠実",
+        interests: ["読書"],
+        speaking_style: "丁寧",
+        interaction_policy: "尊重",
+        shareable_info: "好きな本",
+        restrictions: "なし",
+        version: 1,
+        approved_at: profile.created_at,
+      },
+    ];
+  }
   return async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
@@ -142,6 +180,8 @@ export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
       if (suffix === "/profile/suggest" && request.method === "POST")
         return mockError(503, "SUGGESTION_UNAVAILABLE");
     }
+    const activityResponse = await activity(request);
+    if (activityResponse) return activityResponse;
     return mockError(404);
   };
 }

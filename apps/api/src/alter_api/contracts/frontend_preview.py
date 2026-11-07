@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
+from alter_api.contracts.activity_preview import register_activity_contract
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -202,4 +203,5 @@ def create_contract_app() -> FastAPI:
     def suggest(id: UUID, body: SuggestionInput) -> ProfileRevision:
         raise HTTPException(503, "Contract only")
 
+    register_activity_contract(app, ERRORS)
     return app

@@ -82,3 +82,21 @@ NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000 pnpm dev:web --hostname 127.0.0.1
 http://127.0.0.1:3000/login で同意→Google/GitHub→テストOAuthのnormalを選ぶ。
 forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現できる。
 テストAuthはセッションごとに状態を分離し、プロセス停止で消える。実ユーザーの情報を入れない。
+
+## #23 ダッシュボード・会話・通知（Draft）
+
+依存: #17（PR #46）、#11（Figma未提供）、#21（正式API未提供）。
+`activity_preview.py`に文書を基にしたPydantic案を分離し、既存preview OpenAPI/型へ生成する。
+partner/participantsは`{id,name}`、開始前日時/未生成要約はnullの案で、#21でB確認が必要。
+Discord連携の読み取りだけはダッシュボードのため#26の契約案を先行する。
+
+一覧・通知・ダッシュボードは30秒、queued/runningの詳細は15秒Polling。
+完了/失敗/停止後は詳細Pollingを止め、非表示タブでは自動取得を控える。
+リクエストの重複を避け、移動・cursor変更時はabort/連番で古い応答を破棄する。
+401/403/404等の失敗で表示データを消去し、所有者変更でクライアント表示を作り直す。
+429はBFFのRetry-Afterを引き継ぎ、指定時間（未提供時60秒）まで再取得を止める。
+ページングは不透明cursor、既読は成功時だけ反映し、失敗時は未読のまま再試行可能。
+発言はturn_noのDOM順、生成時刻とAI分身ラベルを表示する。第三者公開は行わない。
+
+テストOAuthの`activity`は承認済みAIと合成会話12件、`activity-empty`は空の交流を返す。
+本番FastAPIに業務APIを追加したことや、実認可が完了したことを意味しない。

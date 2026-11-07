@@ -48,3 +48,9 @@ Bの契約レビュー後に差分を解消し、正式クライアントへ移�
 人格GETの版選択・競合条件・suggest永続化・onboarded_at更新時点は#7/#15のBレビュー待ち。
 UIは公開項目だけを本人/編集対象/版で分離してsessionStorageへ復元し、私的欄は保存しない。
 #8→#9→#17のDraftは先行ブランチをbaseとし、Squash後にmainへ変更して再検証する。
+
+## #23/#24/#25 フロント先行実装の追加（レビュー待ち）
+
+#11/#12のFigma、#16/#21/#22の正式APIは未提供。既存preview契約をPydanticから拡張し、
+#17→#23→#24→#25のDraft依存を記録する。会話のpartner/participantsの形、開始前日時・
+要約のnull、Discord連携読み取りはB確認待ち。詳細は[開発手順](../24-frontend-development.md)。

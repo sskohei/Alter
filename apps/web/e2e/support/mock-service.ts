@@ -60,6 +60,8 @@ const server = createServer(async (req, res) => {
       response = new Response(
         `<html lang="ja"><body><h1>テスト専用 OAuth</h1>${[
           "normal",
+          "activity",
+          "activity-empty",
           "existing",
           "second",
           "forbidden",
@@ -120,7 +122,14 @@ const server = createServer(async (req, res) => {
           onboarded_at: mode === "existing" ? profile.created_at : null,
         });
       else {
-        if (!stores.has(which)) stores.set(which, createMockFetch());
+        if (!stores.has(which))
+          stores.set(
+            which,
+            createMockFetch(mode === "activity-empty" ? "empty" : "normal", {
+              seedAgent: mode.startsWith("activity"),
+              activity: mode === "activity",
+            }),
+          );
         response = await stores.get(which)!(request);
       }
     }
