@@ -6,6 +6,8 @@ const links = [
   ["/conversations", "交流"],
   ["/notifications", "通知"],
   ["/settings/interaction", "交流設定"],
+  ["/memories", "記憶"],
+  ["/relationships", "交流相手"],
 ] as const;
 export function AppNavigation() {
   const primary = links.filter(([href]) =>

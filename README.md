@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-07（フロント先行実装のDraft）。`docs/`が実装契約で、開発用Monorepo雛形とIssue #3のCI・PR品質ゲートに加え、#8/#9/#17のフロント先行実装を追加。実業務API/確定デザインは依存待ちで、[Mock・実接続の区別と起動手順](docs/24-frontend-development.md)を参照。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
+更新日: 2026-11-07（フロント先行実装のDraft）。`docs/`が実装契約で、開発用Monorepo雛形とIssue #3のCI・PR品質ゲートに加え、#8/#9/#17/#23/#24/#25のフロント先行実装を追加。実業務API/確定デザインは依存待ちで、[Mock・実接続の区別と起動手順](docs/24-frontend-development.md)を参照。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
 
 ## ローカル開発（最初に実行）
 
@@ -64,7 +64,7 @@ Webの`/development`の「APIの接続を確認」で生成TypeScriptクライ�
 
 ### Mockと無効化
 
-既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。これは初期接続確認用のMockで、認証や業務APIのMockは後続Issueで契約に合わせて追加する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。API/各独立プロセスは初期接続確認用のMock。Web用のAuth・業務APIの合成Mockと、未合意のpreview契約は[フロント開発手順](docs/24-frontend-development.md)を参照する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
 
 ```bash
 uv run --package alter-worker alter-worker --once

@@ -9,6 +9,7 @@ from uuid import UUID
 
 from alter_api.contracts.activity_preview import register_activity_contract
 from alter_api.contracts.interaction_preview import register_interaction_contract
+from alter_api.contracts.memory_preview import register_memory_contract
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -206,4 +207,5 @@ def create_contract_app() -> FastAPI:
 
     register_activity_contract(app, ERRORS)
     register_interaction_contract(app, ERRORS, AgentSettings)
+    register_memory_contract(app, ERRORS)
     return app

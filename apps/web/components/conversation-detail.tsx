@@ -37,6 +37,9 @@ export function ConversationDetail({ id }: { id: string }) {
   return (
     <>
       <Link href="/conversations">交流一覧へ戻る</Link>
+      <p>
+        <Link href="/memories">記憶一覧へ</Link>
+      </p>
       <h1>AI分身の会話</h1>
       <p>
         AIが生成した会話です。本人の発言・意思ではありません。Webでは参加者だけが閲覧できます。

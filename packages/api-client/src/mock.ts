@@ -1,3 +1,4 @@
+import { createMemoryMock, relationshipFixtures } from "./mock-memory";
 import { createActivityMock, mockOwnAgentId } from "./mock-activity";
 import type { components } from "./preview-schema";
 
@@ -56,6 +57,10 @@ export function createMockFetch(
   let revisions: components["schemas"]["ProfileRevision"][] = [];
   let privateInfo = "";
   const blocked = new Set<string>();
+  const memory = createMemoryMock(
+    scenario === "empty" || !options.activity,
+    blocked,
+  );
   let current = { ...profile };
   if (options.seedAgent) {
     agent = {
@@ -220,7 +225,9 @@ export function createMockFetch(
       }
       const blockMatch = suffix.match(/^\/blocks\/([a-f\d-]{36})$/);
       if (blockMatch && ["PUT", "DELETE"].includes(request.method)) {
-        if (blockMatch[1] !== "20000000-0000-4000-8000-000000000001")
+        if (
+          !relationshipFixtures.some((r) => r.other_agent_id === blockMatch[1])
+        )
           return mockError(404);
         if (request.method === "PUT") blocked.add(blockMatch[1]);
         else blocked.delete(blockMatch[1]);
@@ -246,6 +253,8 @@ export function createMockFetch(
             ]
           : [],
       );
+    const memoryResponse = await memory(request);
+    if (memoryResponse) return memoryResponse;
     const activityResponse = await activity(request);
     if (activityResponse) return activityResponse;
     return mockError(404);
