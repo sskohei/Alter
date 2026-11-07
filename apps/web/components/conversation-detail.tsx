@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback } from "react";
-import { unwrap } from "@alter/api-client/preview";
+import { ApiError, unwrap } from "@alter/api-client/preview";
 import { browserApi } from "../lib/api-browser";
 import { useResource } from "../lib/use-resource";
 import {
@@ -10,6 +10,7 @@ import {
   costLabel,
   isOngoing,
 } from "../lib/activity";
+import { BlockControl } from "./block-control";
 import { DataState } from "./data-state";
 export function ConversationDetail({ id }: { id: string }) {
   const load = useCallback(
@@ -19,6 +20,18 @@ export function ConversationDetail({ id }: { id: string }) {
         .then(unwrap),
     [id],
   );
+  const ownLoad = useCallback(
+    (signal: AbortSignal) =>
+      browserApi()
+        .GET("/api/v1/agents/me", { signal })
+        .then(unwrap)
+        .catch((error) => {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        }),
+    [],
+  );
+  const own = useResource(ownLoad);
   const resource = useResource(load, 15_000, isOngoing);
   const detail = resource.data;
   return (
@@ -50,6 +63,19 @@ export function ConversationDetail({ id }: { id: string }) {
               <p className="notice">この交流は停止しました。</p>
             )}
             <p>{detail.summary ?? "要約は完了後に表示します。"}</p>
+            {own.data && (
+              <BlockControl
+                key={detail.partner.id}
+                ownAgentId={own.data.id}
+                otherAgentId={detail.partner.id}
+                otherAgentName={detail.partner.name}
+              />
+            )}
+            {!!own.error && (
+              <p className="help">
+                ブロック操作の準備に失敗しました。画面を再読込してください。
+              </p>
+            )}
           </section>
           <ol aria-label="AI分身の発言" className="message-list">
             {[...detail.messages]

@@ -55,6 +55,7 @@ export function createMockFetch(
   let agent: components["schemas"]["Agent"] | null = null;
   let revisions: components["schemas"]["ProfileRevision"][] = [];
   let privateInfo = "";
+  const blocked = new Set<string>();
   let current = { ...profile };
   if (options.seedAgent) {
     agent = {
@@ -176,10 +177,75 @@ export function createMockFetch(
         };
         return Response.json(agent);
       }
+      if (suffix === "/settings" && request.method === "GET")
+        return Response.json(agent.settings);
+      if (suffix === "/settings" && request.method === "PATCH") {
+        const body = await request.json();
+        const keys = Object.keys(body);
+        if (
+          !keys.length ||
+          keys.some(
+            (key) =>
+              ![
+                "autonomy_enabled",
+                "frequency_per_day",
+                "daily_budget_usd",
+                "max_session_usd",
+                "discord_publish",
+                "web_visibility",
+              ].includes(key) || body[key] === null,
+          )
+        )
+          return mockError(422);
+        const next = { ...agent.settings!, ...body };
+        if (
+          typeof next.autonomy_enabled !== "boolean" ||
+          typeof next.discord_publish !== "boolean" ||
+          !Number.isInteger(next.frequency_per_day) ||
+          next.frequency_per_day < 0 ||
+          next.frequency_per_day > 2 ||
+          ![next.daily_budget_usd, next.max_session_usd].every(
+            (n) => typeof n === "number" && Number.isFinite(n) && n >= 0,
+          ) ||
+          next.web_visibility !== "participants"
+        )
+          return mockError(422);
+        if (next.autonomy_enabled && agent.approved_profile_version === null)
+          return mockError(409);
+        agent = {
+          ...agent,
+          settings: { ...next, updated_at: new Date().toISOString() },
+        };
+        return Response.json(agent.settings);
+      }
+      const blockMatch = suffix.match(/^\/blocks\/([a-f\d-]{36})$/);
+      if (blockMatch && ["PUT", "DELETE"].includes(request.method)) {
+        if (blockMatch[1] !== "20000000-0000-4000-8000-000000000001")
+          return mockError(404);
+        if (request.method === "PUT") blocked.add(blockMatch[1]);
+        else blocked.delete(blockMatch[1]);
+        return new Response(null, { status: 204 });
+      }
       // Optional LLM is deliberately unavailable; the manual flow must still work.
       if (suffix === "/profile/suggest" && request.method === "POST")
         return mockError(503, "SUGGESTION_UNAVAILABLE");
     }
+    if (url.pathname === "/api/v1/discord/guilds" && request.method === "GET")
+      return Response.json(
+        options.activity
+          ? [
+              {
+                guild_id: "111111111111111111",
+                guild_name: "テスト交流サーバー",
+                channel_id: "222222222222222222",
+                channel_name: "ai交流",
+                guild_enabled: true,
+                consented_at: profile.created_at,
+                revoked_at: null,
+              },
+            ]
+          : [],
+      );
     const activityResponse = await activity(request);
     if (activityResponse) return activityResponse;
     return mockError(404);

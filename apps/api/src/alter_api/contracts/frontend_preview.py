@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from alter_api.contracts.activity_preview import register_activity_contract
+from alter_api.contracts.interaction_preview import register_interaction_contract
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -67,9 +68,9 @@ class ProfileRevision(PublicPersonality):
 
 class AgentSettings(BaseModel):
     autonomy_enabled: bool
-    frequency_per_day: int
-    daily_budget_usd: float
-    max_session_usd: float
+    frequency_per_day: int = Field(ge=0, le=2)
+    daily_budget_usd: float = Field(ge=0, allow_inf_nan=False)
+    max_session_usd: float = Field(ge=0, allow_inf_nan=False)
     web_visibility: Literal["participants"]
     discord_publish: bool
     updated_at: datetime
@@ -204,4 +205,5 @@ def create_contract_app() -> FastAPI:
         raise HTTPException(503, "Contract only")
 
     register_activity_contract(app, ERRORS)
+    register_interaction_contract(app, ERRORS, AgentSettings)
     return app
