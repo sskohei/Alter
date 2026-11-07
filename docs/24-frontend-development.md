@@ -15,3 +15,24 @@ Bearerは合成文字列でよく、認証の安全性を検証するサーバ�
 Bearer転送、リクエストID、一度だけの401更新・再送を提供する。
 HTTPエラーの本文をログへ出さない。サーバーではユーザーごと・リクエストごとに生成する。
 ブラウザへrefresh tokenを返す独自APIや、Supabase重要テーブルの直接DMLは追加しない。
+
+## #9 SSR認証
+
+依存は#2（完了）、#7（契約待ち）、#8（先行PR）、#5（トークン未提供）。
+`@supabase/ssr`のbrowser/server clientとNext 16 ProxyでセッションCookieを更新し、
+保護レイアウトとcallbackは`getUser`でAuthサーバーを確認してからAPI `/users/me`で入場判定する。
+403招待外/停止、503判定障害は拒否し、OAuth成功だけで入場しない。
+Callbackで`onboarded_at`がnullならonboarding、それ以外は許可した内部URLへ遷移する。
+API401では1回だけ更新・再送する。画面からのAPIは同一Originの許可リスト付きBFFを通す。
+全認証応答はprivate/no-store。ログアウトはSupabase signOut後に全画面遷移し、
+永続Query cache/業務データのlocalStorageは使わない。
+
+`apps/web/.env.example`に公開設定、任意のサーバー側`API_URL`とcallback Originを記載した。
+実OAuthはSupabase/Google/GitHubの登録済みURLが必要（#33/#35）。
+`pnpm test:e2e`は独立したローカルAuth/API合成サーバーを起動する。
+アプリにテスト専用認証ルートやCookieの検証を省略する分岐はない。
+法務確認済みの正式文面は未提供のため、/legalは開発用案と明示する。
+
+Draftは依存差分をレビューするため #8 → #9 → #17 のbaseを積む。
+先行PRのSquash後は残りへmainを取り込み、baseをmainに変更して再検証する。
+mainへ直接push/自動mergeは行わない。依存ブランチ向けPRもCIの対象に含める。

@@ -10,10 +10,15 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 } } },
   ],
-  webServer: {
+  webServer: [{
+    command: "pnpm --filter @alter/api-client exec tsx ../../apps/web/e2e/support/mock-service.ts",
+    url: "http://127.0.0.1:8001/health",
+    reuseExistingServer: false,
+  }, {
     command: "pnpm start --hostname 127.0.0.1",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: false,
     timeout: 60_000,
-  },
+    env: { NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000", API_URL: "http://127.0.0.1:8001", NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:8001", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "synthetic-public-key" },
+  }],
 });
