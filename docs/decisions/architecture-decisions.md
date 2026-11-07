@@ -35,3 +35,11 @@
 | 料金プラン/有料席数 | デプロイ前 | 未決定、Vercel Pro 1席/Render Hobby+有料compute | 商用性・権限・実測負荷を確認 |
 
 変更時はこの表に決定日・担当・根拠を追記し、関連文書とIssueを同じPRで更新する。
+
+## #8/#9/#17 フロント先行実装（2026-11-07、レビュー待ち）
+
+#7/#15の実装済み業務OpenAPIと#5/#10のFigmaが未提供のため、文書契約のPydantic案を
+`alter_api/contracts/frontend_preview.py`に置き、`preview.openapi.json`と型を生成する。
+本番FastAPIにはマウントせず、既存`openapi.json`と区別する。これは契約の合意済みを意味しない。
+Bの契約レビュー後に差分を解消し、正式クライアントへ移す。Dのトークン/frame承認までは仮UI。
+依存Issueと未検証事項は各Draft PRに記録し、Mock成功だけでIssue完了・本番公開にしない。
