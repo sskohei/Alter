@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feature/8-api-client-mock, feature/9-ssr-auth-layout, feature/17-agent-creation-editor, feature/23-conversation-notification-ui, feature/24-interaction-settings-ui]
+    branches: [main, feature/8-api-client-mock, feature/9-ssr-auth-layout, feature/17-agent-creation-editor, feature/23-conversation-notification-ui, feature/24-interaction-settings-ui, feature/25-memory-relationship-ui, feature/31-account-deletion-ui, feature/29-discord-connection-ui, feature/35-web-deployment-config]
   push:
     branches: [main]
   workflow_dispatch:

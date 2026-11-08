@@ -145,3 +145,21 @@ APIのblocked値を使う。未知の状態を「未ブロック」と推測し�
 
 正式な所有権/保持期限/出典削除連動/削除記憶の再投入防止は#22のAPI受け入れ待ち。
 本番FastAPIの業務APIは未実装。合成データのMock成功だけでIssue完了にしない。
+
+## #31 アカウント・通知・削除（Draft）
+
+依存: #9/#12/#16/#30。#25の共通画面と部品を利用し、Draftのbaseは#25。
+表示名（DBに合わせ80文字）、Web通知/任意Discord DM、本人再確認と削除受付・本人だけの進捗を実装。
+#30の進捗APIは`GET /users/me/deletion`という未合意のPydantic案。一般業務APIがACCOUNT_INACTIVEを
+返す削除要求後も、この経路だけは本人の最小状態を返す契約が必要。Auth削除後は私的窓口を案内する。
+
+再確認は既存Google/GitHubのPKCE OAuth、短命HttpOnly challenge、同一sub確認を使う。
+Auth getUserで検証済みJWTのoauth amr時刻が5分以内の場合だけ、現在のaccess tokenと本人に結びつけた
+短命HttpOnly UI receiptを発行する。token_refresh/iatだけでは承認しない。BFFも削除直前に再確認する。
+5分という窓とamr提供条件は#30へのレビュー案で、満たせない場合は削除要求を止める。
+APIは署名・本人・fresh OAuthを独立検査し、UI receiptやconfirmだけを認可根拠にしてはいけない。
+[Supabase amr](https://supabase.com/docs/guides/auth/jwt-fields)を2026-11-08確認。
+
+mainのADR-014では招待はDB＋運営CLIへ変更済み。フロントは招待識別情報を保持せず、削除時の
+DB招待失効とAI停止/未配信取消は#30のトランザクションに委ねる。本DraftのMockはUI確認用であり、
+実際のパージ・暗号化・法務確認を完了したものではない。

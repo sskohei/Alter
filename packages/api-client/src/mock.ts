@@ -1,3 +1,4 @@
+import { createAccountMock } from "./mock-account";
 import { createMemoryMock, relationshipFixtures } from "./mock-memory";
 import { createActivityMock, mockOwnAgentId } from "./mock-activity";
 import type { components } from "./preview-schema";
@@ -62,6 +63,12 @@ export function createMockFetch(
     blocked,
   );
   let current = { ...profile };
+  const account = createAccountMock(
+    () => current,
+    (value) => {
+      current = value;
+    },
+  );
   if (options.seedAgent) {
     agent = {
       id: mockOwnAgentId,
@@ -102,13 +109,15 @@ export function createMockFetch(
       return mockError(401);
     if (scenario === "inactive") return mockError(403, "ACCOUNT_INACTIVE");
     if (!Number.isNaN(Number(scenario))) return mockError(Number(scenario));
+    const accountResponse = await account(request);
+    if (accountResponse) return accountResponse;
     if (url.pathname === "/api/v1/users/me") {
       if (request.method === "PATCH") {
         const body = await request.json();
         if (
           typeof body.display_name !== "string" ||
           !body.display_name.trim() ||
-          body.display_name.length > 200
+          body.display_name.length > 80
         )
           return mockError(422);
         current = { ...current, display_name: body.display_name };

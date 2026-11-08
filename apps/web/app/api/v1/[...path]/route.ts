@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { proofCookie, validProof } from "../../../../lib/reauth-proof";
 import { type NextRequest } from "next/server";
 import { appOrigin } from "../../../../lib/origin";
 import { serverApi } from "../../../../lib/api-server";
@@ -11,7 +13,7 @@ async function forward(
   const pathname = path.join("/");
   // Fixed allowlist prevents using this route as an arbitrary authenticated proxy.
   if (
-    !/^(users\/me|memories(?:\/[a-f\d-]{36})?|relationships|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds)|agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?|\/settings|\/blocks\/[a-f\d-]{36})?)?)$/.test(
+    !/^(users\/me(?:\/deletion)?|preferences|memories(?:\/[a-f\d-]{36})?|relationships|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds)|agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?|\/settings|\/blocks\/[a-f\d-]{36})?)?)$/.test(
       pathname,
     )
   )
@@ -34,6 +36,27 @@ async function forward(
       },
       { status: 401, headers: { "Cache-Control": "no-store" } },
     );
+  if (pathname === "users/me/deletion" && request.method === "POST") {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    if (
+      !token ||
+      !validProof(
+        (await cookies()).get(proofCookie)?.value,
+        token,
+        data.user.id,
+      )
+    )
+      return Response.json(
+        {
+          error: {
+            code: "REAUTHENTICATION_REQUIRED",
+            message: "もう一度本人確認をしてください。",
+            request_id: crypto.randomUUID(),
+          },
+        },
+        { status: 403, headers: { "Cache-Control": "private, no-store" } },
+      );
+  }
   const transport = authenticatedFetch({
     accessToken: async () =>
       (await supabase.auth.getSession()).data.session?.access_token ?? null,

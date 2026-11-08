@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 export function dataErrorMessage(error: unknown) {
   if (!(error instanceof ApiError))
     return "接続できませんでした。時間をおいて再試行してください。";
+  if (error.detail.code === "REAUTHENTICATION_REQUIRED") return "本人確認の有効期限を確認できません。もう一度同じアカウントで本人確認してください。";
   if (
     [
       "INVITATION_REQUIRED",

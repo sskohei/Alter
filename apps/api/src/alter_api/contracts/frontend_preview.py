@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
+from alter_api.contracts.account_preview import register_account_contract
 from alter_api.contracts.activity_preview import register_activity_contract
 from alter_api.contracts.interaction_preview import register_interaction_contract
 from alter_api.contracts.memory_preview import register_memory_contract
@@ -26,7 +27,7 @@ class Profile(BaseModel):
 
 class ProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    display_name: str = Field(min_length=1, max_length=200)
+    display_name: str = Field(min_length=1, max_length=80)
 
 
 class ErrorBody(BaseModel):
@@ -205,6 +206,7 @@ def create_contract_app() -> FastAPI:
     def suggest(id: UUID, body: SuggestionInput) -> ProfileRevision:
         raise HTTPException(503, "Contract only")
 
+    register_account_contract(app, ERRORS)
     register_activity_contract(app, ERRORS)
     register_interaction_contract(app, ERRORS, AgentSettings)
     register_memory_contract(app, ERRORS)
