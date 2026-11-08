@@ -11,7 +11,12 @@ from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
 
 from alter_api.auth import JwtVerifier
-from alter_api.errors import REQUEST_ID_HEADER, ErrorResponse, install_error_handlers
+from alter_api.errors import (
+    REQUEST_ID_HEADER,
+    ErrorResponse,
+    RequestIdMiddleware,
+    install_error_handlers,
+)
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
 
 API_V1_PREFIX = "/api/v1"
@@ -70,6 +75,7 @@ def create_app(
     app.state.settings = settings
     app.state.jwt_verifier = JwtVerifier(settings, client)
 
+    install_error_handlers(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -78,7 +84,8 @@ def create_app(
         allow_headers=["Authorization", "Content-Type", IDEMPOTENCY_KEY_HEADER],
         expose_headers=[REQUEST_ID_HEADER],
     )
-    install_error_handlers(app)
+    # 外側から request_id → CORS → 予期しない例外の変換 → ルーター。
+    app.add_middleware(RequestIdMiddleware)
 
     @app.get("/health", response_model=Health, operation_id="get_health", tags=["operations"])
     def health() -> Health:

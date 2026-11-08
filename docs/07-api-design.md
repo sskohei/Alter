@@ -80,11 +80,11 @@
 | 項目 | 実装 | 契約 |
 |---|---|---|
 | 基点 | `main.create_api_v1_router()` | 業務APIは`/api/v1`配下に追加する。`/health`は対象外 |
-| エラー | `errors.py` | 全エラーを`{"error":{code,message,request_id}}`で返す。`code`はOpenAPIの`ErrorBody`のenum。404/405/422/500も同形式。422は入力値を応答に反射しない。500は例外内容を返さない |
-| request_id | `errors.RequestIdMiddleware` | リクエストごとにサーバーがUUIDを採番し、`X-Request-ID`応答ヘッダーとエラー本文に入れる。クライアント送信値は採用しない。CORSで`X-Request-ID`を公開する |
+| エラー | `errors.py` | 全エラーを`{"error":{code,message,request_id}}`で返す。`code`はOpenAPIの`ErrorBody`のenum。404/405/422/500も同形式。422は入力値を応答に反射しない。500はHTTPExceptionのdetailを含め例外内容を返さない。応答開始前の予期しない例外はrequest_idと型名だけを記録して500に変換し、ASGIサーバーに再送出しない |
+| request_id | `errors.RequestIdMiddleware` | リクエストごとにサーバーがUUIDを採番し、`X-Request-ID`応答ヘッダーとエラー本文に入れる。クライアント送信値は採用しない。CORSで`X-Request-ID`を公開する。許可Originからの500応答にもCORSヘッダーを付ける |
 | ページング | `pagination.page_params` / `Page[T]` | `limit` 1〜50（既定20）、`cursor`は1〜512字の不透明文字列。応答`{items,next_cursor}` |
 | Idempotency-Key | `idempotency.idempotency_key` | 印字可能ASCII 8〜255字（UUID推奨）、形式不正は422。キーと結果の保存・再送時の同一応答は、キーを使う最初の書込APIのIssueで保存先と合わせて実装する |
 | CORS | `main.create_app` | `CORS_ORIGINS`の明示Originだけ許可（`*`は設定エラー）。メソッドGET/POST/PATCH/PUT/DELETE、ヘッダー`Authorization`/`Content-Type`/`Idempotency-Key` |
 | 認証 | `auth.CurrentPrincipal` | [認証](06-authentication-authorization.md)の手順でJWTを検証し、`Principal.sub`（UUID）を渡す。未認証・不正は401 `UNAUTHENTICATED`（`WWW-Authenticate: Bearer`）、JWKS/Auth照会障害は503 `AUTHORIZATION_UNAVAILABLE` |
 
-JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDIENCE`・`SUPABASE_JWT_ALGORITHMS`（ES256/RS256のみ、既定両方）・`SUPABASE_JWKS_CACHE_SECONDS`（既定300）。JWKSは`kid`ごとにキャッシュし、未知の`kid`では一度だけ再取得する（再取得は10秒以上の間隔）。ヘッダーの`alg`は許可リストかつ鍵の種類と一致する場合だけ受け付ける。時刻の許容差は30秒。JWKSが空のプロジェクトの`HS256`トークンだけを、`exp`/`iss`/`aud`/`sub`/`role`の確認後に`GET /auth/v1/user`（`apikey`は`SUPABASE_PUBLISHABLE_KEY`）で照会する。JWKSに鍵がある状態の`HS256`は拒否する。トークン・鍵・Publishable Keyはログやエラーに出さない。`ALTER_MODE=mock`でも検証は省略しない。
+JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDIENCE`・`SUPABASE_JWT_ALGORITHMS`（ES256/RS256のみ、既定両方）・`SUPABASE_JWKS_CACHE_SECONDS`（既定300）。JWKSは`kid`ごとにキャッシュし、未知の`kid`では一度だけ再取得する（再取得は10秒以上の間隔）。ヘッダーの`alg`は許可リストかつ鍵の種類と一致する場合だけ受け付ける。時刻の許容差は30秒。JWKSが空のプロジェクトの`HS256`トークンだけを、`exp`/`iss`/`aud`/`sub`/`role`の確認後に`GET /auth/v1/user`（`apikey`は`SUPABASE_PUBLISHABLE_KEY`）で照会する。JWKSに鍵がある状態の`HS256`は拒否する。JWKS内の鍵が不正・未対応の場合は503とし、空JWKSと扱ってHS256へ切り替えない。トークン・鍵・Publishable Keyはログやエラーに出さない。`ALTER_MODE=mock`でも検証は省略しない。

@@ -311,6 +311,34 @@ def test_jwks_server_error_returns_503(ec_key: ec.EllipticCurvePrivateKey) -> No
     assert _get(TestClient(_app(fake)), _sign(ec_key)).status_code == 503
 
 
+@pytest.mark.parametrize(
+    "keys",
+    [
+        [{"kid": "k1"}],
+        [{"kid": "k1", "kty": "RSA"}],
+        [{"kid": "k1", "kty": "RSA", "alg": "unsupported"}],
+        [{"kid": "k1", "kty": "RSA", "alg": ["RS256"]}],
+        [{"kty": "RSA"}],
+    ],
+    ids=["missing-kty", "missing-key-material", "unsupported-alg", "invalid-alg", "missing-kid"],
+)
+@pytest.mark.parametrize("algorithm", ["ES256", "HS256"])
+def test_invalid_jwks_is_503_and_never_enables_hs256(
+    keys: list[dict[str, Any]],
+    algorithm: str,
+    ec_key: ec.EllipticCurvePrivateKey,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = FakeSupabase(jwks=keys)
+    token = _sign(ec_key) if algorithm == "ES256" else _hs_token()
+    response = _get(TestClient(_app(fake), raise_server_exceptions=False), token)
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "AUTHORIZATION_UNAVAILABLE"
+    assert fake.user_calls == 0
+    assert token not in caplog.text
+    assert "test-publishable-key" not in caplog.text
+
+
 # -- 共有鍵 HS256（JWKS が空）: Auth サーバーで確認 -----------------------------
 
 HS_SECRET = "local-shared-secret-not-known-to-api"

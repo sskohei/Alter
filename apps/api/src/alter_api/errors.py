@@ -102,6 +102,37 @@ class RequestIdMiddleware:
         await self.app(scope, receive, send_with_request_id)
 
 
+class UnexpectedErrorMiddleware:
+    """応答開始前の例外を安全な500に変換し、ASGIサーバーの詳細ログを防ぐ。
+
+    CORSより内側に置くことで、500にも通常と同じCORSヘッダーを付ける。
+    応答開始後は別の応答を送れないため、例外を再送出して接続を終了する。
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        response_started = False
+
+        async def track_response(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, track_response)
+        except Exception as exc:
+            if response_started:
+                raise
+            response = await _handle_unexpected_error(Request(scope), exc)
+            await response(scope, receive, send)
+
+
 def get_request_id(request: Request) -> str:
     request_id = getattr(request.state, "request_id", None)
     if isinstance(request_id, str):
@@ -137,6 +168,8 @@ async def _handle_http_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, StarletteHTTPException)
     code = _STATUS_TO_CODE.get(exc.status_code, "INTERNAL_ERROR")
     message = exc.detail if isinstance(exc.detail, str) else "Request failed"
+    if exc.status_code == 500:
+        message = "Internal server error"
     return error_response(request, exc.status_code, code, message, dict(exc.headers or {}))
 
 
@@ -159,4 +192,4 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, _handle_http_error)
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
     app.add_exception_handler(Exception, _handle_unexpected_error)
-    app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(UnexpectedErrorMiddleware)

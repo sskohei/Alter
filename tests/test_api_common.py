@@ -1,5 +1,6 @@
 """#7 前半: 共通エラー形式・request_id・ページング・Idempotency-Key・CORS・OpenAPI。"""
 
+import logging
 import uuid
 from typing import Annotated, Any
 
@@ -8,7 +9,7 @@ from alter_api.idempotency import idempotency_key
 from alter_api.main import create_app
 from alter_api.pagination import Page, PageParams, page_params
 from alter_domain.settings import Settings
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -33,6 +34,10 @@ def _app() -> FastAPI:
     @app.get("/api/v1/_test/boom")
     def boom() -> None:
         raise RuntimeError("secret detail that must not leak")
+
+    @app.get("/api/v1/_test/http-boom")
+    def http_boom() -> None:
+        raise HTTPException(500, detail="secret detail that must not leak")
 
     return app
 
@@ -73,6 +78,35 @@ def test_unexpected_error_is_500_without_details(client: TestClient) -> None:
     response = client.get("/api/v1/_test/boom")
     _assert_error(response, 500, "INTERNAL_ERROR")
     assert "secret detail" not in response.text
+
+
+def test_http_500_does_not_echo_details(client: TestClient) -> None:
+    response = client.get("/api/v1/_test/http-boom", headers={"Origin": ORIGIN})
+    _assert_error(response, 500, "INTERNAL_ERROR")
+    assert response.headers["access-control-allow-origin"] == ORIGIN
+    assert "secret detail" not in response.text
+
+
+def test_unexpected_error_is_cors_readable(client: TestClient) -> None:
+    response = client.get("/api/v1/_test/boom", headers={"Origin": ORIGIN})
+    _assert_error(response, 500, "INTERNAL_ERROR")
+    assert response.headers["access-control-allow-origin"] == ORIGIN
+    assert "x-request-id" in response.headers["access-control-expose-headers"].lower()
+
+
+def test_unexpected_error_does_not_escape_to_server_logs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # 通常のTestClientはASGIサーバーまで例外が伝播した場合に再送出する。
+    response = TestClient(_app()).get("/api/v1/_test/boom")
+    error = _assert_error(response, 500, "INTERNAL_ERROR")
+    records = [record for record in caplog.records if record.name == "alter_api"]
+    assert len(records) == 1
+    assert records[0].levelno == logging.ERROR
+    assert error["request_id"] in records[0].getMessage()
+    assert "RuntimeError" in records[0].getMessage()
+    assert "secret detail" not in caplog.text
+    assert records[0].exc_info is None
 
 
 def test_request_id_on_success_and_not_taken_from_client(client: TestClient) -> None:

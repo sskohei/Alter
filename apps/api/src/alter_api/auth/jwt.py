@@ -85,13 +85,16 @@ class JwksCache:
             raise authorization_unavailable()
         keys: dict[str, jwt.PyJWK] = {}
         for raw in raw_keys:
-            if not isinstance(raw, dict) or not isinstance(raw.get("kid"), str):
-                continue
+            if not isinstance(raw, dict) or not isinstance(raw.get("kid"), str) or not raw["kid"]:
+                logger.warning("JWKS response contains an invalid key entry")
+                raise authorization_unavailable()
             try:
                 keys[raw["kid"]] = jwt.PyJWK(raw)
-            except jwt.PyJWKError:
-                # 未対応の鍵種別は無視する（対応する鍵だけで検証する）
-                continue
+            except (jwt.PyJWTError, TypeError, ValueError) as exc:
+                # 不正/未対応の鍵を空JWKSと見なし、HS256へ切り替えてはいけない。
+                # ライブラリ例外の本文には鍵が入るため、型名だけをログに残す。
+                logger.warning("JWKS key parsing failed: %s", type(exc).__name__)
+                raise authorization_unavailable() from exc
         return keys
 
     def _refresh_locked(self) -> None:
