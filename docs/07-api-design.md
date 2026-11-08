@@ -8,7 +8,7 @@
 
 招待照合はDBの`invitations`・`invitation_identities`を参照する。DB障害・データ不整合・Auth照会障害は503で拒否する。運営専用CLIは共通ドメイン処理を利用し、公開APIに招待管理操作や招待一覧を追加しない（ADR-014）。
 
-#7 は2つのPRに分けて実装する。前半（共通基盤・JWT検証）は実装済みで、招待DB・運営専用CLI・停止/削除の共通認可と`GET/PATCH /users/me`は後半で追加する。業務エンドポイントの追加時にPydantic/OpenAPIと生成TypeScriptを同時更新する。
+#7 は複数のPRに分けて実装する。共通基盤・JWT検証、招待DB・運営専用CLI・招待照合のドメイン処理（`alter_domain.invitations.evaluate_access`）は実装済み。APIの停止/削除・招待の共通認可と`GET/PATCH /users/me`は次のPRで追加する。業務エンドポイントの追加時にPydantic/OpenAPIと生成TypeScriptを同時更新する。
 
 ## スキーマ（公開API）
 

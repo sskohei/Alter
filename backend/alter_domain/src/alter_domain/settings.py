@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     supabase_jwt_algorithms: str = "ES256,RS256"
     # JWKS を短時間キャッシュする秒数
     supabase_jwks_cache_seconds: int = 300
+    # Supabase Auth 管理 API（招待の identity 照合）。API と運営 CLI のサーバー側だけで使う。
+    supabase_secret_key: str = ""
 
     @field_validator("cors_origins")
     @classmethod

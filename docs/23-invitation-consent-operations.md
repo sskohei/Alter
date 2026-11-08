@@ -20,7 +20,7 @@ MVPの許可リストはSupabase PostgreSQLの`invitations`・`invitation_identi
 
 ## 運営専用CLIとDB更新
 
-運営責任者sskoheiが、本人確認後にCLIで登録・一覧確認・プロバイダー追加・失効を行う。MVPに招待管理Web画面や公開の招待管理APIは設けない。具体的なコマンド名・引数・実行手順は #7 で実装とともに確定する。未配信取消は対象テーブル追加時の #13/#26/#28、削除要求との連動は #30 で同じ共通ドメイン処理へ接続する。
+運営責任者sskoheiが、本人確認後にCLIで登録・一覧確認・プロバイダー追加・失効を行う。MVPに招待管理Web画面や公開の招待管理APIは設けない。コマンドは`alter-invitations`（`backend/alter_domain`の`alter_domain.cli.invitations`）で、#7 で確定した。未配信取消は対象テーブル追加時の #13/#26/#28、削除要求との連動は #30 で同じ共通ドメイン処理へ接続する。
 
 - CLIはAPIと共通のドメイン処理・リポジトリを呼び出し、対象環境を明示してサーバー側DBへ接続する。運営用資格情報をWebへ渡さず、実識別子をシェル履歴・共有ログへ残さない入力方法を用意する。一覧の既定表示は内部招待ID・状態とし、識別子の詳細表示は運営の明示操作に限定する。
 - 登録時はAuth管理情報から取得したidentityと`sub`を本人照合し、招待・identity・監査を同一トランザクションで保存する。10人枠は有効な招待を人数として数え、登録/再参加処理間で共通ロックを取り、同時登録でも10人を超えない。同一`sub`や同一provider IDの重複はDB制約で拒否する。
@@ -28,6 +28,24 @@ MVPの許可リストはSupabase PostgreSQLの`invitations`・`invitation_identi
 - APIは一般業務リクエストごとにDBの有効な招待とAuth側identityを照合する。環境変数への一覧の複製や、リクエストをまたぐ許可結果のキャッシュは行わない。失効コミット後の要求を拒否し、実行中のジョブも予約・実行・配信直前にDB状態を再確認する。
 - 監査は`audit_events`に内部招待ID・操作種別・運営担当・時刻・結果を記録し、provider ID・`sub`・トークンを監査metadataへ複製しない。更新失敗時はロールバックし、識別子を含まない失敗コードと担当・時刻を別途記録する。
 - 失効後は即時に利用不可とする。失効の再実行は冪等とし、最初の失効日時とパージ期限を延長しない。招待とidentityの識別情報は失効時から30日以内、アカウント削除時は削除要求時から30日以内の早い期限でパージする。招待が存在しない状態でも拒否するため、Auth削除後も自動復帰しない。バックアップ復元時の失効・削除再適用を公開前に検証する。
+
+### CLIの使い方（#7）
+
+リポジトリrootで実行する。接続先は`.env`/環境変数の`DATABASE_URL`・`SUPABASE_URL`・`SUPABASE_SECRET_KEY`。
+
+```bash
+uv run alter-invitations --env local --operator sskohei list                    # 内部招待ID・状態・プロバイダー種別のみ
+uv run alter-invitations --env local --operator sskohei list --show-identifiers # 照合作業中だけ。subとprovider IDも表示
+uv run alter-invitations --env local --operator sskohei register                # subを対話入力→Authの連携ログインを表示→registerと入力
+uv run alter-invitations --env local --operator sskohei add-identity <招待ID>    # 同じsubに新しく連携したGoogle/GitHubを追加→addと入力
+uv run alter-invitations --env local --operator sskohei revoke <招待ID>          # 失効・AI停止・監査を同時確定→revokeと入力（--yesで省略）
+```
+
+- `--env local|production`は必須。`local`はDB/Supabaseの接続先がローカル（127.0.0.1/localhost）でなければ中止し、`production`はローカルなら中止したうえで`production`の入力を求める。
+- Supabaseの`sub`はコマンド引数ではなく対話入力で受け取り、シェル履歴に残さない。CLIはログファイルを書かない。
+- `register`はAuth管理APIから取得したGoogle/GitHub identityをすべて登録する。Google/GitHub以外のログイン方法が連携されている、同じプロバイダーの複数アカウントがある、Authにユーザーがいない場合は登録しない。1つの招待に同じプロバイダーは1つまで（`UNIQUE(invitation_id, provider)`）。登録済みプロバイダーの別アカウントへの差し替えは失効と再招待で行う。
+- 失敗した操作も、ロールバック後に`result=failure`と識別子を含まない`code`を監査へ記録する。監査の`metadata`は`operator`・`result`・`code`だけ。
+- 失効済み招待と同じ`sub`/provider IDの再登録は、パージ（#30）まで一意制約で拒否される。
 
 ## 利用説明と同意文言
 
