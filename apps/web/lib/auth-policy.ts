@@ -1,7 +1,7 @@
 export function safeReturnPath(value: unknown) {
   if (typeof value !== "string") return "/dashboard";
   // Restrict to implemented routes; disallow protocol-relative URLs and encodings.
-  return /^\/(dashboard|onboarding|agent(?:\/new|\/edit)?|settings\/account|deletion-status)$/.test(
+  return /^\/(dashboard|onboarding|agent(?:\/new|\/edit)?|settings\/(?:account|discord)|deletion-status)$/.test(
     value,
   )
     ? value

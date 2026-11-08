@@ -163,3 +163,16 @@ APIは署名・本人・fresh OAuthを独立検査し、UI receiptやconfirmだ�
 mainのADR-014では招待はDB＋運営CLIへ変更済み。フロントは招待識別情報を保持せず、削除時の
 DB招待失効とAI停止/未配信取消は#30のトランザクションに委ねる。本DraftのMockはUI確認用であり、
 実際のパージ・暗号化・法務確認を完了したものではない。
+
+## #29 Discord本人連携（Draft）
+
+依存は#9/#12/#26/#27。#31の再確認/共通設定を先行baseとする。
+/settings/discordとサーバー専用/auth/discord/callbackを追加。startのURLはhttps://discord.com、
+identifyだけのscope、登録したcallback、単一のstate/redirect_uri等に限定する。
+短命HttpOnly state hashと同一本人をWebでも確認し、code/stateはサーバーからBearer付きAPIへ送る。
+APIは10分・使い捨て・本人拘束stateを独立検査し、OAuth secret/tokenを通常応答へ返さない。
+
+連携と交流/全体公開/ギルド同意/DMは独立。Botの/agent publishと/server setupを案内するだけで
+Webからギルド権限や同意を付与しない。解除の確認直前に完全回収不可を説明する。
+解除後の未配信取消・全体公開/DM/ギルド同意失効の原子性は#26で受け入れる。
+Mockは実Discordへ接続せず、ブラウザE2EもDiscordの認可画面を合成応答へ置換する。

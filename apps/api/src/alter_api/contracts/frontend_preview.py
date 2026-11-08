@@ -9,6 +9,7 @@ from uuid import UUID
 
 from alter_api.contracts.account_preview import register_account_contract
 from alter_api.contracts.activity_preview import register_activity_contract
+from alter_api.contracts.discord_preview import register_discord_contract
 from alter_api.contracts.interaction_preview import register_interaction_contract
 from alter_api.contracts.memory_preview import register_memory_contract
 from fastapi import Depends, FastAPI, HTTPException
@@ -206,6 +207,7 @@ def create_contract_app() -> FastAPI:
     def suggest(id: UUID, body: SuggestionInput) -> ProfileRevision:
         raise HTTPException(503, "Contract only")
 
+    register_discord_contract(app, ERRORS)
     register_account_contract(app, ERRORS)
     register_activity_contract(app, ERRORS)
     register_interaction_contract(app, ERRORS, AgentSettings)

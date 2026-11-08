@@ -1,3 +1,4 @@
+import { createDiscordMock } from "./mock-discord";
 import { createAccountMock } from "./mock-account";
 import { createMemoryMock, relationshipFixtures } from "./mock-memory";
 import { createActivityMock, mockOwnAgentId } from "./mock-activity";
@@ -63,6 +64,7 @@ export function createMockFetch(
     blocked,
   );
   let current = { ...profile };
+  const discord = createDiscordMock(!!options.activity, () => { current = { ...current, discord_dm_notifications: false }; if (agent?.settings) agent = { ...agent, settings: { ...agent.settings, discord_publish: false } }; });
   const account = createAccountMock(
     () => current,
     (value) => {
@@ -246,22 +248,8 @@ export function createMockFetch(
       if (suffix === "/profile/suggest" && request.method === "POST")
         return mockError(503, "SUGGESTION_UNAVAILABLE");
     }
-    if (url.pathname === "/api/v1/discord/guilds" && request.method === "GET")
-      return Response.json(
-        options.activity
-          ? [
-              {
-                guild_id: "111111111111111111",
-                guild_name: "テスト交流サーバー",
-                channel_id: "222222222222222222",
-                channel_name: "ai交流",
-                guild_enabled: true,
-                consented_at: profile.created_at,
-                revoked_at: null,
-              },
-            ]
-          : [],
-      );
+    const discordResponse = await discord(request);
+    if (discordResponse) return discordResponse;
     const memoryResponse = await memory(request);
     if (memoryResponse) return memoryResponse;
     const activityResponse = await activity(request);
