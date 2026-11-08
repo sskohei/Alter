@@ -1,9 +1,10 @@
 # ER図
 
-カラムと制約の正本は [DB設計](../05-database-design.md)。図は主要FKを示す。
+カラムと制約の正本は [DB設計](../05-database-design.md)。図は主要FKを示す。招待2表はADR-014で設計し #7 で追加予定。`invitations.auth_user_id`はAuthの`sub`を保持するが、失効記録の保持とプロフィール作成前の登録のためAuth/プロフィールへのFKは設けない。
 
 ```mermaid
 erDiagram
+  INVITATIONS ||--|{ INVITATION_IDENTITIES : allows
   AUTH_USERS ||--|| PROFILES : id
   PROFILES ||--o| AGENTS : owns
   AGENTS ||--o{ AGENT_PROFILES : versions
