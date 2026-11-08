@@ -18,7 +18,10 @@
     "db:status": "supabase status",
     "test": "pnpm --filter web test",
     "test:e2e": "pnpm --filter web test:e2e",
-    "dev:mock": "pnpm --filter @alter/api-client mock"
+    "dev:mock": "pnpm --filter @alter/api-client mock",
+    "web:check-env": "node scripts/check_web_environment.mjs",
+    "web:smoke": "node scripts/smoke_web.mjs",
+    "test:deployment": "node --test scripts/*.test.mjs"
   },
   "devDependencies": {
     "supabase": "2.122.0"
