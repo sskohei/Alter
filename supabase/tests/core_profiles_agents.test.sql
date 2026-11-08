@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(72);
+select plan(85);
 
 -- ---------------------------------------------------------------------------
 -- 1. RLS: 全対象表で有効、ポリシー 0 件（default deny）
@@ -49,6 +49,16 @@ cross join (values
 ) as op (kind, sql)
 order by r.role, t.name, op.kind;
 
+-- 新規関数にも default deny が効くことを実呼出しで検証する。
+create function public.test_default_deny_probe()
+returns integer language sql as 'select 1';
+
+select throws_ok(
+  format('set local role %I; select public.test_default_deny_probe()', r.role),
+  '42501', null, format('%s は新規関数を実行できない', r.role)
+)
+from (values ('anon'), ('authenticated')) as r (role);
+
 -- ---------------------------------------------------------------------------
 -- テストデータ（このトランザクションの最後に rollback される）
 -- ---------------------------------------------------------------------------
@@ -71,6 +81,18 @@ insert into public.agent_profiles (
   ('10000000-0000-0000-0000-00000000000a', 1, 'p', 'v', 's', 'i', 'sh', 'r', now()),
   ('10000000-0000-0000-0000-00000000000a', 2, 'p', 'v', 's', 'i', 'sh', 'r', null),
   ('10000000-0000-0000-0000-00000000000b', 1, 'p', 'v', 's', 'i', 'sh', 'r', now());
+
+-- 承認済みで非公開欄を持つ行を、鍵交換テスト用に作る。
+insert into public.agent_profiles (
+  agent_id, version, personality, values_text, speaking_style,
+  interaction_policy, shareable_info, restrictions,
+  private_info_ciphertext, private_info_key_version, approved_at
+) values (
+  '10000000-0000-0000-0000-00000000000a', 3, 'p', 'v', 's', 'i', 'sh', 'r',
+  decode('01', 'hex'), 1, now()
+);
+create temporary table rotation_before as
+select * from public.agent_profiles where version = 3;
 
 insert into public.agent_settings (agent_id) values ('10000000-0000-0000-0000-00000000000a');
 
@@ -159,6 +181,67 @@ select lives_ok(
   $$update public.agent_profiles set personality = 'draft edit', approved_at = now()
     where agent_id = '10000000-0000-0000-0000-00000000000a' and version = 2$$,
   'agent_profiles: 未承認版は編集・承認できる'
+);
+
+-- 承認済み版の鍵交換は許可し、人格・識別子・承認記録は維持する。
+select lives_ok(
+  $$update public.agent_profiles
+    set private_info_ciphertext = decode('02', 'hex'), private_info_key_version = 2
+    where version = 3$$,
+  '鍵交換: 承認済み版の暗号文と鍵版を更新できる'
+);
+select is(
+  (select private_info_ciphertext from public.agent_profiles where version = 3),
+  decode('02', 'hex'), '鍵交換: 新しい暗号文を保存する'
+);
+select is(
+  (select private_info_key_version::int from public.agent_profiles where version = 3),
+  2, '鍵交換: 新しい鍵版を保存する'
+);
+select is(
+  (select to_jsonb(p) - 'private_info_ciphertext' - 'private_info_key_version'
+   from public.agent_profiles p where version = 3),
+  (select to_jsonb(p) - 'private_info_ciphertext' - 'private_info_key_version'
+   from rotation_before p),
+  '鍵交換: 暗号文と鍵版以外は維持する'
+);
+select throws_ok(
+  $$update public.agent_profiles set private_info_ciphertext = decode('03', 'hex')
+    where version = 3$$,
+  '23514', null, '鍵交換: 同じ鍵版で暗号文だけを変更できない'
+);
+select throws_ok(
+  $$update public.agent_profiles
+    set private_info_ciphertext = null, private_info_key_version = null where version = 3$$,
+  '23514', null, '鍵交換: 承認済みの非公開欄を削除できない'
+);
+select throws_ok(
+  $$update public.agent_profiles
+    set private_info_ciphertext = decode('03', 'hex'), private_info_key_version = 3
+    where agent_id = '10000000-0000-0000-0000-00000000000b' and version = 1$$,
+  '23514', null, '鍵交換: 承認済み版に非公開欄を追加できない'
+);
+select throws_ok(
+  $$update public.agent_profiles
+    set private_info_ciphertext = decode('03', 'hex'), private_info_key_version = 3,
+        approved_at = null where version = 3$$,
+  '23514', null, '鍵交換: 承認を取り消せない'
+);
+select throws_ok(
+  $$update public.agent_profiles
+    set private_info_ciphertext = decode('03', 'hex'), private_info_key_version = 3,
+        version = 4 where version = 3$$,
+  '23514', null, '鍵交換: 版番号を変更できない'
+);
+select throws_ok(
+  $$update public.agent_profiles
+    set private_info_ciphertext = decode('03', 'hex'), private_info_key_version = 3,
+        personality = 'changed' where version = 3$$,
+  '23514', null, '鍵交換: 人格内容を同時に変更できない'
+);
+select throws_ok(
+  $$update public.agent_profiles set private_info_key_version = null where version = 3$$,
+  '23514', null, '鍵交換: 鍵版をNULLにできない'
 );
 
 -- agent_settings

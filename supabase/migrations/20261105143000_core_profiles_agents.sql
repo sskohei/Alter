@@ -7,7 +7,7 @@
 -- * 業務テーブルは RLS を有効にし、ポリシーは 0 件 (default deny)。
 --   anon / authenticated からは直接 SELECT/INSERT/UPDATE/DELETE できない。
 --   データ操作は FastAPI（管理接続 + 所有権 SQL 条件）だけが行う。
--- * 承認済みの人格版 (agent_profiles.approved_at IS NOT NULL) は変更不可。
+-- * 承認済み人格は不変。既存の非公開欄の鍵ローテーションだけを例外とする。
 
 -- ---------------------------------------------------------------------------
 -- 共通: updated_at を自動更新するトリガー関数
@@ -115,14 +115,22 @@ create table public.agent_profiles (
   )
 );
 
--- 承認済み版の更新を拒否する（承認そのもの = approved_at を NULL から設定する更新は許可）
+-- 承認済み版は不変。既存暗号文を別の鍵版へ移す更新だけを許可する。
+-- 平文が同じことはDBでは検証できないため、管理APIの再暗号化処理が保証する。
 create function public.prevent_approved_profile_update()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
-  if old.approved_at is not null then
+  if old.approved_at is not null and new is distinct from old and (
+    (to_jsonb(new) - 'private_info_ciphertext' - 'private_info_key_version')
+      is distinct from
+    (to_jsonb(old) - 'private_info_ciphertext' - 'private_info_key_version')
+    or old.private_info_ciphertext is null
+    or new.private_info_ciphertext is null
+    or new.private_info_key_version is not distinct from old.private_info_key_version
+  ) then
     raise exception 'approved agent profile % (agent %, version %) is immutable',
       old.id, old.agent_id, old.version
       using errcode = 'check_violation';
@@ -241,3 +249,7 @@ alter default privileges for role postgres in schema public
   revoke all on sequences from anon, authenticated;
 alter default privileges for role postgres in schema public
   revoke all on functions from public, anon, authenticated;
+
+-- PUBLIC EXECUTE はグローバル既定値。スキーマ単位の REVOKE では取り消せない。
+alter default privileges for role postgres
+  revoke execute on functions from public;
