@@ -182,3 +182,9 @@ Mockは実Discordへ接続せず、ブラウザE2EもDiscordの認可画面を�
 Vercel環境別テンプレート、build時の公開変数/接続先検査と認証なしスモークを追加。
 実環境は未設定のためデプロイ・callback登録・実API受け入れは未実施。
 依存・登録値・手順は[Webデプロイ](25-web-deployment.md)を参照する。
+
+## #37 MVP受け入れの準備（Draft）
+
+10合成IDのMock操作、375/320px axe/keyboard、live証跡の充足性判定器を追加。
+手順と実環境で必要な全caseは[MVP受け入れ](26-mvp-acceptance.md)を参照する。
+実環境未設定のため実10人の受け入れ・性能測定・本番公開は未実施。

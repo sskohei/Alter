@@ -4,13 +4,18 @@ import { createMockFetch, mockError, profile } from "@alter/api-client/mock";
 
 function user(which: string) {
   return {
-    id: which.startsWith("second")
-      ? "00000000-0000-4000-8000-000000000002"
-      : profile.id,
+    id: /^mvp\d{2}:/.test(which)
+      ? `80000000-0000-4000-8000-${which.slice(3, 5).padStart(12, "0")}`
+      : which.startsWith("second")
+        ? "00000000-0000-4000-8000-000000000002"
+        : profile.id,
     aud: "authenticated",
     role: "authenticated",
     email: "synthetic@example.test",
-    app_metadata: { provider: "google", providers: ["google"] },
+    app_metadata: {
+      provider: /^mvp(02|04|06|08|10):/.test(which) ? "github" : "google",
+      providers: [/^mvp(02|04|06|08|10):/.test(which) ? "github" : "google"],
+    },
     user_metadata: {},
     created_at: profile.created_at,
     last_sign_in_at: new Date().toISOString(),
@@ -96,6 +101,10 @@ const server = createServer(async (req, res) => {
       const callback = url.searchParams.get("redirect_to")!;
       response = new Response(
         `<html lang="ja"><body><h1>テスト専用 OAuth</h1>${[
+          ...Array.from(
+            { length: 10 },
+            (_, index) => `mvp${String(index + 1).padStart(2, "0")}`,
+          ),
           "normal",
           "activity",
           "activity-empty",
