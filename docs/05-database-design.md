@@ -47,6 +47,31 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 
 招待2表のmigration・制約/RLSテスト・運営CLIは #7 で追加する。#6の既存migrationは変更しない。テーブル未適用や不整合・照会障害は認可エラー503として業務処理を止める。保持期限・CLI操作・失効と停止の原子性は[招待契約](23-invitation-consent-operations.md)に従う。
 
+## 会話・ジョブ・記憶の運用制約（#13）
+
+migrationは`20261109220000_conversations_jobs_memories.sql`、受け入れテストは`supabase/tests/conversations_jobs_memories.test.sql`。上表で値が未定義だった項目は次のとおり確定した（後続Issueで変える場合はここを更新する）。
+
+- `messages.moderation_status IN (allowed,blocked)`。発言者は`(conversation_id,agent_id)`の複合FKで`conversation_participants`を参照し、参加者以外の発言を拒否する（`agents`への単独FKの代わり）。本文は空白不可・4000字以内。
+- `conversations.visibility='participants'`固定（MVP）。`topic`200字・`summary`4000字以内、`ended_at >= started_at`、`profile_versions`はJSONオブジェクト。
+- `memories.status IN (active,archived)`（本人削除は行削除、`archived`は180日見直し用）。本文1000字以内。
+- `background_jobs.kind`と`notifications.kind`は値の一覧を固定せず、形式`^[a-z][a-z0-9_.]{0,31}$`だけを検査する。具体的な種類は利用するIssue（#19〜#21・#28・#30）で決める。`last_error`は500字以内の固定コードとし、例外本文や会話本文を入れない。
+- `background_jobs`は`status='running'`のときだけ`lease_until`を持つ（CHECK）。`payload`・`notifications.body`はJSONオブジェクト。
+- `agent_relationships.shared_interests`は20件以内。各`dedupe_key`/`idempotency_key`は空白不可・200字以内。
+
+削除動作: 会話削除で参加者・発言・通知・出典の記憶をCASCADE。参加者の`agent_id`はRESTRICTで、会話が残るAIは削除できない（アカウント削除は会話→記憶→通知→AIの順）。`conversations.job_id`と`usage_records.conversation_id`は保持期間が違う（ジョブ30〜90日・費用12か月・会話90日）ためSET NULL。`usage_records.agent_id`・`memories.agent_id`・関係・ブロックはAI削除でCASCADE。
+
+Scheduler/Workerが使う索引とトランザクション境界:
+
+| 処理 | 条件・ロック | 索引 |
+|---|---|---|
+| 予約（Cron） | 対象AIの`agents`行を`FOR UPDATE`→当日の`usage_records`（確定＋未解放予約）と進行中参加を確認→`background_jobs`と`conversations`・参加者・`reserve`を同一トランザクションで作成。重複は`(kind,dedupe_key)`で拒否 | `usage_records(agent_id,created_at)`、`conversation_participants(agent_id,conversation_id)` |
+| 取得（Worker） | `status IN (queued,retry_wait) AND run_at<=now()`を`FOR UPDATE SKIP LOCKED LIMIT 1`→同一トランザクションで`running`・`lease_until=now()+90s`・`attempts+1` | 部分索引`background_jobs(run_at) WHERE status IN (queued,retry_wait)` |
+| lease切れ再取得 | `status='running' AND lease_until<now()`を同様に条件付きUPDATE | 部分索引`background_jobs(lease_until) WHERE status='running'` |
+| 発言保存 | `(conversation_id,turn_no)`を冪等キーに発言と`usage_records`を同一トランザクションで保存 | `messages(conversation_id,turn_no)` UNIQUE |
+| 完了 | 会話`completed`・要約・通知・関係回数・配信outboxを同時確定。通知は`(profile_id,dedupe_key)`で重複しない | `notifications(profile_id,created_at DESC)` |
+
+同じペアの並行セッション禁止はDB制約では表さず、予約時の行ロックと`dedupe_key`で防ぐ（#19で受け入れ）。
+
 ## RLSと接続ロール
 
 全`public`業務テーブルでRLSを有効にし、`anon`の読み書きを禁止する。`authenticated`には直接DML権限を与えず、MVPでは**すべての表でRLSポリシー0件（default deny）**とする。対象は上表の全24表で、`invitations`・`invitation_identities`・`profiles`・`agents`・`agent_profiles`・`agent_settings`・`conversations`・`conversation_participants`・`messages`・`memories`・`agent_relationships`・`agent_blocks`・`notifications`・`discord_connections`・`discord_oauth_states`・`discord_guilds`・`discord_channels`・`agent_discord_consents`・`discord_deliveries`・`discord_dm_deliveries`・`usage_records`・`background_jobs`・`audit_events`・`deletion_requests`。将来、公開プロフィール投影を追加する場合は別VIEWと限定SELECTポリシーを設計する。`postgres`等の管理権限はRLSを迂回し得るため、APIはJWT検証と所有権SQL条件を必須とする。Worker/Botは別の最小権限DB資格情報を持つのが正式版目標。MVPでは管理接続を使う場合、秘密をRenderだけに置き、各操作の`WHERE owner_id=...`と参加者検証をテストで必須とする。新規関数の既定権限は、スキーマ単位の付与を外すことに加え、グローバルのPUBLIC EXECUTEも取り消す。RLSをAPI側の認可代替と数えない。[Supabase RLS資料](https://supabase.com/docs/guides/database/postgres/row-level-security)、[JWT資料](https://supabase.com/docs/guides/auth/jwts)。
