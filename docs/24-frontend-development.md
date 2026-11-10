@@ -12,6 +12,17 @@ Bearerは合成文字列でよく、認証の安全性を検証するサーバ�
 ページングヘルパーは不透明cursorと1〜50件を扱う。業務一覧の空fixtureは対応画面の契約追加時に接続する。
 
 `@alter/api-client/preview`は型付きクライアント、共通エラー（status/code/request_id）、
-Bearer転送、リクエストID、一度だけの401更新・再送を提供する。
+Bearer転送、応答のリクエストID、一度だけの401更新・再送を提供する。
 HTTPエラーの本文をログへ出さない。サーバーではユーザーごと・リクエストごとに生成する。
 ブラウザへrefresh tokenを返す独自APIや、Supabase重要テーブルの直接DMLは追加しない。
+
+## mainの実装との統合（2026-11-10）
+
+#43/#55でJWT検証・共通エラー・招待DB/CLIがmainへ入った。previewのエラーは
+`alter_api.errors.ErrorResponse`を直接使用し、エラーコードとrequest_idの型を二重管理しない。
+Mockエラーも実APIの生成OpenAPIで検査する。request_idはAPIが採番するため、
+クライアントはX-Request-IDを送らず応答から取得する（APIのCORS許可ヘッダーに含まれない）。
+
+`GET/PATCH /users/me`を含む業務ルーターは未実装で、招待判定はドメイン処理まで。
+プロフィール・人格・会話等のMockを実APIへ切り替える条件はまだ満たさない。
+外部OAuth/LLM/Discordを使う自動テストのMockは引き続き維持する。

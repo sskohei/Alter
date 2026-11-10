@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from alter_api.errors import ErrorResponse
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,16 +24,6 @@ class Profile(BaseModel):
 class ProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     display_name: str = Field(min_length=1, max_length=200)
-
-
-class ErrorBody(BaseModel):
-    code: str
-    message: str
-    request_id: UUID
-
-
-class ErrorResponse(BaseModel):
-    error: ErrorBody
 
 
 ERRORS: dict[int | str, dict[str, Any]] = {
