@@ -40,6 +40,12 @@ test("generated input and all lifecycle responses match OpenAPI; approval leaves
   validate("Agent", agent);
   expect(JSON.stringify(agent)).not.toContain("PRIVATE_SENTINEL");
   const params = { path: { id: agent.id } };
+  const suggestion = await client.POST("/api/v1/agents/{id}/profile/suggest", {
+    params, body: { answers: {} },
+  });
+  expect(suggestion.response.status).toBe(503);
+  validate("ErrorResponse", suggestion.error);
+  expect(suggestion.error?.error.code).toBe("SERVICE_UNAVAILABLE");
   const first = await unwrap(
     await client.GET("/api/v1/agents/{id}/profile", { params }),
   );

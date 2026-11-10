@@ -708,6 +708,20 @@
       "ErrorBody": {
         "properties": {
           "code": {
+            "enum": [
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "INVITATION_REQUIRED",
+              "ACCOUNT_INACTIVE",
+              "NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "CONFLICT",
+              "VALIDATION_ERROR",
+              "RATE_LIMITED",
+              "AUTHORIZATION_UNAVAILABLE",
+              "SERVICE_UNAVAILABLE",
+              "INTERNAL_ERROR"
+            ],
             "title": "Code",
             "type": "string"
           },
@@ -716,7 +730,6 @@
             "type": "string"
           },
           "request_id": {
-            "format": "uuid",
             "title": "Request Id",
             "type": "string"
           }
