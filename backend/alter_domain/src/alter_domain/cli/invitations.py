@@ -17,13 +17,14 @@
 import argparse
 import sys
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TextIO
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import Engine
+from sqlalchemy import Connection, Engine
 from sqlalchemy.engine import make_url
 
 from alter_domain import invitations as inv
@@ -153,23 +154,33 @@ def _ask(deps: Deps, prompt: str) -> str:
 # -- 失敗の監査（ロールバック後に別トランザクションで記録） -----------------------------
 
 
-def _run_audited(
-    deps: Deps,
-    *,
-    action: str,
-    operator: str,
-    invitation_id: uuid.UUID | None,
-    work: Callable[..., object],
-) -> object:
+@contextmanager
+def _audit_failures(
+    deps: Deps, *, action: str, operator: str, invitation_id: uuid.UUID | None
+) -> Iterator[None]:
+    """コマンド全体（事前確認・Auth 照会・DB 更新）の失敗を固定コードで監査する。
+
+    業務データの更新はロールバック済みなので、別トランザクションで記録する。
+    確認入力の取り消し（CliAbort）は失敗ではないので記録しない。
+    """
     try:
-        with deps.engine.begin() as conn:
-            return work(conn)
+        yield
+    except CliAbort:
+        raise
     except inv.InvitationError as exc:
         _record_failure(deps, action, operator, invitation_id, exc.code)
+        raise
+    except AuthAdminUnavailable:
+        _record_failure(deps, action, operator, invitation_id, "auth_unavailable")
         raise
     except Exception:
         _record_failure(deps, action, operator, invitation_id, "unexpected_error")
         raise
+
+
+def _in_transaction[T](deps: Deps, work: Callable[[Connection], T]) -> T:
+    with deps.engine.begin() as conn:
+        return work(conn)
 
 
 def _record_failure(
@@ -231,58 +242,51 @@ def _read_sub(deps: Deps) -> uuid.UUID:
 
 def _cmd_register(args: argparse.Namespace, deps: Deps) -> None:
     sub = _read_sub(deps)
-    user = deps.get_auth_user(sub)
-    if user is None:
-        _record_failure(deps, "invitation.register", args.operator, None, "auth_user_not_found")
-        raise inv.AuthUserNotFound()
-    _show_auth_user(deps, user)
-    try:
+    with _audit_failures(
+        deps, action="invitation.register", operator=args.operator, invitation_id=None
+    ):
+        user = deps.get_auth_user(sub)
+        if user is None:
+            raise inv.AuthUserNotFound()
+        _show_auth_user(deps, user)
         inv.allowed_identities(user)
-    except inv.InvitationError as exc:
-        _record_failure(deps, "invitation.register", args.operator, None, exc.code)
-        raise
-    print(
-        "上の情報が、招待した本人と別の連絡経路で確認したものと一致するか照合してください。",
-        file=deps.stdout,
-    )
-    if _ask(deps, "一致していれば register と入力: ") != "register":
-        raise CliAbort("確認の入力が一致しません")
-
-    invitation_id = _run_audited(
-        deps,
-        action="invitation.register",
-        operator=args.operator,
-        invitation_id=None,
-        work=lambda conn: inv.register_invitation(conn, user, operator=args.operator),
-    )
+        print(
+            "上の情報が、招待した本人と別の連絡経路で確認したものと一致するか照合してください。",
+            file=deps.stdout,
+        )
+        if _ask(deps, "一致していれば register と入力: ") != "register":
+            raise CliAbort("確認の入力が一致しません")
+        invitation_id = _in_transaction(
+            deps, lambda conn: inv.register_invitation(conn, user, operator=args.operator)
+        )
     print(f"登録しました。招待ID: {invitation_id}", file=deps.stdout)
 
 
 def _cmd_add_identity(args: argparse.Namespace, deps: Deps) -> None:
-    with deps.engine.connect() as conn:
-        detail = inv.get_invitation(conn, args.invitation_id)
-    if detail.summary.status != "active":
-        raise inv.InvitationRevoked()
-    user = deps.get_auth_user(detail.auth_user_id)
-    if user is None:
-        raise inv.AuthUserNotFound()
-    _show_auth_user(deps, user)
-    print(
-        "新しく追加されたログインが本人のものか、別の連絡経路で照合してください。", file=deps.stdout
-    )
-    if _ask(deps, "一致していれば add と入力: ") != "add":
-        raise CliAbort("確認の入力が一致しません")
-
-    added = _run_audited(
+    with _audit_failures(
         deps,
         action="invitation.add_identity",
         operator=args.operator,
         invitation_id=args.invitation_id,
-        work=lambda conn: inv.add_identities(
-            conn, args.invitation_id, user, operator=args.operator
-        ),
-    )
-    assert isinstance(added, tuple)
+    ):
+        with deps.engine.connect() as conn:
+            detail = inv.get_invitation(conn, args.invitation_id)
+        if detail.summary.status != "active":
+            raise inv.InvitationRevoked()
+        user = deps.get_auth_user(detail.auth_user_id)
+        if user is None:
+            raise inv.AuthUserNotFound()
+        _show_auth_user(deps, user)
+        print(
+            "新しく追加されたログインが本人のものか、別の連絡経路で照合してください。",
+            file=deps.stdout,
+        )
+        if _ask(deps, "一致していれば add と入力: ") != "add":
+            raise CliAbort("確認の入力が一致しません")
+        added = _in_transaction(
+            deps,
+            lambda conn: inv.add_identities(conn, args.invitation_id, user, operator=args.operator),
+        )
     print(f"追加しました: {', '.join(added)}", file=deps.stdout)
 
 
@@ -292,14 +296,13 @@ def _cmd_revoke(args: argparse.Namespace, deps: Deps) -> None:
         and _ask(deps, f"招待 {args.invitation_id} を失効します。revoke と入力: ") != "revoke"
     ):
         raise CliAbort("確認の入力が一致しません")
-    result = _run_audited(
-        deps,
-        action="invitation.revoke",
-        operator=args.operator,
-        invitation_id=args.invitation_id,
-        work=lambda conn: inv.revoke_invitation(conn, args.invitation_id, operator=args.operator),
-    )
-    assert isinstance(result, inv.RevokeResult)
+    with _audit_failures(
+        deps, action="invitation.revoke", operator=args.operator, invitation_id=args.invitation_id
+    ):
+        result = _in_transaction(
+            deps,
+            lambda conn: inv.revoke_invitation(conn, args.invitation_id, operator=args.operator),
+        )
     if result.already_revoked:
         print(
             f"すでに失効済みです（失効日時 {result.revoked_at:%Y-%m-%d %H:%M}）", file=deps.stdout

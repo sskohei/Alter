@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from alter_domain import invitations as inv
-from alter_domain.auth_admin import AuthIdentity, AuthUser
+from alter_domain.auth_admin import AuthAdminUnavailable, AuthIdentity, AuthUser
 from alter_domain.cli.invitations import EXIT_FAILED, EXIT_OK, Deps, main
 from alter_domain.settings import Settings
 from sqlalchemy import Connection, Engine, text
@@ -370,6 +370,63 @@ def _cli(
     deps, out = _cli_deps(engine, users, stdin)
     code = main(["--env", "local", "--operator", "sskohei", *args], deps=deps)
     return code, out.getvalue()
+
+
+def _failure_codes(engine: Engine, action: str) -> list[str]:
+    return [
+        a["metadata"]["code"]
+        for a in _audits(engine)
+        if a["action"] == action and a["metadata"]["result"] == "failure"
+    ]
+
+
+def _auth_down(sub: uuid.UUID) -> AuthUser | None:
+    raise AuthAdminUnavailable("Auth admin lookup failed")
+
+
+def test_cli_precheck_failures_are_audited(engine: Engine) -> None:
+    """#55 レビュー指摘: 事前確認（招待取得・状態確認・Auth 照会）の失敗も監査する。"""
+    user = _user("g-1")
+    invitation_id = _register(engine, user)
+    revoked_user = _user("g-2")
+    revoked_id = _register(engine, revoked_user)
+    with engine.begin() as conn:
+        inv.revoke_invitation(conn, revoked_id, operator="sskohei")
+
+    cases: list[tuple[list[str], dict[uuid.UUID, AuthUser] | None, str]] = [
+        (["add-identity", str(uuid.uuid4())], {}, "invitation_not_found"),
+        (["add-identity", str(revoked_id)], {revoked_user.id: revoked_user}, "invitation_revoked"),
+        (["add-identity", str(invitation_id)], {}, "auth_user_not_found"),
+        (["add-identity", str(invitation_id)], None, "auth_unavailable"),
+    ]
+    for args, users, _ in cases:
+        deps, _out = _cli_deps(engine, users or {}, "add\n")
+        if users is None:
+            deps.get_auth_user = _auth_down
+        assert main(["--env", "local", "--operator", "sskohei", *args], deps=deps) == EXIT_FAILED
+    assert _failure_codes(engine, "invitation.add_identity") == [code for *_, code in cases]
+
+    deps, _out = _cli_deps(engine, {}, f"{uuid.uuid4()}\n")
+    deps.get_auth_user = _auth_down
+    assert main(["--env", "local", "--operator", "sskohei", "register"], deps=deps) == EXIT_FAILED
+    assert _failure_codes(engine, "invitation.register") == ["auth_unavailable"]
+
+
+def test_cli_cancelled_confirmation_is_not_audited(engine: Engine) -> None:
+    """確認入力の取り消しは失敗ではないので監査しない（業務データも変えない）。"""
+    user = _user("g-1")
+    invitation_id = _register(engine, user)
+    before = len(_audits(engine))
+    linked = AuthUser(user.id, (AuthIdentity("google", "g-1"), AuthIdentity("github", "9")))
+    code, _ = _cli(engine, {user.id: linked}, "add-identity", str(invitation_id), stdin="no\n")
+    assert code == EXIT_FAILED
+    code, _ = _cli(engine, {}, "revoke", str(invitation_id), stdin="no\n")
+    assert code == EXIT_FAILED
+    assert len(_audits(engine)) == before
+    assert (
+        _scalar(engine, "select status from public.invitations where id = :id", id=invitation_id)
+        == "active"
+    )
 
 
 def test_cli_end_to_end_without_leaking_identifiers(engine: Engine) -> None:

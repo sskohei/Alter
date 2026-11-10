@@ -44,7 +44,7 @@ uv run alter-invitations --env local --operator sskohei revoke <招待ID>       
 - `--env local|production`は必須。`local`はDB/Supabaseの接続先がローカル（127.0.0.1/localhost）でなければ中止し、`production`はローカルなら中止したうえで`production`の入力を求める。
 - Supabaseの`sub`はコマンド引数ではなく対話入力で受け取り、シェル履歴に残さない。CLIはログファイルを書かない。
 - `register`はAuth管理APIから取得したGoogle/GitHub identityをすべて登録する。Google/GitHub以外のログイン方法が連携されている、同じプロバイダーの複数アカウントがある、Authにユーザーがいない場合は登録しない。1つの招待に同じプロバイダーは1つまで（`UNIQUE(invitation_id, provider)`）。登録済みプロバイダーの別アカウントへの差し替えは失効と再招待で行う。
-- 失敗した操作も、ロールバック後に`result=failure`と識別子を含まない`code`を監査へ記録する。監査の`metadata`は`operator`・`result`・`code`だけ。
+- 失敗した操作も、ロールバック後に`result=failure`と識別子を含まない`code`を監査へ記録する。招待の取得・状態確認・Auth照会など更新前の事前確認の失敗も含む（`invitation_not_found`・`invitation_revoked`・`auth_user_not_found`・`auth_unavailable`など）。確認入力の取り消しは失敗ではないので記録しない。監査の`metadata`は`operator`・`result`・`code`だけ。
 - 失効済み招待と同じ`sub`/provider IDの再登録は、パージ（#30）まで一意制約で拒否される。
 
 ## 利用説明と同意文言
