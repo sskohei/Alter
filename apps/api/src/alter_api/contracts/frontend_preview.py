@@ -9,6 +9,7 @@ from uuid import UUID
 
 from alter_api.contracts.activity_preview import register_activity_contract
 from alter_api.contracts.interaction_preview import register_interaction_contract
+from alter_api.errors import ErrorResponse
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,16 +27,6 @@ class Profile(BaseModel):
 class ProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     display_name: str = Field(min_length=1, max_length=200)
-
-
-class ErrorBody(BaseModel):
-    code: str
-    message: str
-    request_id: UUID
-
-
-class ErrorResponse(BaseModel):
-    error: ErrorBody
 
 
 Text = Annotated[str, Field(max_length=2000)]

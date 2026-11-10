@@ -228,7 +228,7 @@ export function createMockFetch(
       }
       // Optional LLM is deliberately unavailable; the manual flow must still work.
       if (suffix === "/profile/suggest" && request.method === "POST")
-        return mockError(503, "SUGGESTION_UNAVAILABLE");
+        return mockError(503, "SERVICE_UNAVAILABLE");
     }
     if (url.pathname === "/api/v1/discord/guilds" && request.method === "GET")
       return Response.json(
