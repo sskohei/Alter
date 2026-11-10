@@ -49,7 +49,13 @@ BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制�
 | Cron | `DATABASE_URL`, `SCHEDULER_BATCH_SIZE` | バッチ上限を設ける |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
 
-`.env.example`には上の変数名・ダミー値・取得先・必須/任意を記載し、実値はGitに入れない。RenderのEnvironment Groupは共通非秘密値だけ、秘密はサービス単位。Discord OAuth secretはコールバックを処理するAPIだけに置く。Supabase server secretは通常CRUDに使わず、Authユーザー削除の限定管理操作だけに使用し、専用環境変数`SUPABASE_SECRET_KEY`をAPIに限定する。
+`.env.example`には上の変数名・ダミー値・取得先・必須/任意を記載し、実値はGitに入れない。RenderのEnvironment Groupは共通非秘密値だけ、秘密はサービス単位。Discord OAuth secretはコールバックを処理するAPIだけに置く。Supabase server secretは通常CRUDに使わず、Authユーザー削除・招待時のidentity照合の限定管理操作だけに使用し、専用環境変数`SUPABASE_SECRET_KEY`をAPIに限定する。
+
+## 招待管理の運営手順（ADR-014、#7で実装）
+
+招待者の一覧は環境変数・設定ファイルへ置かず、環境ごとのDBで管理する。sskoheiがAPI実行環境内の運営専用CLIから対象環境を確認し、本人を私的経路で照合して登録・一覧確認・identity追加・失効を行う。CLIは共通ドメイン処理とDB接続を使い、HTTPの管理エンドポイントは追加しない。資格情報はサーバー側のSecret管理から読み、Web・コマンド引数・ログへ渡さない。
+
+初回OAuth後のID確認はSupabase Auth管理情報を使う。Auth照会に管理鍵が必要な場合はAPIの限定管理処理でのみ使用し、Worker/Bot/Cronへ配布しない。CLIの識別子入力方法・コマンド・失敗時の再実行手順は #7 で実装と同時に本節へ追記する。Preview/Productionの招待データをコピーせず、それぞれ本人照合して登録する。復元時は招待失効・削除を再適用してからAPI/Worker/Bot/Cronを再開する。
 
 ## デプロイ手順
 
