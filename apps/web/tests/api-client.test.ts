@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 import { authenticatedFetch, createPreviewClient, unwrap, ApiError, pagination } from "@alter/api-client/preview";
 import { createMockFetch, scenarios, pageFixture } from "@alter/api-client/mock";
 
-test("401 refresh retries once with the same request ID and request body", async () => {
+test("401 refresh preserves the request body without sending a client request ID", async () => {
   const requests: Request[] = [];
   const fetcher: typeof fetch = async (input, init) => {
     const req = new Request(input, init); requests.push(req);
@@ -11,11 +11,12 @@ test("401 refresh retries once with the same request ID and request body", async
   };
   const refreshToken = vi.fn(async () => "new");
   const transport = authenticatedFetch({ accessToken: async () => "old", refreshToken, onUnauthenticated: vi.fn(), fetch: fetcher });
-  await transport("https://example.test/api", { method: "POST", body: '{"version":1}' });
+  await transport("https://example.test/api", { method: "POST", body: '{"version":1}', headers: { "X-Request-ID": "untrusted-client-id" } });
   expect(requests).toHaveLength(2);
   expect(await requests[0].text()).toBe(await requests[1].text());
   expect(requests[1].headers.get("Authorization")).toBe("Bearer new");
-  expect(requests[1].headers.get("X-Request-ID")).toBe(requests[0].headers.get("X-Request-ID"));
+  expect(requests[0].headers.has("X-Request-ID")).toBe(false);
+  expect(requests[1].headers.has("X-Request-ID")).toBe(false);
   expect(requests[1].cache).toBe("no-store");
   expect(refreshToken).toHaveBeenCalledOnce();
 });

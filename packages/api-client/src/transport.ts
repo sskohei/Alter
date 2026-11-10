@@ -35,11 +35,10 @@ export type AuthTransport = {
 export function authenticatedFetch(auth: AuthTransport): typeof fetch {
   return async (input, init) => {
     const original = new Request(input, init);
-    const requestId =
-      original.headers.get("X-Request-ID") ?? crypto.randomUUID();
     const send = async (token: string | null) => {
       const request = new Request(original.clone(), { cache: "no-store" });
-      request.headers.set("X-Request-ID", requestId);
+      // The API assigns request IDs; this header is not allowed by its CORS policy.
+      request.headers.delete("X-Request-ID");
       if (token) request.headers.set("Authorization", `Bearer ${token}`);
       return (auth.fetch ?? globalThis.fetch)(request);
     };
