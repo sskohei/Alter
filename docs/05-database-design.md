@@ -11,7 +11,7 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 | テーブル・目的 | カラム（共通 `created_at` 以外） | 主な制約・索引 | 削除・保持 |
 |---|---|---|---|
 | `invitations` 招待 | `id uuid! PK`, `auth_user_id uuid!`, `status varchar(16)!`, `revoked_at timestamptz?`, `updated_at timestamptz!` | `UNIQUE(auth_user_id)`、`status IN (active,revoked)`、状態と`revoked_at`の整合CHECK、`status`索引 | Auth/プロフィールから独立。失効後30日以内、削除要求後30日以内の早い期限でパージ |
-| `invitation_identities` 許可identity | `id uuid! PK`, `invitation_id uuid! FK invitations(id)`, `provider varchar(16)!`, `provider_user_id text!` | `UNIQUE(provider,provider_user_id)`、`provider IN (google,github)`、IDは空不可、`invitation_id`索引 | 招待削除でCASCADE、実IDを監査へ複製しない |
+| `invitation_identities` 許可identity | `id uuid! PK`, `invitation_id uuid! FK invitations(id)`, `provider varchar(16)!`, `provider_user_id text!` | `UNIQUE(provider,provider_user_id)`、`UNIQUE(invitation_id,provider)`（1人の招待に同じプロバイダーは1つ。`invitation_id`索引を兼ねる）、`provider IN (google,github)`、IDは空・前後空白不可 | 招待削除でCASCADE、実IDを監査へ複製しない |
 | `profiles` 利用者 | `id uuid! PK FK auth.users(id)`, `display_name varchar(80)!`, `web_notifications bool! DEFAULT true`, `discord_dm_notifications bool! DEFAULT false`, `onboarded_at timestamptz?`, `deleted_at timestamptz?`, `updated_at timestamptz!` | `id UNIQUE`; `deleted_at`索引 | Auth削除でCASCADE。削除要求後30日以内にパージ |
 | `agents` AI本体 | `id uuid! PK`, `owner_id uuid! FK profiles(id)`, `name varchar(80)!`, `icon_path text?`, `status varchar(16)!`, `approved_profile_version int?`, `updated_at timestamptz!` | `UNIQUE(owner_id)`（MVP1体）、`status IN (draft,active,paused,deleted)` | 所有者削除時に会話先行削除、後にCASCADE |
 | `agent_profiles` 人格版 | `id uuid! PK`, `agent_id uuid! FK agents(id)`, `version int!`, `personality text!`, `values_text text!`, `interests text[]!`, `hobbies text[]!`, `strengths text[]!`, `weaknesses text[]!`, `speaking_style text!`, `interaction_policy text!`, `shareable_info text!`, `private_info_ciphertext bytea?`, `private_info_key_version smallint?`, `restrictions text!`, `approved_at timestamptz?` | `UNIQUE(agent_id,version)`、`version>0`。承認済み版は不変 | AI削除でCASCADE。私的文をログに出さない |
@@ -45,7 +45,7 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 
 `invitations.auth_user_id`はSupabaseの`sub`と同値だが、Auth削除で失効記録が消えたりプロフィール作成を前提にしたりしないよう、`auth.users`/`profiles`へのFKを設けない。登録時にAuth側で実在・identityを検証し、削除はアプリのパージ処理で管理する。`active`は`revoked_at IS NULL`、`revoked`は`revoked_at IS NOT NULL`とする。有効化は本人照合・1つ以上の許可identity・10人枠確認と同一トランザクションで行う。枠の確認は登録/再参加の全経路で共通のトランザクションロックを取り、失効済み行を自動有効化しない。
 
-招待2表のmigration・制約/RLSテスト・運営CLIは #7 で追加する。#6の既存migrationは変更しない。テーブル未適用や不整合・照会障害は認可エラー503として業務処理を止める。保持期限・CLI操作・失効と停止の原子性は[招待契約](23-invitation-consent-operations.md)に従う。
+招待2表のmigration（`20261108180000_invitations.sql`）・制約/RLSテスト・運営CLIは #7 で追加した。10人枠はドメイン処理とDBトリガーの両方で共通ロック（`lock_invitation_capacity()`）の下で確認し、有効な招待のidentity必須はコミット時の制約トリガーで、失効の不可逆性・識別子の不変性はトリガーで保証する。#6の既存migrationは変更しない。テーブル未適用や不整合・照会障害は認可エラー503として業務処理を止める。保持期限・CLI操作・失効と停止の原子性は[招待契約](23-invitation-consent-operations.md)に従う。
 
 ## 会話・ジョブ・記憶の運用制約（#13）
 
