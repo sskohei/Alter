@@ -246,7 +246,7 @@ export function createMockFetch(
       }
       // Optional LLM is deliberately unavailable; the manual flow must still work.
       if (suffix === "/profile/suggest" && request.method === "POST")
-        return mockError(503, "SUGGESTION_UNAVAILABLE");
+        return mockError(503, "SERVICE_UNAVAILABLE");
     }
     const discordResponse = await discord(request);
     if (discordResponse) return discordResponse;
