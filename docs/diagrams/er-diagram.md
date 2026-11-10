@@ -1,6 +1,6 @@
 # ER図
 
-カラムと制約の正本は [DB設計](../05-database-design.md)。図は主要FKを示す。招待2表はADR-014で設計し #7 で追加した。`invitations.auth_user_id`はAuthの`sub`を保持するが、失効記録の保持とプロフィール作成前の登録のためAuth/プロフィールへのFKは設けない。
+カラムと制約の正本は [DB設計](../05-database-design.md)。図は主要FKを示す。招待2表はADR-014で設計し #7 で追加予定。`invitations.auth_user_id`はAuthの`sub`を保持するが、失効記録の保持とプロフィール作成前の登録のためAuth/プロフィールへのFKは設けない。
 
 ```mermaid
 erDiagram
@@ -20,7 +20,7 @@ erDiagram
   AGENTS ||--o{ AGENT_BLOCKS : blocker
   AGENTS ||--o{ AGENT_BLOCKS : blocked
   CONVERSATIONS ||--o{ NOTIFICATIONS : about
-  CONVERSATIONS ||--o{ USAGE_RECORDS : cost
+  CONVERSATIONS |o--o{ USAGE_RECORDS : cost
   PROFILES ||--o{ NOTIFICATIONS : receives
   PROFILES ||--o{ DISCORD_CONNECTIONS : links
   DISCORD_GUILDS ||--o{ DISCORD_CHANNELS : configures
@@ -29,6 +29,6 @@ erDiagram
   CONVERSATIONS ||--o{ DISCORD_DELIVERIES : publishes
   DISCORD_CHANNELS ||--o{ DISCORD_DELIVERIES : destination
   NOTIFICATIONS ||--o| DISCORD_DM_DELIVERIES : private_notice
-  AGENTS ||--o{ USAGE_RECORDS : billed
+  AGENTS |o--o{ USAGE_RECORDS : billed
   BACKGROUND_JOBS ||--o| CONVERSATIONS : runs
 ```

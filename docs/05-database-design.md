@@ -11,7 +11,7 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 | テーブル・目的 | カラム（共通 `created_at` 以外） | 主な制約・索引 | 削除・保持 |
 |---|---|---|---|
 | `invitations` 招待 | `id uuid! PK`, `auth_user_id uuid!`, `status varchar(16)!`, `revoked_at timestamptz?`, `updated_at timestamptz!` | `UNIQUE(auth_user_id)`、`status IN (active,revoked)`、状態と`revoked_at`の整合CHECK、`status`索引 | Auth/プロフィールから独立。失効後30日以内、削除要求後30日以内の早い期限でパージ |
-| `invitation_identities` 許可identity | `id uuid! PK`, `invitation_id uuid! FK invitations(id)`, `provider varchar(16)!`, `provider_user_id text!` | `UNIQUE(provider,provider_user_id)`、`UNIQUE(invitation_id,provider)`（1人の招待に同じプロバイダーは1つ。`invitation_id`索引を兼ねる）、`provider IN (google,github)`、IDは空・前後空白不可 | 招待削除でCASCADE、実IDを監査へ複製しない |
+| `invitation_identities` 許可identity | `id uuid! PK`, `invitation_id uuid! FK invitations(id)`, `provider varchar(16)!`, `provider_user_id text!` | `UNIQUE(provider,provider_user_id)`、`provider IN (google,github)`、IDは空不可、`invitation_id`索引 | 招待削除でCASCADE、実IDを監査へ複製しない |
 | `profiles` 利用者 | `id uuid! PK FK auth.users(id)`, `display_name varchar(80)!`, `web_notifications bool! DEFAULT true`, `discord_dm_notifications bool! DEFAULT false`, `onboarded_at timestamptz?`, `deleted_at timestamptz?`, `updated_at timestamptz!` | `id UNIQUE`; `deleted_at`索引 | Auth削除でCASCADE。削除要求後30日以内にパージ |
 | `agents` AI本体 | `id uuid! PK`, `owner_id uuid! FK profiles(id)`, `name varchar(80)!`, `icon_path text?`, `status varchar(16)!`, `approved_profile_version int?`, `updated_at timestamptz!` | `UNIQUE(owner_id)`（MVP1体）、`status IN (draft,active,paused,deleted)` | 所有者削除時に会話先行削除、後にCASCADE |
 | `agent_profiles` 人格版 | `id uuid! PK`, `agent_id uuid! FK agents(id)`, `version int!`, `personality text!`, `values_text text!`, `interests text[]!`, `hobbies text[]!`, `strengths text[]!`, `weaknesses text[]!`, `speaking_style text!`, `interaction_policy text!`, `shareable_info text!`, `private_info_ciphertext bytea?`, `private_info_key_version smallint?`, `restrictions text!`, `approved_at timestamptz?` | `UNIQUE(agent_id,version)`、`version>0`。承認済み版は不変 | AI削除でCASCADE。私的文をログに出さない |
@@ -30,7 +30,7 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 | `agent_discord_consents` ギルド別公開同意 | `agent_id uuid! FK agents(id)`, `guild_id text! FK discord_guilds(id)`, `consented_at timestamptz!`, `revoked_at timestamptz?` | 複合PK `(agent_id,guild_id)`、有効行索引 | AIまたはギルド削除でCASCADE。解除後は未配信取消 |
 | `discord_deliveries` 投稿outbox | `id uuid! PK`, `conversation_id uuid! FK conversations(id)`, `channel_id text! FK discord_channels(id)`, `status varchar(16)!`, `discord_thread_id text?`, `discord_message_id text?`, `attempts smallint!`, `next_attempt_at timestamptz!`, `last_error text?` | `UNIQUE(conversation_id,channel_id)`、`(status,next_attempt_at)` | 会話削除でCASCADE。投稿済みIDは会話保持期間と同じ |
 | `discord_dm_deliveries` 個別通知outbox | `id uuid! PK`, `notification_id uuid! FK notifications(id)`, `discord_user_id text!`, `status varchar(16)!`, `discord_message_id text?`, `attempts smallint!`, `next_attempt_at timestamptz!` | `UNIQUE(notification_id)`、`(status,next_attempt_at)` | 通知削除でCASCADE。最大90日 |
-| `usage_records` 費用台帳 | `id uuid! PK`, `agent_id uuid! FK agents(id)`, `conversation_id uuid? FK conversations(id)`, `provider text!`, `model text!`, `input_tokens int!`, `output_tokens int!`, `estimated_usd numeric(12,6)!`, `actual_usd numeric(12,6)?`, `kind varchar(16)!`, `idempotency_key text!` | `UNIQUE(idempotency_key)`、`(agent_id,created_at)`、`kind IN (reserve,charge,release)` | 12か月保持後集計・削除 |
+| `usage_records` 費用台帳 | `id uuid! PK`, `agent_id uuid? FK agents(id)`（新規記録は必須。NULLはAI削除後の匿名化済み記録だけ）, `conversation_id uuid? FK conversations(id)`, `provider text!`, `model text!`, `input_tokens int!`, `output_tokens int!`, `estimated_usd numeric(12,6)!`, `actual_usd numeric(12,6)?`, `kind varchar(16)!`, `idempotency_key text!` | `UNIQUE(idempotency_key)`、`(agent_id,created_at)`、`(created_at)`、`kind IN (reserve,charge,release)` | 12か月保持後集計・削除。AI削除では匿名化して保持 |
 | `background_jobs` 永続ジョブ | `id uuid! PK`, `kind varchar(32)!`, `dedupe_key text!`, `payload jsonb!`, `status varchar(16)!`, `run_at timestamptz!`, `lease_until timestamptz?`, `attempts smallint!`, `last_error text?`, `updated_at timestamptz!` | `UNIQUE(kind,dedupe_key)`、`(status,run_at)` | 完了後30日、失敗後90日 |
 | `audit_events` 監査 | `id uuid! PK`, `actor_profile_id uuid?`, `action varchar(64)!`, `resource_type text!`, `resource_id text!`, `metadata jsonb!` | `(actor_profile_id,created_at DESC)` | 180日、秘密本文・トークン禁止 |
 | `deletion_requests` 削除追跡 | `id uuid! PK`, `profile_id uuid!`, `status varchar(16)!`, `requested_at timestamptz!`, `completed_at timestamptz?`, `error_code text?` | `UNIQUE(profile_id)`（進行中） | 完了後30日、PIIなしで集計 |
@@ -45,7 +45,7 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 
 `invitations.auth_user_id`はSupabaseの`sub`と同値だが、Auth削除で失効記録が消えたりプロフィール作成を前提にしたりしないよう、`auth.users`/`profiles`へのFKを設けない。登録時にAuth側で実在・identityを検証し、削除はアプリのパージ処理で管理する。`active`は`revoked_at IS NULL`、`revoked`は`revoked_at IS NOT NULL`とする。有効化は本人照合・1つ以上の許可identity・10人枠確認と同一トランザクションで行う。枠の確認は登録/再参加の全経路で共通のトランザクションロックを取り、失効済み行を自動有効化しない。
 
-招待2表のmigration（`20261108180000_invitations.sql`）・制約/RLSテスト・運営CLIは #7 で追加した。10人枠はドメイン処理とDBトリガーの両方で共通ロック（`lock_invitation_capacity()`）の下で確認し、有効な招待のidentity必須はコミット時の制約トリガーで、失効の不可逆性・識別子の不変性はトリガーで保証する。#6の既存migrationは変更しない。テーブル未適用や不整合・照会障害は認可エラー503として業務処理を止める。保持期限・CLI操作・失効と停止の原子性は[招待契約](23-invitation-consent-operations.md)に従う。
+招待2表のmigration・制約/RLSテスト・運営CLIは #7 で追加する。#6の既存migrationは変更しない。テーブル未適用や不整合・照会障害は認可エラー503として業務処理を止める。保持期限・CLI操作・失効と停止の原子性は[招待契約](23-invitation-consent-operations.md)に従う。
 
 ## 会話・ジョブ・記憶の運用制約（#13）
 
@@ -58,7 +58,7 @@ migrationは`20261109220000_conversations_jobs_memories.sql`、受け入れテ�
 - `background_jobs`は`status='running'`のときだけ`lease_until`を持つ（CHECK）。`payload`・`notifications.body`はJSONオブジェクト。
 - `agent_relationships.shared_interests`は20件以内。各`dedupe_key`/`idempotency_key`は空白不可・200字以内。
 
-削除動作: 会話削除で参加者・発言・通知・出典の記憶をCASCADE。参加者の`agent_id`はRESTRICTで、会話が残るAIは削除できない（アカウント削除は会話→記憶→通知→AIの順）。`conversations.job_id`と`usage_records.conversation_id`は保持期間が違う（ジョブ30〜90日・費用12か月・会話90日）ためSET NULL。`usage_records.agent_id`・`memories.agent_id`・関係・ブロックはAI削除でCASCADE。
+削除動作: 会話削除で参加者・発言・通知・出典の記憶をCASCADE。参加者の`agent_id`はRESTRICTで、会話が残るAIは削除できない（アカウント削除は会話→記憶→通知→AIの順）。`conversations.job_id`と`usage_records.conversation_id`は保持期間が違う（ジョブ30〜90日・費用12か月・会話90日）ためSET NULL。`memories.agent_id`・関係・ブロックはAI削除でCASCADE。`usage_records`は12か月保持し、運営全体の日次費用を減らさないためAI削除でも行を残す。`agent_id`はSET NULLとし、同時にトリガーで`conversation_id`をNULL、ID を含み得る`idempotency_key`を`anonymized:<行id>`へ置き換えて再識別できる紐付けを外す（docs/15）。匿名化した行は別のAI・会話へ付け直せず、新規記録は`agent_id`必須。
 
 Scheduler/Workerが使う索引とトランザクション境界:
 

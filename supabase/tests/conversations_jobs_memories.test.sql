@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(132);
+select plan(138);
 
 create temporary table _tables (name text primary key) on commit drop;
 insert into _tables values
@@ -228,6 +228,11 @@ select throws_ok(
   '23514', null, 'usage: 金額は 0 以上'
 );
 select throws_ok(
+  $$insert into public.usage_records (provider, model, estimated_usd, kind, idempotency_key)
+    values ('mock', 'mock-1', 0, 'charge', 'no-agent')$$,
+  '23502', null, 'usage: 新しい記録は AI の指定が必須'
+);
+select throws_ok(
   $$insert into public.notifications (profile_id, kind, dedupe_key)
     values ('00000000-0000-0000-0000-00000000000a', 'conversation_completed',
             'completed:30000000-0000-0000-0000-000000000001')$$,
@@ -278,6 +283,7 @@ select throws_ok(
 select has_index('public', 'background_jobs', 'background_jobs_waiting_idx', 'jobs: 待機ジョブ取得の索引');
 select has_index('public', 'background_jobs', 'background_jobs_lease_idx', 'jobs: lease 切れ再取得の索引');
 select has_index('public', 'usage_records', 'usage_records_agent_created_at_idx', 'usage: 日次上限判定の索引');
+select has_index('public', 'usage_records', 'usage_records_created_at_idx', 'usage: 運営全体の日次集計・期限削除の索引');
 select has_index('public', 'conversation_participants', 'conversation_participants_agent_id_idx', 'participants: AI ごとの会話の索引');
 select has_index('public', 'memories', 'memories_agent_status_importance_idx', 'memories: 記憶検索の索引');
 select is(
@@ -323,10 +329,34 @@ select is(
   null, '削除: 費用台帳（12 か月）は残り、会話との紐付けだけ外れる'
 );
 
--- 会話がなくなれば AI を消せる。記憶・費用・関係・ブロックは CASCADE
+-- 会話がなくなれば AI を消せる。記憶・関係・ブロックは CASCADE、費用台帳は匿名化して残す
+-- 匿名化で会話との紐付けも外れることを確かめるため、まだ残っている会話を指す記録を足す
+insert into public.conversations (id) values ('30000000-0000-0000-0000-000000000002');
+insert into public.usage_records
+  (agent_id, conversation_id, provider, model, estimated_usd, actual_usd, kind, idempotency_key) values
+  ('10000000-0000-0000-0000-00000000000a', '30000000-0000-0000-0000-000000000002',
+   'mock', 'mock-1', 0.01, 0.008, 'charge', 'charge:30000000-0000-0000-0000-000000000002:a');
+
 delete from public.agents where id = '10000000-0000-0000-0000-00000000000a';
 select is((select count(*)::int from public.memories), 0, '削除: AI を消すと記憶も消える');
-select is((select count(*)::int from public.usage_records), 0, '削除: AI を消すと費用台帳も消える');
+select is((select count(*)::int from public.usage_records), 2, '削除: AI を消しても費用台帳は残る（12 か月保持）');
+select is(
+  (select count(*)::int from public.usage_records where agent_id is not null or conversation_id is not null),
+  0, '削除: 残った費用台帳から AI・会話への紐付けが外れる'
+);
+select is(
+  (select count(*)::int from public.usage_records
+   where idempotency_key <> 'anonymized:' || id::text),
+  0, '削除: ID を含み得る冪等キーも匿名の値に置き換わる'
+);
+select is(
+  (select sum(estimated_usd)::text || '/' || sum(actual_usd)::text from public.usage_records),
+  '0.060000/0.008000', '削除: 金額は残り、運営全体の日次集計が減らない'
+);
+select throws_ok(
+  $$update public.usage_records set agent_id = '10000000-0000-0000-0000-00000000000b'$$,
+  '23514', null, '削除: 匿名化した費用台帳を別の AI に付け直せない'
+);
 select is((select count(*)::int from public.agent_relationships), 0, '削除: AI を消すと関係も消える');
 select is((select count(*)::int from public.agent_blocks), 0, '削除: AI を消すとブロックも消える');
 

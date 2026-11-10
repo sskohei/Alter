@@ -150,10 +150,12 @@ create index messages_participant_idx on public.messages (conversation_id, agent
 
 -- ---------------------------------------------------------------------------
 -- usage_records: 費用台帳（reserve → charge → release）
+-- 12 か月保持（docs/15）。AI 削除では行を残し、再識別できる紐付けだけを外す。
+-- agent_id が NULL の行は「削除済み AI の匿名化済み記録」だけ（下のトリガーで保証）。
 -- ---------------------------------------------------------------------------
 create table public.usage_records (
   id uuid primary key default gen_random_uuid(),
-  agent_id uuid not null references public.agents (id) on delete cascade,
+  agent_id uuid references public.agents (id) on delete set null,
   conversation_id uuid references public.conversations (id) on delete set null,
   provider text not null,
   model text not null,
@@ -182,6 +184,39 @@ create table public.usage_records (
 -- 日次上限判定（AI ごとの当日の確定費用＋未解放予約）。agent_id の FK 索引を兼ねる
 create index usage_records_agent_created_at_idx on public.usage_records (agent_id, created_at);
 create index usage_records_conversation_id_idx on public.usage_records (conversation_id);
+-- 運営全体の日次停止額の集計と 12 か月後の削除（AI 削除後の匿名行も含む）
+create index usage_records_created_at_idx on public.usage_records (created_at);
+
+-- 新規記録は必ず AI に紐付く。AI 削除（FK の SET NULL）では会話との紐付けと
+-- ID を含み得る冪等キーも外して匿名化し、いったん外した紐付けは戻せない。
+create function public.protect_usage_record_identity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.agent_id is null then
+      raise exception 'usage_records.agent_id is required for new records'
+        using errcode = 'not_null_violation';
+    end if;
+  elsif old.agent_id is null then
+    if new.agent_id is not null or new.conversation_id is not null
+       or new.idempotency_key is distinct from old.idempotency_key then
+      raise exception 'anonymized usage record % cannot be re-linked', old.id
+        using errcode = 'check_violation';
+    end if;
+  elsif new.agent_id is null then
+    new.conversation_id := null;
+    new.idempotency_key := 'anonymized:' || new.id::text;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger usage_records_protect_identity
+before insert or update on public.usage_records
+for each row execute function public.protect_usage_record_identity();
 
 -- ---------------------------------------------------------------------------
 -- notifications: Web 通知
@@ -302,3 +337,6 @@ revoke all on table
   public.memories,
   public.agent_relationships
 from anon, authenticated;
+
+revoke all on function public.protect_usage_record_identity()
+from public, anon, authenticated;
