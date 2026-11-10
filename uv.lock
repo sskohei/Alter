@@ -115,6 +115,7 @@ name = "alter-domain"
 version = "0.1.0"
 source = { editable = "backend/alter_domain" }
 dependencies = [
+    { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "sqlalchemy" },
@@ -122,6 +123,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic-settings", specifier = ">=2.11" },
     { name = "sqlalchemy", specifier = ">=2.0" },
