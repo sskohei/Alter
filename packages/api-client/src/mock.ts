@@ -140,7 +140,7 @@ export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
       }
       // Optional LLM is deliberately unavailable; the manual flow must still work.
       if (suffix === "/profile/suggest" && request.method === "POST")
-        return mockError(503, "SUGGESTION_UNAVAILABLE");
+        return mockError(503, "SERVICE_UNAVAILABLE");
     }
     return mockError(404);
   };

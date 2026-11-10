@@ -94,6 +94,15 @@ pnpm test:e2e         # 本番buildを起動、PC/375pxでMock APIを検査
 # packages/api-client/openapi.json と src/schema.d.ts が生成物
 ```
 
+DB統合テスト（`tests/db`）は招待2表を空にするため、ローカルSupabaseなど使い捨てDBにだけ向ける。
+
+```bash
+ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres \
+  uv run --all-packages pytest tests/db
+```
+
+招待の登録・失効は運営専用CLI`alter-invitations`で行う（[招待契約](docs/23-invitation-consent-operations.md)）。
+
 GitHub Actionsの必須チェックは`CI required`。Python/Web/API生成差分/空Supabase migration/secret scanningの検査範囲は[テスト戦略](docs/16-testing-strategy.md)、`MainRule`の承認・保護設定は[Git運用](docs/22-git-workflow.md)を参照。
 
 OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生成し、業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
