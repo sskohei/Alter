@@ -1,6 +1,55 @@
 {
   "components": {
     "schemas": {
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "enum": [
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "INVITATION_REQUIRED",
+              "ACCOUNT_INACTIVE",
+              "NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "CONFLICT",
+              "VALIDATION_ERROR",
+              "RATE_LIMITED",
+              "AUTHORIZATION_UNAVAILABLE",
+              "SERVICE_UNAVAILABLE",
+              "INTERNAL_ERROR"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
       "Health": {
         "properties": {
           "mode": {
@@ -29,6 +78,13 @@
         ],
         "title": "Health",
         "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "SupabaseBearer": {
+        "description": "Supabase Auth \u306e access token\uff08refresh token \u306f\u9001\u3089\u306a\u3044\uff09",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
