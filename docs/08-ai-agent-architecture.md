@@ -54,3 +54,16 @@ BaselineModeratorはメール/電話の最低限の検査であり、供給元�
 consumeでは実費chargeと同額releaseを同時追加し、終了時に残予約をreleaseする。
 結果不明の呼出は予約を保持し、自動再試行/自動解放を行わない。運用照合は#36。
 DBトランザクションを閉じてからLLMを呼び、生成結果と台帳の確定は短いトランザクションで行う。
+
+## #20 Workerの実装
+
+`conversation.run_one`は90秒leaseをclaimし、25秒ごとの別接続heartbeatとUUID tokenでfencingする。
+DBトランザクションを閉じた状態でLLMを呼ぶ。発言・費用charge/release・job/会話状態・完了eventは
+短いトランザクションで確定する。失効tokenの更新は拒否する。
+`llm_invocations`に呼出前のstartedを残し、途中クラッシュ後の同ターン再呼出を禁止する。
+TemporaryLLMErrorは「供給元で処理/課金されていないことが分かる失敗」だけ。
+最大3回の再試行、30/120/600秒＋jobから決まるジッター、Retry-After相当の待ち時間を尊重する。
+5分上限は再試行待ちも含む。タイムアウト/結果不明/未知エラーは失敗とし、予約額を照合まで残す。
+unsafe出力も呼出費用は計上するが発言本文は保存しない。停止/同意消失後は追加呼出しない。
+`conversation_events`のcompleted/failed/cancelledは1会話1種1件。#21が通知・Discord候補へ接続する。
+実LLMの課金exactly-onceは保証しない。現在のプロセス入口はLLM_BACKEND=fakeのみ有効。

@@ -98,3 +98,11 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 複合PKは`owner_id,operation,key_hash`、profiles削除でCASCADE、RLS default deny。
 作成応答（私的欄なし）と入力HMACのみ保持する。削除時は本人の記録も削除する。
 rollbackは`DROP TABLE public.api_idempotency`だが再送結果を失うためAPIを止めて実施する。
+
+## #20 Worker実行記録
+
+background_jobsに`lease_token uuid`を追加。
+`llm_invocations(conversation_id,turn_no,status,created_at)`は会話/turn複合PK、
+`conversation_events(conversation_id,kind,created_at)`は会話/kind複合PK。
+双方とも会話削除でCASCADE、RLS default deny。本文・秘密は持たない。
+rollbackはWorker停止後に2表DROPとlease_token列DROP（呼出の不明状態/完了eventを失うため運用照合必須）。
