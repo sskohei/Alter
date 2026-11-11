@@ -22,18 +22,20 @@ def business_connection(request: Request, principal: CurrentPrincipal) -> Iterat
         auth_user = request.app.state.auth_admin.get_user(principal.sub)
         with request.app.state.db_engine.begin() as conn:
             # Match invitation revocation's lock order; writes cannot race past revocation.
-            conn.execute(
-                text("select id from public.invitations where auth_user_id=:id for update"),
+            invitation = conn.execute(
+                text("select id,status from public.invitations where auth_user_id=:id for update"),
                 {"id": principal.sub},
-            )
-            if evaluate_access(conn, principal.sub, auth_user) != AccessDecision.ALLOWED:
-                raise ApiError(403, "INVITATION_REQUIRED", "An active invitation is required")
+            ).first()
             profile = conn.execute(
                 text("select deleted_at from public.profiles where id=:id for update"),
                 {"id": principal.sub},
             ).first()
-            if profile is not None and profile.deleted_at is not None:
+            if (profile is not None and profile.deleted_at is not None) or (
+                invitation is not None and invitation.status == "revoked"
+            ):
                 raise ApiError(403, "ACCOUNT_INACTIVE", "Account is inactive")
+            if evaluate_access(conn, principal.sub, auth_user) != AccessDecision.ALLOWED:
+                raise ApiError(403, "INVITATION_REQUIRED", "An active invitation is required")
             # First authorized business request may bootstrap the profile, never a rejected request.
             conn.execute(
                 text(
