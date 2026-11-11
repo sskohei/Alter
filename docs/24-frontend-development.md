@@ -50,7 +50,7 @@ mainへ直接push/自動mergeは行わない。依存ブランチ向けPRもCI�
 
 ## #17 AI分身の作成・編集
 
-依存は#8（PR #44）、#9（PR #45）、#10（Figma待ち）、#15（正式API待ち）。
+依存は#8（PR #44）、#9（PR #45）、#10（デザイン待ち）、#15（正式API待ち）。
 /onboardingの3段階質問→/agent/newの手動入力→下書き保存→公開項目/差分確認→
 未チェックの本人承認→/agentを実装する。/agent/editは新しい人格版を保存・承認する。
 RHF/Zodで入力を検査し、生成型を満たす要求を同一Origin BFFへ送る。
@@ -96,7 +96,7 @@ forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現でき�
 
 ## #23 ダッシュボード・会話・通知（Draft）
 
-依存: #17（PR #46）、#11（Figma未提供）、#21（正式API未提供）。
+依存: #17（PR #46）、#11（デザイン未提供）、#21（正式API未提供）。
 `activity_preview.py`に文書を基にしたPydantic案を分離し、既存preview OpenAPI/型へ生成する。
 partner/participantsは`{id,name}`、開始前日時/未生成要約はnullの案で、#21でB確認が必要。
 Discord連携の読み取りだけはダッシュボードのため#26の契約案を先行する。
@@ -114,7 +114,7 @@ Discord連携の読み取りだけはダッシュボードのため#26の契約�
 
 ## #24 交流設定・予算・停止・ブロック（Draft）
 
-依存: #17（PR #46）、#12（Figma未提供）、#16（正式設定/ブロックAPI未提供）。
+依存: #17（PR #46）、#12（デザイン未提供）、#16（正式設定/ブロックAPI未提供）。
 今回のブランチは#23の共通取得・会話導線を利用するため、PR #47も先行する。
 `interaction_preview.py`のPydantic案からsettings GET/PATCH、blocks PUT/DELETE、
 公開先確認用のDiscord guilds GETを生成する。公開先の名称は#26と確認するnullableの案。
@@ -140,7 +140,7 @@ APIのblocked値を使う。未知の状態を「未ブロック」と推測し�
 
 ## #25 記憶・関係性リスト（Draft）
 
-依存: #9（PR #45）、#24（PR #48）、#11（Figma未提供）、#22（正式API未提供）。
+依存: #9（PR #45）、#24（PR #48）、#11（デザイン未提供）、#22（正式API未提供）。
 `memory_preview.py`のPydantic案から一覧/削除/関係性を生成する。Memoryの出典IDはDBのnullableに
 合わせた案で、欠落・削除済みなら参照不可を案内し、有効な出典リンクから会話へ進める。
 会話が404なら本文を表示せず記憶一覧に戻れる。出典会話が消えた場合の派生記憶削除はAPIの責務。

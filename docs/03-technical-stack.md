@@ -4,7 +4,7 @@
 
 | 層 | 採用 | 理由 |
 |---|---|---|
-| Web | Next.js App Router / TypeScript / Tailwind CSS / shadcn/ui | SSR認証と画面開発、Figmaからの実装 |
+| Web | Next.js App Router / TypeScript / Tailwind CSS / shadcn/ui | SSR認証と画面開発。デザインもコードで作る（ADR-015） |
 | 認証・DB | Supabase Auth / PostgreSQL | ID統一、RLS、永続化 |
 | API | FastAPI / Pydantic | OpenAPIを契約とし、業務ロジックを集約 |
 | DBアクセス | SQLAlchemy 2.x + psycopg + SQL文併用 | トランザクションと明示的ロックが必要。Bot/Workerで共有 |
