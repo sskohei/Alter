@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "../../lib/api-server";
 import { AppNavigation } from "../../components/app-navigation";
 import { LogoutButton } from "../../components/logout-button";
+import { AlterLogo } from "../../components/landing/alter-logo";
 export const dynamic = "force-dynamic";
 export default async function ProtectedLayout({
   children,
@@ -16,7 +17,7 @@ export default async function ProtectedLayout({
       </a>
       <header className="app-header">
         <Link href="/dashboard" className="brand">
-          Alter
+          <AlterLogo />
         </Link>
         <span>{profile.display_name}</span>
         <LogoutButton />

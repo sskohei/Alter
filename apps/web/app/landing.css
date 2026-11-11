@@ -5,31 +5,8 @@
    Everything is scoped under .lp so the signed-in app keeps its own styles.
    ========================================================================= */
 .lp {
-  /* base */
-  --paper: #E4E0D7;        /* warm grey paper (page background) */
-  --ink-0: #17161B;        /* near-black ink */
-  --sink: #24252B;         /* sunk faces: 02 DEMO, footer */
-  /* dusty faces (grey mixed in on purpose — ink text on all of them is 7:1+) */
-  --rose: #E3A69C;
-  --sage: #A9BBA2;
-  --lilac: #B4A9CE;
-  --mustard: #D8B85C;
-  /* the only full-saturation colour: lines, selection boxes, small marks */
-  --line: #0026FF;         /* 5.9:1 on --paper */
-  --line-ink: #FFFFFF;     /* text on a --line fill */
-  /* current surface (sections override these) */
-  --bg: var(--paper);
-  --ink: var(--ink-0);
-  --dim: #524E57;          /* 6.2:1 on --paper */
-  --hair: .5px;
-  --slow: 2;
-  --display: var(--font-display), "Unbounded", sans-serif;
-  --sq: 1.12;             /* 平体: horizontal stretch for thin body copy (1 = off) */
-  --sq-title: 1.06;       /* 平体 for headings — subtler than body */
-  --w-thin: 100;           /* weight of Japanese body copy (labels/headings keep their own) — raise to thicken */
-  --mono: var(--font-mono), "Space Mono", ui-monospace, monospace;   /* labels / codes */
-  --jp: var(--font-jp), "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;     /* headings */
-  --jp-thin: var(--font-jp-thin), "M PLUS 1", "Hiragino Sans", sans-serif;      /* body */
+  /* Palette, type and surface tokens live in globals.css (:root). Only page-specific knobs here. */
+  --slow: 2;               /* speed of the ticker / rotating parts (bigger = slower) */
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
@@ -38,7 +15,7 @@
   line-height: 1.8;
   overflow-x: clip;
 }
-body:has(.lp) { background: #E4E0D7; }
+body:has(.lp) { background: var(--paper); }
 .lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
 .lp :is(h1, h2, h3, p, dl, dd, ol, ul) { margin: 0; }
 .lp :is(ol, ul) { padding: 0; list-style: none; }
@@ -52,7 +29,6 @@ body:has(.lp) { background: #E4E0D7; }
 /* skip link */
 .lp-skip { position: absolute; left: 12px; top: -80px; z-index: 60; background: var(--ink); color: var(--paper) !important; padding: 10px 16px; font-weight: 700; text-decoration: none; }
 .lp-skip:focus { top: 12px; }
-.lp-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* thin body copy, slightly flattened (平体). Wrap text in <Sq>: it wraps at 1/--sq of the width,
    then is stretched back horizontally, so nothing overflows and line height is unchanged. */
@@ -61,15 +37,14 @@ body:has(.lp) { background: #E4E0D7; }
 .lp :is(h1, h2, h3) { width: calc(100% / var(--sq-title)); transform: scaleX(var(--sq-title)); transform-origin: 0 0; }
 
 /* ---------- logo (03, warp; no colour offset — it read as "horror") ---------- */
-.lp-logo { display: inline-flex; align-items: center; font: 900 1em/1 var(--display); letter-spacing: -.05em; color: var(--ink); white-space: nowrap;
-  filter: url(#lp-warp); }
-.lp-logo svg { height: .74em; width: auto; margin: 0 .02em; transform: translateY(.04em); }
+/* The wordmark's base style is in globals.css (shared with the app header). Only the footer's giant logo wobbles. */
+.lp .lp-logo-giant { filter: url(#lp-warp); }
 .lp-logo-xl { font-size: clamp(64px, 9vw, 150px); }
 /* outline variant (hero): clean hairline letters, only the "you" circle filled (--logo-fill), no wobble, no colour offset
    (wobble on hairlines reads as a shaky scribble; colour fringes read as "horror" from afar). */
 .lp .lp-logo.is-outline { --logo-stroke: 1.5px; --logo-fill: var(--ink); color: transparent; -webkit-text-stroke: var(--logo-stroke) var(--ink); filter: none; }
-.lp-logo.is-outline svg circle { fill: none; stroke: var(--ink); stroke-width: var(--logo-stroke); vector-effect: non-scaling-stroke; }
-.lp-logo.is-outline svg .you { fill: var(--logo-fill); }
+.lp .lp-logo.is-outline svg circle { fill: none; stroke: var(--ink); stroke-width: var(--logo-stroke); vector-effect: non-scaling-stroke; }
+.lp .lp-logo.is-outline svg .you { fill: var(--logo-fill); }
 
 /* ---------- buttons (ink pill; the blue only shows up on hover) ---------- */
 .lp .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: .3em; min-height: 44px; padding: 0 22px; border: 0; border-radius: 999px;
@@ -84,8 +59,6 @@ body:has(.lp) { background: #E4E0D7; }
 .lp-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 24px;
   background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 .lp-home { font-size: 28px; text-decoration: none; display: inline-flex; min-height: 44px; align-items: center; }
-/* At header size the wobble hurts legibility. */
-.lp .lp-home .lp-logo { filter: none; }
 .lp-header nav { display: flex; gap: 22px; font: 400 13px var(--mono); }
 .lp-header nav a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; border-bottom: 2px solid transparent; }
 .lp-header nav a span { color: var(--dim); margin-right: .3em; }
@@ -336,10 +309,10 @@ body:has(.lp) { background: #E4E0D7; }
 
 /* ---------- motion: user toggle and OS preference ---------- */
 html[data-motion="off"] .lp *, html[data-motion="off"] .lp *::before, html[data-motion="off"] .lp *::after { animation-play-state: paused !important; }
-html[data-motion="off"] .lp-logo { filter: url(#lp-warp-still); }
+html[data-motion="off"] .lp .lp-logo-giant { filter: url(#lp-warp-still); }
 @media (prefers-reduced-motion: reduce) {
   html:not([data-motion="on"]) .lp *, html:not([data-motion="on"]) .lp *::before, html:not([data-motion="on"]) .lp *::after { animation-play-state: paused !important; }
-  html:not([data-motion="on"]) .lp-logo { filter: url(#lp-warp-still); }
+  html:not([data-motion="on"]) .lp .lp-logo-giant { filter: url(#lp-warp-still); }
   .lp { scroll-behavior: auto; }
 }
 

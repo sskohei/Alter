@@ -74,7 +74,7 @@ export default function Home() {
       <a href="#main" className="lp-skip">本文へ移動</a>
 
       <header className="lp-header">
-        <Link href="/" className="lp-home"><AlterLogo /><span className="lp-vh"> ホーム</span></Link>
+        <Link href="/" className="lp-home"><AlterLogo /><span className="vh"> ホーム</span></Link>
         <nav aria-label="ページ内">
           <a href="#how"><span aria-hidden="true">[01]</span> しくみ</a>
           <a href="#demo"><span aria-hidden="true">[02]</span> 会話の例</a>
