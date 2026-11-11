@@ -24,3 +24,14 @@ WebのMVP公開範囲は参加者本人だけ。Discordは両者の`discord_publ
 ## 冪等性・観測
 
 `background_jobs(kind,dedupe_key)`、`conversations.job_id`、`messages(conversation_id,turn_no)`、`usage_records.idempotency_key`、`discord_deliveries(conversation_id,channel_id)`が重複防止の軸。ジョブ取得時のleaseと状態遷移は条件付きUPDATEで行う。監視指標は待ちジョブ数、最古待機時間、失敗率、LLMトークン/費用、Discord未配信件数。DB障害時はCron/Workerが失敗してもデータをローカルに保持せず、復旧後にジョブを再取得する。少なくとも1件のLLM外部呼出とDiscord投稿の完全exactly-onceは保証できない。対策は [構成](04-system-architecture.md) の境界処理。
+
+## #19 Scheduler実装
+
+`interaction`の共通判定と`scheduling.select_due/schedule`を実装した。
+10人MVPではbudget advisory lock→招待→profiles→agents→settingsをID順でロックし、
+片側ブロック・日次枠・同時1会話を検査。job/会話/2参加者/双方reserveはsavepointで一括作成する。
+共通興味＋新規性−過去完了回数で候補を並べ、seedとペアのハッシュで同点解消する。
+公開同意はマッチング条件に含めない。Discord配送はこの段階で一切許可しない。
+`SCHEDULER_ENABLED=false`が既定。mockは従来どおりDB更新なし。
+liveのDB検証は`SCHEDULER_ENABLED=true,LLM_BACKEND=fake`でのみ可能（偽LLM）。
+本人が交流ONにする経路は#16。正式供給元は#14/#18後に接続する。

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     alter_mode: Literal["mock", "live"] = "mock"
     discord_enabled: bool = False
+    scheduler_enabled: bool = False
+    llm_backend: Literal["disabled", "fake"] = "disabled"
+    scheduler_batch_size: int = Field(default=10, ge=1, le=10)
     max_daily_cost_usd: Decimal = Field(default=Decimal("10"), ge=0, allow_inf_nan=False)
     profile_encryption_key_v1: SecretStr = SecretStr("")
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres"
