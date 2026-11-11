@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
-from alter_domain.budget import BudgetExceeded, exposure, reserve
+from alter_domain.budget import BudgetExceeded, LedgerConflict, exposure, reserve
 from alter_domain.llm import FakeLLM
 from sqlalchemy import Engine, text
 
@@ -27,4 +27,23 @@ def test_parallel_reservation_never_exceeds_global_cap(engine: Engine, ai_pair: 
         with pytest.raises(BudgetExceeded):
             reserve(
                 conn, ai_pair[0], None, FakeLLM.price, "another", Decimal(".05"), Decimal(".05")
+            )
+
+
+def test_ledger_replay_requires_same_provider_model_and_amount(engine: Engine, ai_pair: list[UUID]):
+    with engine.begin() as conn:
+        for _ in range(2):
+            reserve(
+                conn, ai_pair[0], None, FakeLLM.price, "replay-key", Decimal(".05"), Decimal("10")
+            )
+        assert exposure(conn) == Decimal(".05")
+        with pytest.raises(LedgerConflict):
+            reserve(
+                conn,
+                ai_pair[0],
+                None,
+                FakeLLM.price.model_copy(update={"model": "different"}),
+                "replay-key",
+                Decimal(".05"),
+                Decimal("10"),
             )
