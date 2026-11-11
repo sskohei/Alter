@@ -7,7 +7,7 @@ from alter_api.auth import get_principal
 from alter_api.auth.jwt import Principal
 from alter_api.main import create_app
 from alter_domain.auth_admin import AuthIdentity, AuthUser
-from alter_domain.invitations import register_invitation
+from alter_domain.invitations import register_invitation, revoke_invitation
 from alter_domain.settings import Settings
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
@@ -107,4 +107,15 @@ def test_owned_profile_workflow_and_idempotency(engine: Engine, created_users: l
                 conn.execute(
                     text("update public.profiles set deleted_at=now() where id=:id"), {"id": owner}
                 )
-            assert client.get("/api/v1/agents/me").status_code == 403
+            inactive = client.get("/api/v1/agents/me")
+            assert inactive.status_code == 403
+            assert inactive.json()["error"]["code"] == "ACCOUNT_INACTIVE"
+            with engine.begin() as conn:
+                conn.execute(
+                    text("update public.profiles set deleted_at=null where id=:id"), {"id": owner}
+                )
+                invitation = conn.execute(
+                    text("select id from public.invitations where auth_user_id=:id"), {"id": owner}
+                ).scalar_one()
+                revoke_invitation(conn, invitation, operator="sskohei")
+            assert client.get("/api/v1/agents/me").json()["error"]["code"] == "ACCOUNT_INACTIVE"
