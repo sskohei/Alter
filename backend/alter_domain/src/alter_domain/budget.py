@@ -66,17 +66,32 @@ def record(
     amount(usd)
     old = conn.execute(
         text(
-            "select agent_id,conversation_id,kind,estimated_usd from public.usage_records "
+            "select "
+            "agent_id,conversation_id,kind,estimated_usd,provider,model,input_tokens,output_tokens "
+            "from public.usage_records "
             "where idempotency_key=:key"
         ),
         {"key": key},
     ).first()
     if old is not None:
-        if (old.agent_id, old.conversation_id, old.kind, old.estimated_usd) != (
+        if (
+            old.agent_id,
+            old.conversation_id,
+            old.kind,
+            old.estimated_usd,
+            old.provider,
+            old.model,
+            old.input_tokens,
+            old.output_tokens,
+        ) != (
             agent,
             conversation,
             kind,
             usd,
+            price.provider,
+            price.model,
+            input_tokens,
+            output_tokens,
         ):
             raise LedgerConflict()
         return
