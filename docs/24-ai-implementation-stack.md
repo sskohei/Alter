@@ -48,3 +48,7 @@ Supabase Auth管理/JWTの実接続は未検証（既存JWTテストとHTTP Mock
 #22: 出典付き引用記憶、完了eventの独立consumer、所有権付き一覧/削除、関係再集計を追加。
 Workerには記憶/直近要約の引用contextと完了後consumerを接続。
 #21の会話表示・通知/outboxと#30の削除受付は依存として残し、内部purge hookだけ提供する。
+
+#38: 個人情報を出さないread-only集計CLI、recall@kと評価開始ゲート、
+[計測計画](25-post-mvp-measurement.md)を追加。本番7日以上/ラベル評価の証拠がなければ採用判断をしない。
+#37は未完了で、本番実測・F/B/Dレビュー・改善子Issueへの分割は公開後の残件。
