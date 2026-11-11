@@ -31,3 +31,8 @@ Directoryの検索（2026-11-11、`language model inference`）ではOpenRouter�
 #15の残件: Storageアイコンadapter、鍵ローテーションCLI/復元訓練、#7のユーザーAPI。
 DBテストは使い捨てPostgres 17＋最小auth.users/anon/authenticatedで実行。
 Supabase Auth管理/JWTの実接続は未検証（既存JWTテストとHTTP Mockを使用）。
+
+#18は#13のPR #56（e4b0d64）をmergeしたため、そのSQL/pgTAP差分も含む。
+#56を先にレビュー・マージし、#18の再base時に重複差分がないか確認する。
+#18残件は正式供給元adapter、実moderation、任意人格提案の生成/回数制限/課金。
+後続は注入可能な偽LLMでドメイン/DBの挙動を先行検証する。

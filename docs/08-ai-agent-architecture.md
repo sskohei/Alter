@@ -38,3 +38,19 @@ stateDiagram-v2
 ```
 
 一時障害は最大3回、指数バックオフ（例: 30秒、2分、10分）にジッターを加える。検証失敗・権限消失・予算不足は再試行しない。`turn_no`一意制約とジョブleaseで多重実行を抑え、開始直前と各ターン前に双方の設定を確認する。AI発言生成にLLM APIを非同期I/Oで呼ぶ間、DBトランザクションは開きっぱなしにしない。予算は事前に最大見積額を予約し、実績で調整する。詳細は [交流](09-autonomous-interaction.md)、[テスト](16-testing-strategy.md)。
+
+## #18 実装とliveゲート
+
+`llm.LLMClient`/`FakeLLM`/`checked_generate`と`budget`を追加。
+人格は`ProfileInput`の明示投影、発言/記憶はuser内の引用JSONで、systemへ連結しない。
+schemaはextra禁止/厳密bool、PIIと既知秘密の出力検査を行う。
+BaselineModeratorはメール/電話の最低限の検査であり、供給元の安全性審査・moderationの代替ではない。
+実供給元adapterは#14の実評価後に接続する。それまではLLM外部呼出なし。
+任意提案APIは所有権検証後に503を返し、手動作成を継続できる契約のみ提供する。
+提案の利用回数制限・費用記録・人格提案生成は供給元接続時の残件。
+
+台帳は全writerが固定advisory transaction lockを取得後にagent_settingsをロックする。
+残予約は全期間のreserve-release、日次実費はUTC当日のchargeを合計する。
+consumeでは実費chargeと同額releaseを同時追加し、終了時に残予約をreleaseする。
+結果不明の呼出は予約を保持し、自動再試行/自動解放を行わない。運用照合は#36。
+DBトランザクションを閉じてからLLMを呼び、生成結果と台帳の確定は短いトランザクションで行う。

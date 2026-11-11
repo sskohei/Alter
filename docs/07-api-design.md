@@ -103,3 +103,6 @@ privateはAES-256-GCM（32byte鍵、ランダムnonce、agent/versionをAAD）�
 Storage所有権/MIME/サイズ検証がない間は`icon_path`の非null入力を422で拒否する。
 業務APIはliveでのみDBを利用し、毎リクエストのAuth管理照会と招待/プロフィールロックを通す。
 Mockでも認可は迂回せず503。`GET/PATCH /users/me`の残件は#7の次の実装へ引き継ぐ。
+
+#18の`POST /agents/{id}/profile/suggest`は所有権付きの契約を追加した。
+供給元が未採用の間は503（LLMを呼ばない）。任意提案を使わず手動作成できる。
