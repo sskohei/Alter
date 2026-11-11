@@ -106,3 +106,11 @@ background_jobsに`lease_token uuid`を追加。
 `conversation_events(conversation_id,kind,created_at)`は会話/kind複合PK。
 双方とも会話削除でCASCADE、RLS default deny。本文・秘密は持たない。
 rollbackはWorker停止後に2表DROPとlease_token列DROP（呼出の不明状態/完了eventを失うため運用照合必須）。
+
+## #22 記憶の削除抑止
+
+memory_tombstones（agent_id,dedupe_keyの複合PK）、memory_source_suppressions
+（agent_id,source_conversation_idの複合PK、sourceの逆引き索引）、memory_completions
+（conversation_idのPK）を追加。RLS default deny、AI/会話削除CASCADE。
+本文を削除しても再抽出防止のhash/出典IDを保持する。rollbackはWorker/API停止後に3表DROPだが、
+抑止情報を失うと削除済み記憶の再抽出リスクがあるため、出典の除去・バックアップ照合後に実施する。

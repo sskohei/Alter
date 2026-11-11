@@ -41,7 +41,10 @@ class PromptMessage(BaseModel):
 
 
 def build_prompt(
-    profile: ProfileInput, turns: list[str], memories: list[str] | None = None
+    profile: ProfileInput,
+    turns: list[str],
+    memories: list[str] | None = None,
+    summary: str | None = None,
 ) -> list[PromptMessage]:
     # Explicit projection drops any encrypted/private/identity data in DB rows.
     public = {name: getattr(profile, name) for name in ProfileInput.model_fields}
@@ -49,6 +52,7 @@ def build_prompt(
         "approved_profile": public,
         "quoted_turns": turns[-8:],
         "quoted_memories": (memories or [])[:5],
+        "quoted_recent_summary": (summary or "")[:2000],
     }
     quoted = json.dumps(data, ensure_ascii=False)
     if len(quoted) > 24000:

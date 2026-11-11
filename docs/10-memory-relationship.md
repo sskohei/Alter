@@ -17,3 +17,23 @@
 ## 関係性
 
 `agent_relationships`は2体のIDを昇順に正規化した無向の交流集計。完了会話1件につき回数を1増やし、共通の公開興味を保存。表示ラベルは0=初対面、1〜2=顔見知り、3以上=よく交流する相手。共通興味は補助表示であり、本人同士の友人関係や相性を断定しない。会話削除時は残存完了会話から再集計し、関係性が消える場合は行を削除する。MVPはリスト表示、グラフ可視化は正式版。[DB](05-database-design.md)、[画面](12-frontend-screens.md)参照。
+
+## #22 実装
+
+MVPは追加LLM呼出をせず、検査済みの発言を「会話中の発言・確定事実ではない」と明示して、
+本人視点で最大3候補（重要度3）を抽出する。会話要約も発言の引用から作る。
+`conversation_events`→`memory_completions`を同一transactionで処理し、出典/正規化hashで重複を棄却する。
+関係性は残存completed会話から再集計し、加算による二重計上を防ぐ。
+Workerは次のターンごとに同じ相手の上位5記憶＋直近要約を取得し、引用データとして渡す。
+
+削除APIは本文を即時DELETEし、選んだ候補と同じ出典の候補も除去する。
+`memory_tombstones`に内容hash、`memory_source_suppressions`に本人/出典IDだけを保持し、
+同じ内容の再抽出と同じ出典の要約/記憶の再入力を防ぐ。抑止記録には本文を持たず、AI/会話削除で消える。
+UIは「この会話から作成した記憶も削除」と説明する必要がある（#25への引き渡し）。
+既に会話に含まれる発言の回収や意味が似た別発言の自動削除は行わず、会話削除は#30で扱う。
+本人または相手のprofiles.deleted_atが設定されたら派生情報はパージ前でも非表示にする。
+内部`delete_conversation`は会話と派生記憶をCASCADE削除し、関係性を再集計する#30用hook。
+
+HTTP: `GET /memories?agent_id&limit&cursor`、`DELETE /memories/{id}`、`GET /relationships`。
+削除はIdempotency-Key再送に対応。所有者以外は404、cursor不正は422。
+#21の通知/outboxは独立した未実装consumerであり、本機能はその進捗を変更しない。

@@ -22,6 +22,7 @@ from alter_domain.llm import (
     build_prompt,
 )
 from alter_domain.llm_contract import Utterance
+from alter_domain.memory import context, recent_summary
 
 
 class LeaseLost(Exception):
@@ -184,7 +185,7 @@ def retry(conn: Connection, lease: Lease, client: LLMClient, now: datetime, dela
 
 def prepare(
     conn: Connection, lease: Lease, client: LLMClient, now: datetime, global_limit: Decimal
-) -> tuple[uuid.UUID, int, ProfileInput, list[str]] | None:
+) -> tuple[uuid.UUID, int, ProfileInput, list[str], list[str], str | None] | None:
     lock_interactions(conn)
     assert_lease(conn, lease, now)
     row = (
@@ -277,7 +278,8 @@ def prepare(
         .one()
     )
     public = ProfileInput.model_validate({k: profile[k] for k in ProfileInput.model_fields})
-    return aid, turn, public, turns
+    other = ids[turn % 2]
+    return aid, turn, public, turns, context(conn, aid, other), recent_summary(conn, aid, other)
 
 
 def run_one(
@@ -302,7 +304,7 @@ def run_one(
                 prepared = prepare(conn, lease, client, clock(), global_limit)
             if prepared is None:
                 return True
-            aid, turn, profile, turns = prepared
+            aid, turn, profile, turns, memories, summary = prepared
             if stopped.is_set():
                 # No request was dispatched. Mark retryable before yielding the lease.
                 with engine.begin() as conn:
@@ -317,7 +319,7 @@ def run_one(
                     )
                     retry(conn, lease, client, clock(), 1)
                 return True
-            messages = build_prompt(profile, turns)
+            messages = build_prompt(profile, turns, memories, summary)
             try:
                 with Heartbeat(engine, lease, clock) as heartbeat:
                     response = client.generate(messages)

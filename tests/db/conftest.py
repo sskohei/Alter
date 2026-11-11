@@ -82,6 +82,7 @@ def ai_pair(engine: Engine, created_users: list[uuid.UUID]) -> Iterator[list[uui
             agents.append(agent.id)
     yield agents
     with engine.begin() as conn:
+        conn.execute(text("delete from public.background_jobs where kind='conversation'"))
         for aid in agents:
             conn.execute(
                 text(

@@ -6,6 +6,7 @@ import threading
 from alter_domain.conversation import run_one
 from alter_domain.db import create_db_engine
 from alter_domain.llm import BaselineModerator, FakeLLM
+from alter_domain.memory import enrich_pending
 from alter_domain.runtime import run_mock_process
 from alter_domain.settings import Settings
 
@@ -38,6 +39,7 @@ def main() -> None:
                 stopped=stopped,
                 global_limit=settings.max_daily_cost_usd,
             )
+            enrich_pending(engine)
             if args.once:
                 return
             if not processed:

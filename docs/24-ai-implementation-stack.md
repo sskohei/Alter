@@ -44,3 +44,7 @@ Supabase Auth管理/JWTの実接続は未検証（既存JWTテストとHTTP Mock
 #20: lease/token fencing、heartbeat、呼出前記録、8発言/5分/費用/停止と再試行を追加。
 #21の会話API・通知/Discord outboxは未実装。conversation_eventsが完了接続点。
 #22は完了eventを元に記憶を冪等に生成する。実供給元adapterと本番復旧訓練は残件。
+
+#22: 出典付き引用記憶、完了eventの独立consumer、所有権付き一覧/削除、関係再集計を追加。
+Workerには記憶/直近要約の引用contextと完了後consumerを接続。
+#21の会話表示・通知/outboxと#30の削除受付は依存として残し、内部purge hookだけ提供する。
