@@ -66,3 +66,10 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 - 削除: まず新規交流と配信を停止し、対象会話→記憶→通知→AI→プロフィール→Authユーザーの順で削除する。外部Discord投稿の削除試行は別ジョブで記録する。会話CASCADE前に配送IDを本文なしで削除ジョブへ引き渡す。要求時から関連会話・派生記憶/通知を双方の参照対象外とし、招待失効後にAuthを削除する。保持期限と30日以内パージ・匿名化・復元時の扱いは[運用契約](23-invitation-consent-operations.md)に従う。
 
 [ER図](diagrams/er-diagram.md)・[認可設計](06-authentication-authorization.md)を参照。
+
+## #15 API冪等性
+
+`api_idempotency(owner_id,operation,key_hash,request_hash,response,created_at)`を追加。
+複合PKは`owner_id,operation,key_hash`、profiles削除でCASCADE、RLS default deny。
+作成応答（私的欄なし）と入力HMACのみ保持する。削除時は本人の記録も削除する。
+rollbackは`DROP TABLE public.api_idempotency`だが再送結果を失うためAPIを止めて実施する。

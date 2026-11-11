@@ -115,6 +115,7 @@ name = "alter-domain"
 version = "0.1.0"
 source = { editable = "backend/alter_domain" }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
@@ -123,6 +124,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=46" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic-settings", specifier = ">=2.11" },

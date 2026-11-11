@@ -27,3 +27,7 @@ Directoryの検索（2026-11-11、`language model inference`）ではOpenRouter�
 現時点は実LLMの評価結果・採用モデル・正式単価なし。liveのLLM呼出は無効とする。
 運用責任者sskoheiが公開直前とモデル変更時に公式価格/データ条件を再確認する。
 #14はこのドラフトだけでは完了扱いにしない。
+
+#15の残件: Storageアイコンadapter、鍵ローテーションCLI/復元訓練、#7のユーザーAPI。
+DBテストは使い捨てPostgres 17＋最小auth.users/anon/authenticatedで実行。
+Supabase Auth管理/JWTの実接続は未検証（既存JWTテストとHTTP Mockを使用）。

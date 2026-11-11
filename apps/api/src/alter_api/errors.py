@@ -96,6 +96,8 @@ class RequestIdMiddleware:
                 name = REQUEST_ID_HEADER.lower().encode()
                 if not any(key.lower() == name for key, _ in headers):
                     headers.append((name, request_id.encode()))
+                if scope.get("path", "").startswith("/api/v1/"):
+                    headers.append((b"cache-control", b"no-store"))
                 message["headers"] = headers
             await send(message)
 

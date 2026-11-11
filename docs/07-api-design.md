@@ -90,3 +90,16 @@
 | 認証 | `auth.CurrentPrincipal` | [認証](06-authentication-authorization.md)の手順でJWTを検証し、`Principal.sub`（UUID）を渡す。未認証・不正は401 `UNAUTHENTICATED`（`WWW-Authenticate: Bearer`）、JWKS/Auth照会障害は503 `AUTHORIZATION_UNAVAILABLE` |
 
 JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDIENCE`・`SUPABASE_JWT_ALGORITHMS`（ES256/RS256のみ、既定両方）・`SUPABASE_JWKS_CACHE_SECONDS`（既定300）。JWKSは`kid`ごとにキャッシュし、未知の`kid`では一度だけ再取得する（再取得は10秒以上の間隔）。ヘッダーの`alg`は許可リストかつ鍵の種類と一致する場合だけ受け付ける。時刻の許容差は30秒。JWKSが空のプロジェクトの`HS256`トークンだけを、`exp`/`iss`/`aud`/`sub`/`role`の確認後に`GET /auth/v1/user`（`apikey`は`SUPABASE_PUBLISHABLE_KEY`）で照会する。JWKSに鍵がある状態の`HS256`は拒否する。JWKS内の鍵が不正・未対応の場合は503とし、空JWKSと扱ってHS256へ切り替えない。トークン・鍵・Publishable Keyはログやエラーに出さない。`ALTER_MODE=mock`でも検証は省略しない。
+
+## #15 人格APIの実装
+
+`GET /agents/me`、作成/名前更新、人格取得/新規版/承認/privateを実装。
+`RevisionInput.expected_version`は必須（最新下書き版との不一致は409）。承認は最新の版だけを許可し、
+同じ版への再送は同じ結果。承認では交流をONにしない。通常人格応答は最新下書き、Workerは承認版を使用する。
+作成のIdempotency-Keyは`api_idempotency`に成功応答とHMACだけを保存し、本文不一致は409。
+鍵を変更すると過去キーの再送は409になるため、新しい操作には新しいキーを使う。
+privateはAES-256-GCM（32byte鍵、ランダムnonce、agent/versionをAAD）で保存、応答はno-store。
+鍵不備は503。現在V1鍵のみで、鍵交換CLIとStorage検証adapterは別途必要。
+Storage所有権/MIME/サイズ検証がない間は`icon_path`の非null入力を422で拒否する。
+業務APIはliveでのみDBを利用し、毎リクエストのAuth管理照会と招待/プロフィールロックを通す。
+Mockでも認可は迂回せず503。`GET/PATCH /users/me`の残件は#7の次の実装へ引き継ぐ。
