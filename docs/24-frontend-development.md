@@ -98,7 +98,7 @@ forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現でき�
 
 依存: #17（PR #46）、#11（Figma未提供）、#21（正式API未提供）。
 `activity_preview.py`に文書を基にしたPydantic案を分離し、既存preview OpenAPI/型へ生成する。
-partner/participantsは`{id,name}`、開始前日時/未生成要約はnullの案で、#21でB確認が必要。
+partner/participantsは`{id,name}`、開始前日時/未生成要約はnull。PR #47のBレビューでこの形に合わせる方針を確認済み。
 Discord連携の読み取りだけはダッシュボードのため#26の契約案を先行する。
 
 一覧・通知・ダッシュボードは30秒、queued/runningの詳細は15秒Polling。
@@ -123,3 +123,8 @@ BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABL
 コメントの`base_version`案に対し、PR #58の現在のPydantic正本は必須の`expected_version`なのでpreview/生成型/UI/Mockをその名前に合わせた。
 初回作成には期待版を送らず、作成後に取得した版を次の保存の基準にする。
 提案応答は版・承認日時を持たず、本人が適用・保存・承認するまで人格版を作らない。
+
+## PRレビュー反映（#47）
+
+`cost_usd`は本人AIの確定費用だけという方針をAPI説明・生成型・一覧/詳細文言に反映した。
+集計対象列と未確定時のnull/0は#21で確定待ち。nullは従来どおり未提供として表示し、0へ変換しない。

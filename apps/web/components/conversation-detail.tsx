@@ -40,7 +40,7 @@ export function ConversationDetail({ id }: { id: string }) {
               </time>
             </p>
             <p>公開状態: Web参加者限定</p>
-            <p>使用量: {costLabel(detail.cost_usd)}</p>
+            <p>自分のAIの確定費用: {costLabel(detail.cost_usd)}</p>
             {detail.status === "failed" && (
               <p className="notice">
                 生成に失敗しました。新しい発言は追加されません。

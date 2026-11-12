@@ -345,7 +345,10 @@ export interface components {
         };
         /** ConversationDetail */
         ConversationDetail: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             */
             cost_usd?: number | null;
             /**
              * Id
@@ -405,7 +408,10 @@ export interface components {
         };
         /** ConversationSummary */
         ConversationSummary: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             */
             cost_usd?: number | null;
             /**
              * Id

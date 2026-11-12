@@ -259,6 +259,7 @@
                 "type": "null"
               }
             ],
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002",
             "title": "Cost Usd"
           },
           "id": {
@@ -425,6 +426,7 @@
                 "type": "null"
               }
             ],
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002",
             "title": "Cost Usd"
           },
           "id": {
