@@ -93,3 +93,8 @@ NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000 pnpm dev:web --hostname 127.0.0.1
 http://127.0.0.1:3000/login で同意→Google/GitHub→テストOAuthのnormalを選ぶ。
 forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現できる。
 テストAuthはセッションごとに状態を分離し、プロセス停止で消える。実ユーザーの情報を入れない。
+## PRレビュー反映（#45）
+
+OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
+このブラウザのSupabaseセッションを終了して元の拒否理由を表示する。503ではセッションを終了せず再試行できる。
+BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABLE`に統一する。

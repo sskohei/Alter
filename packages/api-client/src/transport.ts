@@ -46,7 +46,7 @@ export async function unwrap<T>(result: { data?: T; error?: unknown; response: R
   if (result.data !== undefined) return result.data;
   const error = result.error as { error?: ApiErrorBody } | undefined;
   throw new ApiError(result.response.status, {
-    code: error?.error?.code ?? "UNAVAILABLE",
+    code: error?.error?.code ?? "SERVICE_UNAVAILABLE",
     message: error?.error?.message ?? "通信に失敗しました。もう一度お試しください。",
     request_id: error?.error?.request_id ?? result.response.headers.get("X-Request-ID") ?? undefined,
   });

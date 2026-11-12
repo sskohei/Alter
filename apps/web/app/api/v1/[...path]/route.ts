@@ -25,6 +25,6 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   try {
     const response = await transport(upstream, { method: request.method, headers, ...(request.method === "GET" ? {} : { body: await request.text() }) });
     return new Response(response.body, { status: response.status, headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", ...(response.headers.get("X-Request-ID") ? { "X-Request-ID": response.headers.get("X-Request-ID")! } : {}) } });
-  } catch { return Response.json({ error: { code: "UNAVAILABLE", message: "接続できません。再試行してください。", request_id: crypto.randomUUID() } }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
+  } catch { return Response.json({ error: { code: "SERVICE_UNAVAILABLE", message: "接続できません。再試行してください。", request_id: crypto.randomUUID() } }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
 }
 export { forward as GET, forward as POST, forward as PATCH };
