@@ -31,3 +31,5 @@ Directoryの検索（2026-11-11、`language model inference`）ではOpenRouter�
 #15の残件: Storageアイコンadapter、鍵ローテーションCLI/復元訓練、#7のユーザーAPI。
 DBテストは使い捨てPostgres 17＋最小auth.users/anon/authenticatedで実行。
 Supabase Auth管理/JWTの実接続は未検証（既存JWTテストとHTTP Mockを使用）。
+
+#58レビュー対応: 初回承認でonboarded_at、版指定取得、独立した版付きHMAC鍵と24時間の再送保証を実装。期限切れapi_idempotencyの日次清掃は#30へ引き継ぐ。

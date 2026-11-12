@@ -95,9 +95,25 @@ JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDI
 
 `GET /agents/me`、作成/名前更新、人格取得/新規版/承認/privateを実装。
 `RevisionInput.expected_version`は必須（最新下書き版との不一致は409）。承認は最新の版だけを許可し、
-同じ版への再送は同じ結果。承認では交流をONにしない。通常人格応答は最新下書き、Workerは承認版を使用する。
-作成のIdempotency-Keyは`api_idempotency`に成功応答とHMACだけを保存し、本文不一致は409。
-鍵を変更すると過去キーの再送は409になるため、新しい操作には新しいキーを使う。
+同じ最新版が承認済みなら追加更新せず現在の`Agent`を200で返す。新版作成後の旧版承認は409。
+承認APIは`Idempotency-Key`を契約に含めず、キー別の過去応答は保存しない。
+初回承認成功時に、同じDBトランザクションで`profiles.onboarded_at`をサーバー時刻で設定する。
+作成・下書き保存ではNULL、再送・再承認では初回日時を維持し、承認失敗では記録しない。
+承認では交流・Discord公開をONにしない。
+`GET /agents/{id}/profile`は版指定なしなら最新の版（承認状態を問わない）を返す。
+任意の`?version=N`（整数、1以上）で特定版を取得でき、版不存在・他人所有は404、指定不正は422。
+どの版でも非公開欄は含めない。Workerは承認版を使用する。
+作成の`Idempotency-Key`は本人・操作ごとに分離し、`api_idempotency`へ201の成功応答と入力HMAC・鍵版を保存する。
+成功から24時間以内の同一キー・同一入力は保存済み応答を201で返し、本文不一致は409。
+再送しても期限は延長しない。期限後は保存済み応答を返さず、新規作成として検証するため、
+既存AIがあれば409（1人1体の制約は維持）。清掃の実行有無でこの挙動は変わらない。
+HMACは暗号化鍵から独立した32byte鍵を使う。`API_IDEMPOTENCY_HMAC_KEYS`は
+版番号→Base64鍵のJSON、`API_IDEMPOTENCY_HMAC_ACTIVE_VERSION`（既定1）は新規記録の鍵版。
+再送は記録の鍵版で照合するため、暗号化鍵の交換やHMACの現行版切替で過去の再送を壊さない。
+照合後の再送には暗号化鍵を要求しない。必要なHMAC鍵の未設定・不正・旧版欠落は503で、書込は行わない。
+ヘッダーなしの作成ではHMAC鍵を要求しない。
+交換時は新旧のHMAC鍵を全APIインスタンスへ配布してから現行版を切替え、旧版の最終作成成功から24時間経過後に旧鍵を外す。
+同じ鍵版の値は上書きしない。再送保証・保持契約は[DB設計](05-database-design.md)を参照。
 privateはAES-256-GCM（32byte鍵、ランダムnonce、agent/versionをAAD）で保存、応答はno-store。
 鍵不備は503。現在V1鍵のみで、鍵交換CLIとStorage検証adapterは別途必要。
 Storage所有権/MIME/サイズ検証がない間は`icon_path`の非null入力を422で拒否する。

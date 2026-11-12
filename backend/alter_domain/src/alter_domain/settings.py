@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 非対称署名だけを JWKS で検証する。HS256 は JWKS では検証せず Auth サーバー照会に回す。
@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     alter_mode: Literal["mock", "live"] = "mock"
     discord_enabled: bool = False
     profile_encryption_key_v1: SecretStr = SecretStr("")
+    api_idempotency_hmac_keys: dict[PositiveInt, SecretStr] = Field(default_factory=dict)
+    api_idempotency_hmac_active_version: PositiveInt = 1
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres"
     cors_origins: str = "http://localhost:3000"
 

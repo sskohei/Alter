@@ -560,7 +560,9 @@ export interface operations {
     };
     get_agent_profile: {
         parameters: {
-            query?: never;
+            query?: {
+                version?: number | null;
+            };
             header?: never;
             path: {
                 agent_id: string;
@@ -637,10 +639,7 @@ export interface operations {
     approve_agent_profile: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description 同じ操作の再送を識別するキー。印字可能な ASCII 8〜255 文字（UUID 推奨） */
-                "Idempotency-Key"?: string | null;
-            };
+            header?: never;
             path: {
                 agent_id: string;
             };

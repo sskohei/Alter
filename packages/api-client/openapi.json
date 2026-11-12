@@ -836,6 +836,23 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
           }
         ],
         "responses": {
@@ -933,24 +950,6 @@
               "format": "uuid",
               "title": "Agent Id",
               "type": "string"
-            }
-          },
-          {
-            "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
-              "title": "Idempotency-Key"
             }
           }
         ],

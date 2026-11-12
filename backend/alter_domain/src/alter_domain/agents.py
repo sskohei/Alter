@@ -36,20 +36,30 @@ def owned(conn: Connection, owner: uuid.UUID, agent_id: uuid.UUID, *, lock: bool
     return Agent.model_validate(dict(row))
 
 
-def latest(conn: Connection, agent_id: uuid.UUID) -> ProfileRevision:
+def get_profile(
+    conn: Connection, agent_id: uuid.UUID, version: int | None = None
+) -> ProfileRevision:
     row = (
         conn.execute(
             text(
                 f"select {', '.join(PROFILE_FIELDS)}, version, approved_at "
                 "from public.agent_profiles "
-                "where agent_id=:id order by version desc limit 1"
+                "where agent_id=:id "
+                + ("and version=:version " if version is not None else "")
+                + "order by version desc limit 1"
             ),
-            {"id": agent_id},
+            {"id": agent_id, "version": version},
         )
         .mappings()
-        .one()
+        .first()
     )
+    if row is None:
+        raise AgentNotFound()
     return ProfileRevision.model_validate(dict(row))
+
+
+def latest(conn: Connection, agent_id: uuid.UUID) -> ProfileRevision:
+    return get_profile(conn, agent_id)
 
 
 def save_revision(
@@ -115,6 +125,12 @@ def approve(conn: Connection, owner: uuid.UUID, agent_id: uuid.UUID, version: in
             "where agent_id=:id and version=:v and approved_at is null"
         ),
         {"id": agent_id, "v": version},
+    )
+    conn.execute(
+        text(
+            "update public.profiles set onboarded_at=now() where id=:owner and onboarded_at is null"
+        ),
+        {"owner": owner},
     )
     # Approval never opts the user into autonomous interaction.
     conn.execute(

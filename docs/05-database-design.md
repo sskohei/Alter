@@ -94,7 +94,12 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 
 ## #15 API冪等性
 
-`api_idempotency(owner_id,operation,key_hash,request_hash,response,created_at)`を追加。
+`api_idempotency(owner_id,operation,key_hash,request_hash,hmac_key_version,response,created_at)`を追加。
 複合PKは`owner_id,operation,key_hash`、profiles削除でCASCADE、RLS default deny。
-作成応答（私的欄なし）と入力HMACのみ保持する。削除時は本人の記録も削除する。
+作成応答（私的欄なし）と入力HMAC・正の鍵版を保持する。本文は保持しない。
+成功時の`created_at`から24時間を再送保証期間とし、再送で期限は延長しない。
+期限後はAPIの再送照合対象から外す。#30で`created_at <= now() - interval '24 hours'`の行を
+日次削除する（通常の物理保持は最大48時間。清掃失敗中も再送保証は延長しない）。
+`created_at`に清掃用索引を設ける。プロフィール削除時は期限によらずCASCADEで削除する。
+HMAC鍵版ごとの独立した鍵をAPIのSecretで管理し、旧版を最後に使用した作成成功から24時間は保持する。
 rollbackは`DROP TABLE public.api_idempotency`だが再送結果を失うためAPIを止めて実施する。
