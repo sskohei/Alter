@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -16,7 +15,7 @@ import {
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
-import pair from "../public/visuals/pair.png";
+import { AlterCardPreview, cardTags } from "./alter-card";
 const steps: (keyof AgentFormValues)[][] = [
   ["name", "personality", "values_text"],
   ["interests", "speaking_style"],
@@ -46,13 +45,6 @@ const examples: Partial<Record<keyof AgentFormValues, string[]>> = {
   restrictions: ["仕事の話", "家族の話"],
 };
 const REVEAL_MS = 700;
-const tags = (...texts: (string | undefined)[]) =>
-  texts
-    .join("、")
-    .split(/[、,，\n]/)
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .slice(0, 8);
 export function OnboardingForm({ owner }: { owner: string }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -129,7 +121,7 @@ export function OnboardingForm({ owner }: { owner: string }) {
     document.getElementById(field)?.focus();
   }
   const name = String(values.name ?? "").trim();
-  const stickers = tags(values.personality, values.values_text, values.interests);
+  const stickers = cardTags(values.personality, values.values_text, values.interests);
   return (
     <div className="ob">
       <div className="ob-main">
@@ -252,26 +244,7 @@ export function OnboardingForm({ owner }: { owner: string }) {
           </fieldset>
         </form>
       </div>
-      {/* Live preview card. Decorative copy of what you typed; the form above is the source of truth. */}
-      <aside className="ob-side" aria-hidden="true">
-        <div className="alter-card">
-          <span className="draft">DRAFT</span>
-          <p className="k"><span>ALTER CARD</span><span>v0</span></p>
-          <div className="stage">
-            <div className="float" key={name ? "named" : "empty"}>
-              <Image src={pair} alt="" className={`float-obj${name ? " jelly-once" : ""}`} sizes="240px" />
-            </div>
-          </div>
-          <p className={`card-name${name ? "" : " empty"}`}>{name || "名前はまだ"}</p>
-          <p className="owner">未承認の下書き</p>
-          <div className="stickers">
-            {stickers.map((t, i) => (
-              <span key={`${t}-${i}`} className="sticker">{t}</span>
-            ))}
-          </div>
-          <p className="note">入力するとカードができあがっていきます。</p>
-        </div>
-      </aside>
+      <AlterCardPreview name={name} tags={stickers} status="未承認の下書き" />
     </div>
   );
 }

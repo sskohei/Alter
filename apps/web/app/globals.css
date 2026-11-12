@@ -28,6 +28,12 @@
   --w-thin: 100;           /* weight of Japanese body copy — raise to thicken */
   --sq: 1.12;              /* 平体: horizontal stretch for thin body copy (1 = off) */
   --sq-title: 1.06;        /* 平体 for headings */
+  /* pop accents: the 3D objects' brighter colours, for small things only (stickers, lamps, stamps).
+     Faces stay dusty; these keep the screens from sinking. Ink text on all of them is 7:1+. */
+  --pop-coral: #FF7A6B;
+  --pop-butter: #FFC84A;
+  --pop-lilac: #B9A3FF;
+  --pop-mint: #7FD8B4;
   /* app surfaces and states */
   --paper-2: #EEEBE4;      /* raised sheet (cards, inputs) on paper */
   --danger: #A1261B;       /* errors and destructive actions, 5.7:1 on paper */
@@ -218,8 +224,8 @@ progress::-moz-progress-bar { background: var(--line); }
 .conversation-card { position: relative; border-radius: 4px 18px 18px 18px; }
 .conversation-card .sticker { position: absolute; right: 14px; top: -11px; transform: rotate(5deg); padding: 2px 10px; border-radius: 999px;
   background: var(--ink); color: var(--bg); font: 700 .6875rem var(--jp); }
-.conversation-card[data-status="running"] .sticker, .conversation-card[data-status="queued"] .sticker { background: var(--mustard); color: var(--ink-0); }
-.conversation-card[data-status="failed"] .sticker { background: var(--rose); color: var(--ink-0); }
+.conversation-card[data-status="running"] .sticker, .conversation-card[data-status="queued"] .sticker { background: var(--pop-butter); color: var(--ink-0); }
+.conversation-card[data-status="failed"] .sticker { background: var(--pop-coral); color: var(--ink-0); }
 .conversation-card[data-status="cancelled"] .sticker { background: var(--paper-2); color: var(--ink-0); border: 1px solid var(--ink); }
 
 @media (max-width: 767px) {
@@ -261,7 +267,7 @@ progress::-moz-progress-bar { background: var(--line); }
 .note-card { position: relative; border-radius: 10px; }
 .note-card[data-read="false"] { border-left: 6px solid var(--mustard); }
 .note-card[data-read="false"]::after { content: "NEW" / ""; position: absolute; right: 14px; top: -11px; transform: rotate(5deg); padding: 2px 10px; border-radius: 999px;
-  background: var(--mustard); color: var(--ink-0); font: 700 .6875rem var(--mono); }
+  background: var(--pop-butter); color: var(--ink-0); font: 700 .6875rem var(--mono); }
 .note-card[data-read="true"] { background: transparent; border-style: dashed; }
 .note-card h2 { font-size: 1.1rem; }
 
@@ -292,9 +298,9 @@ progress::-moz-progress-bar { background: var(--line); }
 .ob-steps li { position: relative; padding: 5px 14px; border: 1px solid var(--ink); border-radius: 999px; font: 500 .8125rem var(--jp); background: var(--paper-2); }
 .ob-steps li .n { font: 400 .6875rem var(--mono); margin-right: 6px; color: var(--dim); }
 .ob-steps li[aria-current] { background: var(--ink); color: var(--bg); }
-.ob-steps li[aria-current] .n { color: var(--mustard); }
+.ob-steps li[aria-current] .n { color: var(--pop-butter); }
 .ob-steps li.done::after { content: "OK" / ""; position: absolute; right: -10px; top: -12px; display: grid; place-items: center; width: 30px; height: 30px; transform: rotate(12deg);
-  border: 1px solid var(--ink); border-radius: 50%; background: var(--mustard); color: var(--ink-0); font: 900 .6875rem/1 var(--display); }
+  border: 1px solid var(--ink); border-radius: 50%; background: var(--pop-butter); color: var(--ink-0); font: 900 .6875rem/1 var(--display); }
 .ob-status { font: 400 .75rem var(--mono); color: var(--dim); margin: 6px 0 18px; }
 .ob-chat { display: grid; gap: 22px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .turn { display: grid; gap: 14px; }
@@ -334,9 +340,10 @@ progress::-moz-progress-bar { background: var(--line); }
 .alter-card .owner { margin: 0 0 10px; font: 400 .6875rem var(--mono); color: var(--dim); }
 .alter-card .stickers { display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; }
 .alter-card .sticker { padding: 3px 12px; border: 1px solid var(--ink); border-radius: 999px; font: 500 .8125rem var(--jp); color: var(--ink-0); }
-.alter-card .sticker:nth-child(3n+1) { background: var(--rose); transform: rotate(-3deg); }
-.alter-card .sticker:nth-child(3n+2) { background: var(--sage); transform: rotate(2deg); }
-.alter-card .sticker:nth-child(3n) { background: var(--mustard); transform: rotate(-1deg); }
+.alter-card .sticker:nth-child(4n+1) { background: var(--pop-coral); transform: rotate(-3deg); }
+.alter-card .sticker:nth-child(4n+2) { background: var(--pop-mint); transform: rotate(2deg); }
+.alter-card .sticker:nth-child(4n+3) { background: var(--pop-butter); transform: rotate(-1deg); }
+.alter-card .sticker:nth-child(4n) { background: var(--pop-lilac); transform: rotate(1.5deg); }
 .alter-card .draft { position: absolute; right: -14px; top: -16px; transform: rotate(10deg); padding: 6px 12px; border: 1px solid var(--ink); border-radius: 10px; background: var(--rose); color: var(--ink-0); font: 900 .8125rem/1 var(--display); }
 .alter-card .note { margin: 12px 0 0; font: 400 .75rem var(--mono); color: var(--dim); }
 @media (max-width: 960px) {
@@ -344,6 +351,69 @@ progress::-moz-progress-bar { background: var(--line); }
   .ob-side { position: static; order: -1; }
   .alter-card { transform: none; }
   .alter-card .stage { height: 140px; }
+}
+
+/* =========================================================================
+   #10 studio (/agent/new, /agent/edit): properties panel + live card + approval stamp
+   ========================================================================= */
+.studio { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 32px; align-items: start; margin-top: 12px; }
+.studio-form > .card { margin-top: 0; }
+.studio-form .field { position: relative; padding: 14px 14px 6px; border: var(--hair) solid var(--ink); border-radius: 4px 12px 12px 12px; background: var(--paper); }
+.studio-form .field > label { display: inline-block; margin: -26px 0 8px -1px; padding: 2px 12px; border: 1px solid var(--ink); border-radius: 8px 8px 0 0; background: var(--pop-butter); color: var(--ink-0); font-size: .8125rem; }
+.studio-form .field:nth-of-type(4n+2) > label { background: var(--pop-lilac); }
+.studio-form .field:nth-of-type(4n+3) > label { background: var(--pop-mint); }
+.studio-form .field:nth-of-type(4n) > label { background: var(--pop-coral); }
+.studio-form .field:focus-within { border-color: var(--line); box-shadow: 4px 4px 0 var(--line); }
+.studio-form .stack { gap: 30px; }
+.diff-new { display: inline; padding: 0 .2em; background: linear-gradient(transparent 55%, color-mix(in srgb, var(--pop-butter) 70%, transparent) 55%); }
+.approve-card { position: relative; overflow: hidden; border-radius: 12px; }
+.approve-stamp { position: absolute; right: 18px; top: 16px; padding: 6px 14px; border: 3px solid var(--danger); border-radius: 10px; color: var(--danger);
+  font: 900 1.1rem/1 var(--display); letter-spacing: .02em; transform: rotate(-12deg) scale(1.6); opacity: 0; pointer-events: none; }
+.approve-card[data-agreed="true"] .approve-stamp { opacity: 1; transform: rotate(-12deg) scale(1); }
+.approve-card .check { margin-top: 8px; padding: 12px 14px; border: 1px dashed var(--ink); border-radius: 10px; background: var(--paper); }
+
+/* =========================================================================
+   #12 settings: power switches, a mixer for budgets, a cable for Discord, an ID card and a danger zone
+   ========================================================================= */
+.power { position: relative; padding-right: 120px; border-radius: 12px; }
+.power-switch { position: absolute; right: 22px; top: 22px; width: 76px; height: 40px; border: 1px solid var(--ink); border-radius: 999px; background: var(--paper); box-shadow: inset 0 2px 0 rgb(0 0 0 / .08); }
+.power-switch i { position: absolute; left: 4px; top: 4px; width: 30px; height: 30px; border: 1px solid var(--ink); border-radius: 50%; background: var(--paper-2); box-shadow: 0 2px 0 var(--ink); }
+.power-switch::after { content: "OFF" / ""; position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font: 700 .625rem var(--mono); }
+.power[data-on="true"] { background: color-mix(in srgb, var(--pop-mint) 22%, var(--paper-2)); }
+.power[data-on="true"] .power-switch { background: var(--pop-mint); }
+.power[data-on="true"] .power-switch i { left: auto; right: 4px; background: #fff; }
+.power[data-on="true"] .power-switch::after { content: "ON" / ""; right: auto; left: 11px; }
+.power h2::before { content: "" / ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border: 1px solid var(--ink); border-radius: 50%; background: var(--paper); vertical-align: middle; }
+.power[data-on="true"] h2::before { background: var(--pop-mint); box-shadow: 0 0 0 4px color-mix(in srgb, var(--pop-mint) 35%, transparent); }
+.mixer { border-radius: 12px; background: var(--paper-2); }
+.mixer .field { padding: 12px 14px; border: var(--hair) solid var(--ink); border-radius: 10px; background: var(--paper); }
+.mixer .field-input { font: 400 1.25rem var(--mono); }
+.mixer .field > label::before { content: "▸ " / ""; color: var(--pop-coral); }
+
+.cable-card { border-radius: 12px; }
+.cable { display: flex; align-items: center; gap: 0; margin: 2px 0 14px; }
+.cable .node { padding: 6px 12px; border: 1px solid var(--ink); border-radius: 10px; background: var(--pop-lilac); color: var(--ink-0); font: 700 .75rem var(--mono); box-shadow: 3px 3px 0 var(--ink); }
+.cable .node:last-child { background: var(--pop-butter); }
+.cable .wire { flex: 1; height: 0; min-width: 40px; border-top: 3px dashed var(--ink); margin: 0 -1px; position: relative; }
+.cable .wire::after { content: "⚡︎ unplugged" / ""; position: absolute; left: 50%; top: -24px; transform: translateX(-50%); font: 400 .6875rem var(--mono); color: var(--dim); white-space: nowrap; }
+.cable-card[data-connected="true"] .wire { border-top-style: solid; border-color: var(--line); }
+.cable-card[data-connected="true"] .wire::after { content: "connected" / ""; color: var(--line); }
+
+.passport { position: relative; padding-left: 116px; border-radius: 14px; background: linear-gradient(90deg, color-mix(in srgb, var(--pop-lilac) 35%, var(--paper-2)) 0 92px, var(--paper-2) 92px); }
+.passport-face { position: absolute; left: 22px; top: 26px; display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid var(--ink); border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 12%, transparent 13%), var(--pop-coral); font: 700 1.3rem var(--jp); box-shadow: 3px 3px 0 var(--ink); }
+.passport-k { margin: 0 0 4px; font: 400 .6875rem var(--mono); letter-spacing: .1em; color: var(--dim); }
+.danger-zone { position: relative; border-radius: 12px; padding-top: 40px; overflow: hidden; }
+.danger-zone::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 16px; border-bottom: 1px solid var(--ink);
+  background: linear-gradient(-45deg, var(--pop-butter) 25%, var(--ink-0) 25% 50%, var(--pop-butter) 50% 75%, var(--ink-0) 75%) 0 0 / 22px 22px; }
+@media (max-width: 960px) {
+  .studio { grid-template-columns: minmax(0, 1fr); }
+  .studio .ob-side { order: -1; }
+}
+@media (max-width: 520px) {
+  .power { padding-right: 20px; padding-top: 74px; }
+  .power-switch { left: 20px; right: auto; top: 20px; }
+  .passport { padding-left: 20px; padding-top: 92px; background: linear-gradient(180deg, color-mix(in srgb, var(--pop-lilac) 35%, var(--paper-2)) 0 76px, var(--paper-2) 76px); }
 }
 
 /* =========================================================================
@@ -380,6 +450,16 @@ progress::-moz-progress-bar { background: var(--line); }
   .alter-card { transition: transform .6s cubic-bezier(.34, 1.56, .64, 1); }
   .alter-card:hover { transform: rotate(0); }
   .alter-card .jelly-once { animation: jelly 1.6s cubic-bezier(.37, 0, .63, 1) 1; }
+  .approve-stamp { transition: transform .45s cubic-bezier(.34, 1.56, .64, 1), opacity .2s; }
+  .power-switch i { transition: left .45s cubic-bezier(.34, 1.56, .64, 1), right .45s cubic-bezier(.34, 1.56, .64, 1); }
+  .power:hover .power-switch i { scale: 1.08 .94; transition: scale .3s; }
+  .cable .node { transition: transform .45s cubic-bezier(.34, 1.56, .64, 1); }
+  .cable-card:hover .node:first-child { transform: translateX(6px) rotate(-3deg); }
+  .cable-card:hover .node:last-child { transform: translateX(-6px) rotate(3deg); }
+  .passport-face { transition: transform .6s cubic-bezier(.34, 1.56, .64, 1); }
+  .passport:hover .passport-face { transform: rotate(-10deg) scale(1.08); }
+  .studio-form .field > label { transition: transform .35s cubic-bezier(.34, 1.56, .64, 1); }
+  .studio-form .field:focus-within > label { transform: translateY(-3px) rotate(-2deg); }
   .alter-card .sticker { animation: pop .6s cubic-bezier(.34, 1.56, .64, 1) both; }
   @keyframes pop { from { scale: .3; } }
   .ex .chip { transition: transform .35s cubic-bezier(.34, 1.56, .64, 1); }

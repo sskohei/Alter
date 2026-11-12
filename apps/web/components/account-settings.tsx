@@ -126,7 +126,9 @@ export function AccountSettings({
         </p>
       )}
       {message && <p role="status">{message}</p>}
-      <section className="card">
+      <section className="card passport">
+        <span className="passport-face" aria-hidden="true">{savedName.slice(0, 1)}</span>
+        <p className="passport-k" aria-hidden="true">ALTER ID · INVITED MEMBER</p>
         <h2>表示名</h2>
         <p>保存済み: {savedName}</p>
         <form
@@ -188,7 +190,7 @@ export function AccountSettings({
           </>
         )}
       </section>
-      <section className="card">
+      <section className="card danger-zone">
         <h2>アカウント削除</h2>
         <p>
           AIを直ちに停止し、関連する共有会話を相手の画面からも非表示にします。関連記憶・通知も削除し、アプリの個人データは原則30日以内に削除します。
