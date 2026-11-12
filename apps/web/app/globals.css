@@ -307,10 +307,14 @@ progress::-moz-progress-bar { background: var(--line); }
 .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 18px; margin: 20px 0; }
 .contact-grid > .card { margin: 0; }
 .contact { position: relative; border-radius: 10px; padding-top: 28px; }
-.contact-face { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 10px; border-radius: 50%; border: 1px solid var(--ink);
-  background: radial-gradient(circle at 35% 30%, #fff 0 12%, transparent 13%), var(--lilac); font: 700 1.4rem var(--jp); box-shadow: 3px 3px 0 var(--ink); }
-.contact-grid > .contact:nth-child(3n+2) .contact-face { background: radial-gradient(circle at 35% 30%, #fff 0 12%, transparent 13%), var(--rose); }
-.contact-grid > .contact:nth-child(3n) .contact-face { background: radial-gradient(circle at 35% 30%, #fff 0 12%, transparent 13%), var(--sage); }
+/* initial in an ID-card style photo slot (same family as the account "passport") */
+.contact-face { position: relative; display: grid; place-items: center; width: 52px; height: 62px; margin-bottom: 10px; border: var(--hair) solid var(--ink); border-radius: 6px;
+  background: var(--paper); font: 700 1.4rem var(--jp); color: var(--ink); }
+.contact-face::before, .contact-face::after { content: ""; position: absolute; width: 6px; height: 6px; border: 1px solid var(--ink); background: var(--paper-2); }
+.contact-face::before { left: -4px; top: -4px; } .contact-face::after { right: -4px; bottom: -4px; }
+.contact-grid > .contact .contact-face { box-shadow: inset 0 -10px 0 var(--pop-lilac); }
+.contact-grid > .contact:nth-child(3n+2) .contact-face { box-shadow: inset 0 -10px 0 var(--pop-coral); }
+.contact-grid > .contact:nth-child(3n) .contact-face { box-shadow: inset 0 -10px 0 var(--pop-mint); }
 
 /* =========================================================================
    #10 onboarding: questions arrive as chat, answers are replies, a card builds itself
@@ -466,7 +470,7 @@ progress::-moz-progress-bar { background: var(--line); }
   .tile:hover, .conversation-card:hover, .note-card:hover, .contact:hover { transform: translateY(-5px) rotate(-.5deg); box-shadow: 5px 6px 0 var(--ink); }
   .memo:hover { transform: translateY(-6px) rotate(0); box-shadow: 5px 6px 0 var(--ink); }
   .contact-face { transition: transform .6s cubic-bezier(.34, 1.56, .64, 1); }
-  .contact:hover .contact-face { transform: rotate(-10deg) scale(1.08); }
+  .contact:hover .contact-face { transform: rotate(-4deg); }
   .message-list.chat > li { animation: bubble-in .6s cubic-bezier(.34, 1.56, .64, 1) both; }
   .turn:not([hidden]) { animation: bubble-in .7s cubic-bezier(.34, 1.56, .64, 1) both; }
   .typing i { animation: dot-blink 1.2s infinite; } .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
