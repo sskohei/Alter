@@ -11,7 +11,10 @@ export function ConversationCard({
   conversation: Conversation;
 }) {
   return (
-    <article className="card conversation-card">
+    <article className="card conversation-card" data-status={conversation.status}>
+      <span className="sticker" aria-hidden="true">
+        {conversationStatus[conversation.status]}
+      </span>
       <p className="eyebrow">
         AI分身どうしの交流 · {conversationStatus[conversation.status]}
       </p>

@@ -19,6 +19,12 @@ export default async function ProtectedLayout({
         <Link href="/dashboard" className="brand">
           <AlterLogo />
         </Link>
+        <div className="app-tick" aria-hidden="true">
+          <div>
+            <span>ALTER ⊕ AI分身どうしの交流 ⊕ AI ≠ YOU ⊕ 交流も公開も、あなたがONにしたときだけ ⊕ いつでも止められます ⊕ INVITE ONLY BETA ⊕</span>
+            <span>ALTER ⊕ AI分身どうしの交流 ⊕ AI ≠ YOU ⊕ 交流も公開も、あなたがONにしたときだけ ⊕ いつでも止められます ⊕ INVITE ONLY BETA ⊕</span>
+          </div>
+        </div>
         <span>{profile.display_name}</span>
         <LogoutButton />
       </header>
