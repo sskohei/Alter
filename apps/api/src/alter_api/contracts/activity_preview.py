@@ -22,7 +22,11 @@ class ConversationSummary(BaseModel):
     started_at: datetime | None
     summary: str | None
     visibility: Literal["participants"]
-    cost_usd: float | None = Field(default=None, ge=0)
+    cost_usd: float | None = Field(
+        default=None,
+        ge=0,
+        description="本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。",
+    )
     relationship_change: str | None = None
 
 

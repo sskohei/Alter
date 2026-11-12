@@ -535,7 +535,10 @@ export interface components {
         };
         /** ConversationDetail */
         ConversationDetail: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             */
             cost_usd?: number | null;
             /**
              * Id
@@ -595,7 +598,10 @@ export interface components {
         };
         /** ConversationSummary */
         ConversationSummary: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             */
             cost_usd?: number | null;
             /**
              * Id
@@ -833,6 +839,29 @@ export interface components {
             /** Weaknesses */
             weaknesses?: string[];
         };
+        /** PublicPersonality */
+        PublicPersonality: {
+            /** Hobbies */
+            hobbies?: string[];
+            /** Interaction Policy */
+            interaction_policy: string;
+            /** Interests */
+            interests: string[];
+            /** Personality */
+            personality: string;
+            /** Restrictions */
+            restrictions: string;
+            /** Shareable Info */
+            shareable_info: string;
+            /** Speaking Style */
+            speaking_style: string;
+            /** Strengths */
+            strengths?: string[];
+            /** Values Text */
+            values_text: string;
+            /** Weaknesses */
+            weaknesses?: string[];
+        };
         /** Relationship */
         Relationship: {
             /** Blocked */
@@ -857,6 +886,38 @@ export interface components {
             items: components["schemas"]["Relationship"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** RevisionInput */
+        RevisionInput: {
+            /** Expected Version */
+            expected_version: number;
+            /** Hobbies */
+            hobbies?: string[];
+            /** Interaction Policy */
+            interaction_policy: string;
+            /** Interests */
+            interests: string[];
+            /** Name */
+            name: string;
+            /** Personality */
+            personality: string;
+            /**
+             * Private Info
+             * @default
+             */
+            private_info: string;
+            /** Restrictions */
+            restrictions: string;
+            /** Shareable Info */
+            shareable_info: string;
+            /** Speaking Style */
+            speaking_style: string;
+            /** Strengths */
+            strengths?: string[];
+            /** Values Text */
+            values_text: string;
+            /** Weaknesses */
+            weaknesses?: string[];
         };
         /** SuggestionInput */
         SuggestionInput: {
@@ -1303,7 +1364,9 @@ export interface operations {
     };
     preview_get_personality: {
         parameters: {
-            query?: never;
+            query?: {
+                version?: number | null;
+            };
             header?: never;
             path: {
                 id: string;
@@ -1571,7 +1634,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AgentDraftInput"];
+                "application/json": components["schemas"]["RevisionInput"];
             };
         };
         responses: {
@@ -1670,7 +1733,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProfileRevision"];
+                    "application/json": components["schemas"]["PublicPersonality"];
                 };
             };
             /** @description Unauthorized */
