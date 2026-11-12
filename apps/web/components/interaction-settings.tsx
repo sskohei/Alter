@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { interactionBudgetSchema, type BudgetValues } from "../lib/interaction-budget";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ApiError, unwrap, type components } from "@alter/api-client/preview";
 import { browserApi } from "../lib/api-browser";
@@ -23,18 +23,6 @@ import {
 type Settings = components["schemas"]["AgentSettings"];
 type Agent = components["schemas"]["Agent"];
 type Guild = components["schemas"]["Guild"];
-const number = z
-  .number({ error: "数値を入力してください。" })
-  .finite("有限の数値を入力してください。")
-  .nonnegative("0以上を入力してください。");
-const schema = z.object({
-  frequency_per_day: number
-    .int("整数を入力してください。")
-    .max(2, "1日2回までです。"),
-  daily_budget_usd: number,
-  max_session_usd: number,
-});
-type BudgetValues = z.infer<typeof schema>;
 type Intent = {
   kind: "start" | "stop" | "publish" | "unpublish";
   values: BudgetValues;
@@ -126,14 +114,20 @@ function SettingsForm({
     reset,
     formState: { errors, isDirty },
   } = useForm<BudgetValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(interactionBudgetSchema),
     defaultValues: initial,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [startFailed, setStartFailed] = useState(false);
   const [message, setMessage] = useState("");
   const [intent, setIntent] = useState<Intent | null>(null);
   const [agreed, setAgreed] = useState(false);
+  const errorMessage = error instanceof ApiError && error.status === 409 && startFailed
+    ? "AIが停止中、または同意設定が未設定・変更された可能性があるため、交流をONにできません。最新のAIの状態を確認し、解消しない場合は運営にお問い合わせください。"
+    : error instanceof ApiError && error.status === 422
+      ? "予算は運営上限以下、小数6桁まで、1会話の費用上限は日次予算以下で設定してください。運営上限は運営にご確認ください。"
+      : dataErrorMessage(error);
   const destinations = guilds.filter((g) => g.guild_enabled);
   const publishReady =
     destinations.length > 0 &&
@@ -141,6 +135,7 @@ function SettingsForm({
   async function patch(body: components["schemas"]["AgentSettingsPatch"]) {
     setBusy(true);
     setError(null);
+    setStartFailed(false);
     setMessage("");
     try {
       const saved = await unwrap(
@@ -160,6 +155,7 @@ function SettingsForm({
       setAgreed(false);
       setMessage("設定を保存しました。");
     } catch (cause) {
+      setStartFailed(body.autonomy_enabled === true);
       setError(cause);
     } finally {
       setBusy(false);
@@ -177,6 +173,7 @@ function SettingsForm({
         !agreed ||
         !disclosure ||
         !agent.approved_profile_version ||
+        agent.status !== "active" ||
         !intent.values.frequency_per_day ||
         !intent.values.daily_budget_usd ||
         !intent.values.max_session_usd
@@ -195,7 +192,7 @@ function SettingsForm({
     <>
       {!!error && !intent && (
         <p className="notice" role="alert">
-          {dataErrorMessage(error)}{" "}
+          {errorMessage}{" "}
           状態表示は前回の確認値です。最新の状態を読み直してください。
         </p>
       )}
@@ -221,6 +218,9 @@ function SettingsForm({
             <Link href="/agent/edit">人格を確認する</Link>
           </p>
         )}
+        {agent.status !== "active" && (
+          <p className="notice">AIが停止中または未承認のため、交流をONにできません。最新のAIの状態を確認してください。</p>
+        )}
         {!disclosure && (
           <p className="notice">
             LLM送信先とデータ利用条件を確認中のため、交流をONにできません。停止と予算の変更は可能です。
@@ -233,7 +233,7 @@ function SettingsForm({
             </Button>
           ) : (
             <Button
-              disabled={busy || !disclosure || !agent.approved_profile_version}
+              disabled={busy || !disclosure || !agent.approved_profile_version || agent.status !== "active"}
               onClick={handleSubmit((values) => propose("start", values))}
             >
               交流をONにする
@@ -400,7 +400,7 @@ function SettingsForm({
           )}
           {!!error && (
             <p role="alert" className="notice">
-              {dataErrorMessage(error)}{" "}
+              {errorMessage}{" "}
               状態表示は前回の確認値です。最新の状態を読み直してください。
             </p>
           )}
