@@ -102,7 +102,7 @@ fieldset.card > legend:not(.sr-only) + * { clear: both; }
 .notice > :first-child { margin-top: 0; } .notice > :last-child { margin-bottom: 0; }
 
 /* app shell */
-.app-shell { display: grid; grid-template-columns: 210px minmax(0, 1fr); min-height: 100vh; }
+.app-shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
 .app-header { grid-column: 1/-1; position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 20px; padding: 10px 24px;
   border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); }
 .app-header form { margin-left: 0; }
@@ -118,7 +118,6 @@ fieldset.card > legend:not(.sr-only) + * { clear: both; }
 .app-nav a:hover { border-left-color: var(--line); background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .app-nav a[aria-current="page"] { border-left-color: var(--line); background: var(--paper-2); }
 .desktop-nav { counter-reset: layer; padding-top: 14px; }
-.desktop-nav::before { content: "LAYERS" / ""; display: block; padding: 0 12px 10px; font: 400 11px var(--mono); letter-spacing: .12em; color: var(--dim); }
 .desktop-nav a { counter-increment: layer; position: relative; gap: 10px; border: 1px solid transparent; border-radius: 4px; }
 .desktop-nav a::before { content: counter(layer, decimal-leading-zero) / ""; font: 400 12px var(--mono); color: var(--dim); min-width: 1.6em; }
 .desktop-nav a[aria-current="page"] { border-color: var(--line); }
@@ -181,6 +180,29 @@ progress::-moz-progress-bar { background: var(--line); }
   .nav-more summary { display: flex; align-items: center; min-height: 44px; padding: 8px; font: 500 .875rem var(--jp); cursor: pointer; }
   .nav-menu { display: grid; gap: 2px; position: absolute; right: 8px; bottom: calc(100% + 8px); width: min(240px, calc(100vw - 32px)); padding: 8px; border: var(--hair) solid var(--ink); background: var(--paper); border-radius: var(--radius); box-shadow: 6px 6px 0 var(--lilac); }
 }
+
+/* =========================================================================
+   LAYERS column, decorated: checker that deepens downwards, colour thumbnails, eyes,
+   frosted items, and 3D shapes drifting behind (components/layers-drift.tsx)
+   ========================================================================= */
+@media (min-width: 768px) {
+  .desktop-nav { position: sticky; top: 65px; align-self: start; height: calc(100vh - 65px); overflow: hidden; isolation: isolate; }
+  .desktop-nav::before { content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+    background: repeating-conic-gradient(#EDE9E2 0 25%, #DAD5CB 0 50%) 0 0 / 12px 12px;
+    -webkit-mask: linear-gradient(transparent 0 35%, #000 100%); mask: linear-gradient(transparent 0 35%, #000 100%); opacity: .9; }
+}
+.layers-ttl { display: flex; align-items: center; justify-content: space-between; margin: 0; padding: 0 12px 10px; font: 400 11px var(--mono); letter-spacing: .12em; color: var(--dim); }
+.layers-ttl .cnt { min-width: 20px; padding: 0 6px; border: 1px solid var(--ink); border-radius: 999px; background: var(--pop-butter); color: var(--ink-0); font: 700 10px/16px var(--mono); letter-spacing: 0; text-align: center; }
+.desktop-nav a { background: color-mix(in srgb, var(--paper) 62%, transparent); backdrop-filter: blur(3px); }
+.desktop-nav a .thumb { order: -1; flex: none; width: 18px; height: 18px; border: 1px solid var(--ink); border-radius: 5px; background: var(--pop-butter); box-shadow: 1.5px 1.5px 0 var(--ink); }
+.desktop-nav a:nth-of-type(4n+2) .thumb { background: var(--pop-lilac); }
+.desktop-nav a:nth-of-type(4n+3) .thumb { background: var(--pop-mint); }
+.desktop-nav a:nth-of-type(4n) .thumb { background: var(--pop-coral); }
+.desktop-nav a .eye { margin-left: auto; width: 16px; height: 9px; border-bottom: 1.5px solid var(--dim); border-radius: 0 0 50% 50%; opacity: .6; }
+.desktop-nav a[aria-current="page"] .eye { height: 10px; border: 1.5px solid var(--line); border-radius: 50%; opacity: 1; background: radial-gradient(circle, var(--line) 0 2.5px, transparent 3px); }
+.desktop-nav a[aria-current="page"] { box-shadow: 3px 3px 0 var(--line); }
+.layers-drift { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.layers-drift img { position: absolute; left: 0; top: 0; height: auto; filter: drop-shadow(0 8px 8px rgb(23 22 27 / .16)); will-change: transform; }
 
 /* =========================================================================
    Home (dashboard): floating 3D, bento tiles, conversation bubbles
@@ -479,6 +501,8 @@ progress::-moz-progress-bar { background: var(--line); }
   .app-nav a { transition: transform .35s cubic-bezier(.34, 1.56, .64, 1), background .2s; }
   .desktop-nav a:hover { transform: translateX(4px); }
   .desktop-nav a:hover::before { color: var(--line); }
+  .desktop-nav a .thumb { transition: transform .45s cubic-bezier(.34, 1.56, .64, 1); }
+  .desktop-nav a:hover .thumb { transform: rotate(-12deg) scale(1.15); }
   .mobile-nav a:hover { transform: translateY(-3px); }
 }
 @media (prefers-reduced-motion: reduce) { .app-tick > div { animation: none; } }

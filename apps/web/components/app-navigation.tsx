@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LayersDrift } from "./layers-drift";
 const links = [
   ["/dashboard", "ホーム"],
   ["/agent", "AI分身"],
@@ -27,11 +28,18 @@ export function AppNavigation() {
   return (
     <>
       <nav aria-label="メインナビゲーション" className="app-nav desktop-nav">
+        <p className="layers-ttl" aria-hidden="true">
+          <span>LAYERS</span>
+          <span className="cnt">{links.length}</span>
+        </p>
         {links.map(([href, label]) => (
           <Link key={href} href={href} aria-current={current(href)}>
+            <span className="thumb" aria-hidden="true" />
             {label}
+            <span className="eye" aria-hidden="true" />
           </Link>
         ))}
+        <LayersDrift />
       </nav>
       <nav aria-label="メインナビゲーション" className="app-nav mobile-nav">
         {primary.map(([href, label]) => (
