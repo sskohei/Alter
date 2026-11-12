@@ -30,7 +30,7 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 | `agent_discord_consents` ギルド別公開同意 | `agent_id uuid! FK agents(id)`, `guild_id text! FK discord_guilds(id)`, `consented_at timestamptz!`, `revoked_at timestamptz?` | 複合PK `(agent_id,guild_id)`、有効行索引 | AIまたはギルド削除でCASCADE。解除後は未配信取消 |
 | `discord_deliveries` 投稿outbox | `id uuid! PK`, `conversation_id uuid! FK conversations(id)`, `channel_id text! FK discord_channels(id)`, `status varchar(16)!`, `discord_thread_id text?`, `discord_message_id text?`, `attempts smallint!`, `next_attempt_at timestamptz!`, `last_error text?` | `UNIQUE(conversation_id,channel_id)`、`(status,next_attempt_at)` | 会話削除でCASCADE。投稿済みIDは会話保持期間と同じ |
 | `discord_dm_deliveries` 個別通知outbox | `id uuid! PK`, `notification_id uuid! FK notifications(id)`, `discord_user_id text!`, `status varchar(16)!`, `discord_message_id text?`, `attempts smallint!`, `next_attempt_at timestamptz!` | `UNIQUE(notification_id)`、`(status,next_attempt_at)` | 通知削除でCASCADE。最大90日 |
-| `usage_records` 費用台帳 | `id uuid! PK`, `agent_id uuid! FK agents(id)`, `conversation_id uuid? FK conversations(id)`, `provider text!`, `model text!`, `input_tokens int!`, `output_tokens int!`, `estimated_usd numeric(12,6)!`, `actual_usd numeric(12,6)?`, `kind varchar(16)!`, `idempotency_key text!` | `UNIQUE(idempotency_key)`、`(agent_id,created_at)`、`kind IN (reserve,charge,release)` | 12か月保持後集計・削除 |
+| `usage_records` 費用台帳 | `id uuid! PK`, `agent_id uuid? FK agents(id)`（新規記録は必須。NULLはAI削除後の匿名化済み記録だけ）, `conversation_id uuid? FK conversations(id)`, `provider text!`, `model text!`, `input_tokens int!`, `output_tokens int!`, `estimated_usd numeric(12,6)!`, `actual_usd numeric(12,6)?`, `kind varchar(16)!`, `idempotency_key text!` | `UNIQUE(idempotency_key)`、`(agent_id,created_at)`、`(created_at)`、`kind IN (reserve,charge,release)` | 12か月保持後集計・削除。AI削除では匿名化して保持 |
 | `background_jobs` 永続ジョブ | `id uuid! PK`, `kind varchar(32)!`, `dedupe_key text!`, `payload jsonb!`, `status varchar(16)!`, `run_at timestamptz!`, `lease_until timestamptz?`, `attempts smallint!`, `last_error text?`, `updated_at timestamptz!` | `UNIQUE(kind,dedupe_key)`、`(status,run_at)` | 完了後30日、失敗後90日 |
 | `audit_events` 監査 | `id uuid! PK`, `actor_profile_id uuid?`, `action varchar(64)!`, `resource_type text!`, `resource_id text!`, `metadata jsonb!` | `(actor_profile_id,created_at DESC)` | 180日、秘密本文・トークン禁止 |
 | `deletion_requests` 削除追跡 | `id uuid! PK`, `profile_id uuid!`, `status varchar(16)!`, `requested_at timestamptz!`, `completed_at timestamptz?`, `error_code text?` | `UNIQUE(profile_id)`（進行中） | 完了後30日、PIIなしで集計 |
@@ -46,6 +46,31 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 `invitations.auth_user_id`はSupabaseの`sub`と同値だが、Auth削除で失効記録が消えたりプロフィール作成を前提にしたりしないよう、`auth.users`/`profiles`へのFKを設けない。登録時にAuth側で実在・identityを検証し、削除はアプリのパージ処理で管理する。`active`は`revoked_at IS NULL`、`revoked`は`revoked_at IS NOT NULL`とする。有効化は本人照合・1つ以上の許可identity・10人枠確認と同一トランザクションで行う。枠の確認は登録/再参加の全経路で共通のトランザクションロックを取り、失効済み行を自動有効化しない。
 
 招待2表のmigration（`20261108180000_invitations.sql`）・制約/RLSテスト・運営CLIは #7 で追加した。10人枠はドメイン処理とDBトリガーの両方で共通ロック（`lock_invitation_capacity()`）の下で確認し、有効な招待のidentity必須はコミット時の制約トリガーで、失効の不可逆性・識別子の不変性はトリガーで保証する。#6の既存migrationは変更しない。テーブル未適用や不整合・照会障害は認可エラー503として業務処理を止める。保持期限・CLI操作・失効と停止の原子性は[招待契約](23-invitation-consent-operations.md)に従う。
+
+## 会話・ジョブ・記憶の運用制約（#13）
+
+migrationは`20261109220000_conversations_jobs_memories.sql`、受け入れテストは`supabase/tests/conversations_jobs_memories.test.sql`。上表で値が未定義だった項目は次のとおり確定した（後続Issueで変える場合はここを更新する）。
+
+- `messages.moderation_status IN (allowed,blocked)`。発言者は`(conversation_id,agent_id)`の複合FKで`conversation_participants`を参照し、参加者以外の発言を拒否する（`agents`への単独FKの代わり）。本文は空白不可・4000字以内。
+- `conversations.visibility='participants'`固定（MVP）。`topic`200字・`summary`4000字以内、`ended_at >= started_at`、`profile_versions`はJSONオブジェクト。
+- `memories.status IN (active,archived)`（本人削除は行削除、`archived`は180日見直し用）。本文1000字以内。
+- `background_jobs.kind`と`notifications.kind`は値の一覧を固定せず、形式`^[a-z][a-z0-9_.]{0,31}$`だけを検査する。具体的な種類は利用するIssue（#19〜#21・#28・#30）で決める。`last_error`は500字以内の固定コードとし、例外本文や会話本文を入れない。
+- `background_jobs`は`status='running'`のときだけ`lease_until`を持つ（CHECK）。`payload`・`notifications.body`はJSONオブジェクト。
+- `agent_relationships.shared_interests`は20件以内。各`dedupe_key`/`idempotency_key`は空白不可・200字以内。
+
+削除動作: 会話削除で参加者・発言・通知・出典の記憶をCASCADE。参加者の`agent_id`はRESTRICTで、会話が残るAIは削除できない（アカウント削除は会話→記憶→通知→AIの順）。`conversations.job_id`と`usage_records.conversation_id`は保持期間が違う（ジョブ30〜90日・費用12か月・会話90日）ためSET NULL。`memories.agent_id`・関係・ブロックはAI削除でCASCADE。`usage_records`は12か月保持し、運営全体の日次費用を減らさないためAI削除でも行を残す。`agent_id`はSET NULLとし、同時にトリガーで`conversation_id`をNULL、ID を含み得る`idempotency_key`を`anonymized:<行id>`へ置き換えて再識別できる紐付けを外す（docs/15）。匿名化した行は別のAI・会話へ付け直せず、新規記録は`agent_id`必須。
+
+Scheduler/Workerが使う索引とトランザクション境界:
+
+| 処理 | 条件・ロック | 索引 |
+|---|---|---|
+| 予約（Cron） | 対象AIの`agents`行を`FOR UPDATE`→当日の`usage_records`（確定＋未解放予約）と進行中参加を確認→`background_jobs`と`conversations`・参加者・`reserve`を同一トランザクションで作成。重複は`(kind,dedupe_key)`で拒否 | `usage_records(agent_id,created_at)`、`conversation_participants(agent_id,conversation_id)` |
+| 取得（Worker） | `status IN (queued,retry_wait) AND run_at<=now()`を`FOR UPDATE SKIP LOCKED LIMIT 1`→同一トランザクションで`running`・`lease_until=now()+90s`・`attempts+1` | 部分索引`background_jobs(run_at) WHERE status IN (queued,retry_wait)` |
+| lease切れ再取得 | `status='running' AND lease_until<now()`を同様に条件付きUPDATE | 部分索引`background_jobs(lease_until) WHERE status='running'` |
+| 発言保存 | `(conversation_id,turn_no)`を冪等キーに発言と`usage_records`を同一トランザクションで保存 | `messages(conversation_id,turn_no)` UNIQUE |
+| 完了 | 会話`completed`・要約・通知・関係回数・配信outboxを同時確定。通知は`(profile_id,dedupe_key)`で重複しない | `notifications(profile_id,created_at DESC)` |
+
+同じペアの並行セッション禁止はDB制約では表さず、予約時の行ロックと`dedupe_key`で防ぐ（#19で受け入れ）。
 
 ## RLSと接続ロール
 
