@@ -74,7 +74,7 @@ async function forward(
     return Response.json(
       {
         error: {
-          code: "UNAVAILABLE",
+          code: "SERVICE_UNAVAILABLE",
           message: "接続できません。再試行してください。",
           request_id: crypto.randomUUID(),
         },
