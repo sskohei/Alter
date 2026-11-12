@@ -71,7 +71,16 @@ def create_app(
         if owns_client:
             client.close()
 
-    app = FastAPI(title="Alter API", version="0.1.0", lifespan=lifespan)
+    # 本番は Swagger UI / ReDoc を閉じる。/openapi.json はスモーク確認と型生成のため公開する
+    # （API の形だけで秘密は含まない）。
+    docs_enabled = settings.api_docs_enabled
+    app = FastAPI(
+        title="Alter API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+    )
     app.state.settings = settings
     app.state.jwt_verifier = JwtVerifier(settings, client)
 
