@@ -68,3 +68,9 @@ UIは公開項目だけを本人/編集対象/版で分離してsessionStorage�
 #11/#12のFigma、#16/#21/#22の正式APIは未提供。既存preview契約をPydanticから拡張し、
 #17→#23→#24→#25のDraft依存を記録する。会話のpartner/participantsの形、開始前日時・
 要約のnull、Discord連携読み取りはB確認待ち。詳細は[開発手順](../24-frontend-development.md)。
+### #17 / PR #46: 人格の競合検知と任意提案（2026-11-13）
+
+PR #46のBレビューを受け、保存前の期待版を送る。コメントの`base_version`案ではなく、PR #58の現Pydantic正本の`expected_version`（必須、1以上）に合わせる。
+成功後だけ期待版を更新し、409は入力を保持して本人による最新人格の再読込を求める。GETは最新が既定で`?version=N`も許可する。
+提案は`PublicPersonality`だけを返し永続化せず、適用後に別途保存・承認する。`onboarded_at`は初回承認時にAPIが設定する。
+正式APIの実接続・認可の受け入れは引き続き#15で確認する。

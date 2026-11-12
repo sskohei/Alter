@@ -14,7 +14,17 @@ export async function GET(request: NextRequest) {
     const { client, supabase } = await serverApi();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) return destination("/login?error=oauth");
-    const profile = await unwrap(await client.GET("/api/v1/users/me"));
+    let profile;
+    try {
+      profile = await unwrap(await client.GET("/api/v1/users/me"));
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 403 &&
+          ["INVITATION_REQUIRED", "ACCOUNT_INACTIVE"].includes(cause.detail.code)) {
+        // End only this browser's session; preserve the original admission error.
+        await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      }
+      throw cause;
+    }
     if (!profile.onboarded_at) return destination("/onboarding");
     return destination(safeReturnPath(request.nextUrl.searchParams.get("next")));
   } catch (cause) {
