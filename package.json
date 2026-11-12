@@ -11,13 +11,14 @@
     "build": "pnpm --filter web build",
     "lint": "pnpm --filter web lint",
     "typecheck": "pnpm -r typecheck",
-    "api:generate": "uv run --package alter-api python scripts/export_openapi.py && pnpm --filter @alter/api-client generate",
+    "api:generate": "uv run --package alter-api python scripts/export_openapi.py && uv run --package alter-api python scripts/export_frontend_contract.py && pnpm --filter @alter/api-client generate",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset --local",
     "db:status": "supabase status",
     "test": "pnpm --filter web test",
-    "test:e2e": "pnpm --filter web test:e2e"
+    "test:e2e": "pnpm --filter web test:e2e",
+    "dev:mock": "pnpm --filter @alter/api-client mock"
   },
   "devDependencies": {
     "supabase": "2.122.0"
