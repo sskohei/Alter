@@ -46,3 +46,9 @@ test("normal and empty page fixtures share the same pagination envelope", () => 
   expect(pageFixture("empty")).toEqual({items: [], next_cursor: null});
   expect(pageFixture("normal").items).toHaveLength(1);
 });
+
+
+test("malformed upstream errors use the shared service-unavailable code", async () => {
+  await expect(unwrap({ response: new Response(null, { status: 503 }) }))
+    .rejects.toMatchObject({ status: 503, detail: { code: "SERVICE_UNAVAILABLE" } });
+});

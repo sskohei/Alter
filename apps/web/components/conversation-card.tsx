@@ -31,7 +31,7 @@ export function ConversationCard({
           ? "会話の生成に失敗しました。保存できた発言だけを詳細で確認できます。"
           : (conversation.summary ?? "要約は会話の完了後に表示します。")}
       </p>
-      <p className="help">使用量: {costLabel(conversation.cost_usd)}</p>
+      <p className="help">自分のAIの確定費用: {costLabel(conversation.cost_usd)}</p>
     </article>
   );
 }
