@@ -322,6 +322,61 @@ export interface components {
             /** Weaknesses */
             weaknesses?: string[];
         };
+        /** PublicPersonality */
+        PublicPersonality: {
+            /** Hobbies */
+            hobbies?: string[];
+            /** Interaction Policy */
+            interaction_policy: string;
+            /** Interests */
+            interests: string[];
+            /** Personality */
+            personality: string;
+            /** Restrictions */
+            restrictions: string;
+            /** Shareable Info */
+            shareable_info: string;
+            /** Speaking Style */
+            speaking_style: string;
+            /** Strengths */
+            strengths?: string[];
+            /** Values Text */
+            values_text: string;
+            /** Weaknesses */
+            weaknesses?: string[];
+        };
+        /** RevisionInput */
+        RevisionInput: {
+            /** Expected Version */
+            expected_version: number;
+            /** Hobbies */
+            hobbies?: string[];
+            /** Interaction Policy */
+            interaction_policy: string;
+            /** Interests */
+            interests: string[];
+            /** Name */
+            name: string;
+            /** Personality */
+            personality: string;
+            /**
+             * Private Info
+             * @default
+             */
+            private_info: string;
+            /** Restrictions */
+            restrictions: string;
+            /** Shareable Info */
+            shareable_info: string;
+            /** Speaking Style */
+            speaking_style: string;
+            /** Strengths */
+            strengths?: string[];
+            /** Values Text */
+            values_text: string;
+            /** Weaknesses */
+            weaknesses?: string[];
+        };
         /** SuggestionInput */
         SuggestionInput: {
             /** Answers */
@@ -599,7 +654,9 @@ export interface operations {
     };
     preview_get_personality: {
         parameters: {
-            query?: never;
+            query?: {
+                version?: number | null;
+            };
             header?: never;
             path: {
                 id: string;
@@ -867,7 +924,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AgentDraftInput"];
+                "application/json": components["schemas"]["RevisionInput"];
             };
         };
         responses: {
@@ -966,7 +1023,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProfileRevision"];
+                    "application/json": components["schemas"]["PublicPersonality"];
                 };
             };
             /** @description Unauthorized */

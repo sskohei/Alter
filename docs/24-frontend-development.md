@@ -70,9 +70,9 @@ Button/Input/Textarea/AlertDialogはshadcn/uiの構成（Radix/CVA/ローカル�
 契約レビューで確認する点（#7/#15）:
 
 - Agent名の上限80文字はDB仕様に合わせた契約案。プロフィール表示名の最終上限もB確認が必要。
-- revision GETが返す最新下書き/承認済み版の選択、競合409の判定と期待版の伝え方。
-- suggest応答の永続化有無。フロントは提案を採用しても改めてrevisionを保存してから承認する。
-- onboarded_atの更新タイミングはAPI側で確定し、UIから推測して書き換えない。
+- revision GETは下書き/承認済みを問わず最新版。`?version=N`は特定版、存在しない版は404。
+- suggestは保存しない`PublicPersonality`応答。提案を採用しても改めてrevisionを保存してから承認する。
+- onboarded_atは初回人格承認と同じトランザクションでAPIが設定し、再承認でも初回日時を保持する。UIから書き換えない。
 - 任意のアイコンStorageアップロードは本画面に追加していない。
 
 Mock成功は実APIの所有権/暗号化/競合保証の証明ではない。本番APIは未実装のまま。
@@ -98,3 +98,10 @@ forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現でき�
 OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
 このブラウザのSupabaseセッションを終了して元の拒否理由を表示する。503ではセッションを終了せず再試行できる。
 BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABLE`に統一する。
+
+## PRレビュー反映（#46）
+
+人格revision保存には編集元の版を送り、成功後だけ次の期待版に進める。409では入力を保持して明示的な再読込を案内し、自動で期待版を更新しない。
+コメントの`base_version`案に対し、PR #58の現在のPydantic正本は必須の`expected_version`なのでpreview/生成型/UI/Mockをその名前に合わせた。
+初回作成には期待版を送らず、作成後に取得した版を次の保存の基準にする。
+提案応答は版・承認日時を持たず、本人が適用・保存・承認するまで人格版を作らない。

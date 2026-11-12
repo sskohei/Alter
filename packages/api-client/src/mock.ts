@@ -111,14 +111,20 @@ export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
         agent = { ...agent, name: body.name };
         return Response.json(agent);
       }
-      if (suffix === "/profile" && request.method === "GET")
-        return Response.json(revisions.at(-1));
+      if (suffix === "/profile" && request.method === "GET") {
+        const version = url.searchParams.get("version");
+        if (version !== null && (!/^\d+$/.test(version) || Number(version) < 1)) return mockError(422);
+        const revision = version === null ? revisions.at(-1) : revisions.find(r => r.version === Number(version));
+        return revision ? Response.json(revision) : mockError(404);
+      }
       if (suffix === "/profile/private" && request.method === "GET")
         return Response.json({ private_info: privateInfo });
       if (suffix === "/profile/revisions" && request.method === "POST") {
-        const body: components["schemas"]["AgentDraftInput"] =
+        const body: components["schemas"]["RevisionInput"] =
           await request.json();
         if (!validDraft(body)) return mockError(422);
+        if (!Number.isInteger(body.expected_version) || body.expected_version < 1) return mockError(422);
+        if (body.expected_version !== revisions.at(-1)!.version) return mockError(409);
         const revision = publicRevision(body, revisions.length + 1);
         revisions.push(revision);
         privateInfo = body.private_info ?? "";
@@ -129,8 +135,9 @@ export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
         const latest = revisions.at(-1)!;
         if (latest.version !== version) return mockError(409);
         revisions = revisions.map((r) =>
-          r.version === version ? { ...r, approved_at: profile.created_at } : r,
+          r.version === version ? { ...r, approved_at: r.approved_at ?? profile.created_at } : r,
         );
+        current = { ...current, onboarded_at: current.onboarded_at ?? profile.created_at };
         agent = {
           ...agent,
           status: "active",

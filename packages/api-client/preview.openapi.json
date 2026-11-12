@@ -454,6 +454,188 @@
         "title": "ProfileRevision",
         "type": "object"
       },
+      "PublicPersonality": {
+        "properties": {
+          "hobbies": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Hobbies",
+            "type": "array"
+          },
+          "interaction_policy": {
+            "maxLength": 2000,
+            "title": "Interaction Policy",
+            "type": "string"
+          },
+          "interests": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Interests",
+            "type": "array"
+          },
+          "personality": {
+            "maxLength": 2000,
+            "title": "Personality",
+            "type": "string"
+          },
+          "restrictions": {
+            "maxLength": 2000,
+            "title": "Restrictions",
+            "type": "string"
+          },
+          "shareable_info": {
+            "maxLength": 2000,
+            "title": "Shareable Info",
+            "type": "string"
+          },
+          "speaking_style": {
+            "maxLength": 2000,
+            "title": "Speaking Style",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Strengths",
+            "type": "array"
+          },
+          "values_text": {
+            "maxLength": 2000,
+            "title": "Values Text",
+            "type": "string"
+          },
+          "weaknesses": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personality",
+          "values_text",
+          "interests",
+          "speaking_style",
+          "interaction_policy",
+          "shareable_info",
+          "restrictions"
+        ],
+        "title": "PublicPersonality",
+        "type": "object"
+      },
+      "RevisionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "hobbies": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Hobbies",
+            "type": "array"
+          },
+          "interaction_policy": {
+            "maxLength": 2000,
+            "title": "Interaction Policy",
+            "type": "string"
+          },
+          "interests": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Interests",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "personality": {
+            "maxLength": 2000,
+            "title": "Personality",
+            "type": "string"
+          },
+          "private_info": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Private Info",
+            "type": "string"
+          },
+          "restrictions": {
+            "maxLength": 2000,
+            "title": "Restrictions",
+            "type": "string"
+          },
+          "shareable_info": {
+            "maxLength": 2000,
+            "title": "Shareable Info",
+            "type": "string"
+          },
+          "speaking_style": {
+            "maxLength": 2000,
+            "title": "Speaking Style",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Strengths",
+            "type": "array"
+          },
+          "values_text": {
+            "maxLength": 2000,
+            "title": "Values Text",
+            "type": "string"
+          },
+          "weaknesses": {
+            "items": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personality",
+          "values_text",
+          "interests",
+          "speaking_style",
+          "interaction_policy",
+          "shareable_info",
+          "restrictions",
+          "name",
+          "expected_version"
+        ],
+        "title": "RevisionInput",
+        "type": "object"
+      },
       "SuggestionInput": {
         "properties": {
           "answers": {
@@ -809,6 +991,23 @@
               "title": "Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
           }
         ],
         "responses": {
@@ -1140,7 +1339,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AgentDraftInput"
+                "$ref": "#/components/schemas/RevisionInput"
               }
             }
           },
@@ -1266,7 +1465,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileRevision"
+                  "$ref": "#/components/schemas/PublicPersonality"
                 }
               }
             },
