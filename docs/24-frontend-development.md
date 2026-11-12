@@ -47,3 +47,9 @@ API401では1回だけ更新・再送する。画面からのAPIは同一Origin�
 Draftは依存差分をレビューするため #8 → #9 → #17 のbaseを積む。
 先行PRのSquash後は残りへmainを取り込み、baseをmainに変更して再検証する。
 mainへ直接push/自動mergeは行わない。依存ブランチ向けPRもCIの対象に含める。
+
+## PRレビュー反映（#45）
+
+OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
+このブラウザのSupabaseセッションを終了して元の拒否理由を表示する。503ではセッションを終了せず再試行できる。
+BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABLE`に統一する。

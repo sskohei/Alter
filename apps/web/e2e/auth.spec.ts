@@ -25,7 +25,14 @@ for (const [which, text] of [["forbidden", "招待が確認できません"], ["
   test(`OAuth/API denial: ${which}`, async ({ page }) => {
     await signIn(page, which);
     await expect(page.getByRole("main").getByRole("alert")).toContainText(text);
-    await page.goto("/dashboard"); await expect(page).toHaveURL(/\/login/);
+    if (which === "forbidden" || which === "inactive") {
+      const cookies = await page.context().cookies();
+      expect(cookies.filter(cookie => /^sb-.*-auth-token(?:\.\d+)?$/.test(cookie.name))).toEqual([]);
+      await signIn(page, "normal");
+      await expect(page).toHaveURL(/\/onboarding$/);
+    } else {
+      await page.goto("/dashboard"); await expect(page).toHaveURL(/\/login/);
+    }
   });
 }
 test("existing user → dashboard; switching accounts removes previous profile", async ({ page }) => {
