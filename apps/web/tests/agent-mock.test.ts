@@ -66,12 +66,25 @@ test("generated input and all lifecycle responses match OpenAPI; approval leaves
   const second = await unwrap(
     await client.POST("/api/v1/agents/{id}/profile/revisions", {
       params,
-      body: { ...body, personality: "慎重" },
+      body: { ...body, personality: "慎重", expected_version: first.version },
     }),
   );
   validate("ProfileRevision", second);
   expect(second.version).toBe(2);
   expect(first.personality).toBe("穏やか");
+  expect((await client.POST("/api/v1/agents/{id}/profile/revisions", {
+    params, body: { ...body, personality: "競合", expected_version: first.version },
+  })).response.status).toBe(409);
+  const latest = await unwrap(await client.GET("/api/v1/agents/{id}/profile", { params }));
+  expect(latest).toEqual(second);
+  const historical = await unwrap(await client.GET("/api/v1/agents/{id}/profile", {
+    params: { ...params, query: { version: first.version } },
+  }));
+  expect(historical.personality).toBe(first.personality);
+  expect((await client.GET("/api/v1/agents/{id}/profile", {
+    params: { ...params, query: { version: 99 } },
+  })).response.status).toBe(404);
+  expect((await unwrap(await client.GET("/api/v1/users/me"))).onboarded_at).not.toBeNull();
   expect(
     (
       await client.POST("/api/v1/agents/{id}/profile/approve", {

@@ -205,7 +205,6 @@ test("optional suggestion is explicit, excludes private answers, and requires a 
     received = route.request().postDataJSON();
     await route.fulfill({
       json: {
-        version: 2,
         personality: "提案の性格",
         values_text: "提案の価値観",
         interests: ["音楽"],
@@ -213,7 +212,6 @@ test("optional suggestion is explicit, excludes private answers, and requires a 
         interaction_policy: "尊重",
         shareable_info: "音楽の趣味",
         restrictions: "なし",
-        approved_at: null,
       },
     });
   });
@@ -238,4 +236,28 @@ test("optional suggestion is explicit, excludes private answers, and requires a 
   await save(page);
   await approve(page);
   await expect(page.getByRole("main")).toContainText("提案の性格");
+});
+
+
+test("stale editor cannot overwrite a newer personality; successive saves advance the expected version", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/agent/new");
+  await fill(page);
+  await save(page);
+  await approve(page);
+  await page.goto("/agent/edit");
+  const stale = await page.context().newPage();
+  await stale.goto("/agent/edit");
+  await expect(stale.getByLabel("性格", { exact: true })).toHaveValue(fields["性格"]);
+  await page.getByLabel("性格", { exact: true }).fill("新しい性格");
+  await save(page);
+  await expect(page.getByRole("heading", { name: "版 2 の確認・本人承認" })).toBeVisible();
+  await page.getByLabel("性格", { exact: true }).fill("さらに新しい性格");
+  await save(page);
+  await expect(page.getByRole("heading", { name: "版 3 の確認・本人承認" })).toBeVisible();
+  await stale.getByLabel("性格", { exact: true }).fill("古い画面の入力");
+  await stale.getByRole("button", { name: "下書きを保存して確認" }).click();
+  await expect(stale.getByRole("main").getByRole("alert")).toContainText("最新");
+  await expect(stale.getByLabel("性格", { exact: true })).toHaveValue("古い画面の入力");
+  await stale.close();
 });

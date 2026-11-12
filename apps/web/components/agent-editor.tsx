@@ -18,6 +18,7 @@ import {
   removeDraft,
   type Agent,
   type Revision,
+  type Personality,
   type AgentFormValues,
 } from "../lib/agent-form";
 import { AgentPreview } from "./agent-preview";
@@ -69,7 +70,8 @@ export function AgentEditor({
   const [restored, setRestored] = useState(false);
   const [privateReady, setPrivateReady] = useState(!initial);
   const [ready, setReady] = useState(false);
-  const [suggestion, setSuggestion] = useState<Revision | null>(null);
+  const [suggestion, setSuggestion] = useState<Personality | null>(null);
+  const [expectedVersion, setExpectedVersion] = useState(initial?.revision.version);
   const leaving = useRef(false);
   const approvalKeys = useRef(new Map<number, string>());
   const key = draftKey(owner, initial?.agent.id);
@@ -175,6 +177,10 @@ export function AgentEditor({
           }),
         );
       } else {
+        if (expectedVersion === undefined) {
+          setMessage("最新の人格を読み直してから保存してください。入力内容は保持しています。");
+          return;
+        }
         if (current.name !== values.name) {
           current = await unwrap(
             await api().PATCH("/api/v1/agents/{id}", {
@@ -187,10 +193,11 @@ export function AgentEditor({
         revision = await unwrap(
           await api().POST("/api/v1/agents/{id}/profile/revisions", {
             params: { path: { id: current.id } },
-            body,
+            body: { ...body, expected_version: expectedVersion },
           }),
         );
       }
+      setExpectedVersion(revision.version);
       setSaved(revision);
       setPreview({ ...values, private_info: "" });
       reset(values);

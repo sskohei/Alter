@@ -10,7 +10,7 @@ from uuid import UUID
 from alter_api.contracts.activity_preview import register_activity_contract
 from alter_api.contracts.interaction_preview import register_interaction_contract
 from alter_api.errors import ErrorResponse
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -50,6 +50,10 @@ class AgentDraftInput(PublicPersonality):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80)
     private_info: Text = ""
+
+
+class RevisionInput(AgentDraftInput):
+    expected_version: int = Field(ge=1)
 
 
 class ProfileRevision(PublicPersonality):
@@ -156,7 +160,9 @@ def create_contract_app() -> FastAPI:
         responses=ERRORS,
         operation_id="preview_get_personality",
     )
-    def get_personality(id: UUID) -> ProfileRevision:
+    def get_personality(
+        id: UUID, version: Annotated[int | None, Query(ge=1)] = None
+    ) -> ProfileRevision:
         raise HTTPException(503, "Contract only")
 
     @app.get(
@@ -174,7 +180,7 @@ def create_contract_app() -> FastAPI:
         responses=ERRORS,
         operation_id="preview_create_personality_revision",
     )
-    def create_revision(id: UUID, body: AgentDraftInput) -> ProfileRevision:
+    def create_revision(id: UUID, body: RevisionInput) -> ProfileRevision:
         raise HTTPException(503, "Contract only")
 
     @app.post(
@@ -188,11 +194,11 @@ def create_contract_app() -> FastAPI:
 
     @app.post(
         "/api/v1/agents/{id}/profile/suggest",
-        response_model=ProfileRevision,
+        response_model=PublicPersonality,
         responses=ERRORS,
         operation_id="preview_suggest_personality",
     )
-    def suggest(id: UUID, body: SuggestionInput) -> ProfileRevision:
+    def suggest(id: UUID, body: SuggestionInput) -> PublicPersonality:
         raise HTTPException(503, "Contract only")
 
     register_activity_contract(app, ERRORS)

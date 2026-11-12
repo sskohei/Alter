@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { components } from "@alter/api-client/preview";
 export type Agent = components["schemas"]["Agent"];
+export type Personality = components["schemas"]["PublicPersonality"];
 export type Revision = components["schemas"]["ProfileRevision"];
 export type DraftInput = components["schemas"]["AgentDraftInput"];
 const text = z
@@ -91,7 +92,7 @@ export function toDraft(values: AgentFormValues): DraftInput {
     weaknesses: split(values.weaknesses),
   };
 }
-export function toForm(agent: Agent, revision: Revision): AgentFormValues {
+export function toForm(agent: Agent, revision: Personality): AgentFormValues {
   return {
     name: agent.name,
     personality: revision.personality,
