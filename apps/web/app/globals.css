@@ -400,8 +400,12 @@ progress::-moz-progress-bar { background: var(--line); }
 .cable-card[data-connected="true"] .wire::after { content: "connected" / ""; color: var(--line); }
 
 .passport { position: relative; padding-left: 116px; border-radius: 14px; background: linear-gradient(90deg, color-mix(in srgb, var(--pop-lilac) 35%, var(--paper-2)) 0 92px, var(--paper-2) 92px); }
-.passport-face { position: absolute; left: 22px; top: 26px; display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid var(--ink); border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff 0 12%, transparent 13%), var(--pop-coral); font: 700 1.3rem var(--jp); box-shadow: 3px 3px 0 var(--ink); }
+/* ID-card "photo slot": a framed wordmark circle pair instead of a cartoon avatar */
+.passport-face { position: absolute; left: 20px; top: 24px; display: grid; place-items: center; width: 56px; height: 68px; border: var(--hair) solid var(--ink); border-radius: 6px;
+  background: var(--paper); color: var(--ink); }
+.passport-face::before, .passport-face::after { content: ""; position: absolute; width: 6px; height: 6px; border: 1px solid var(--ink); background: var(--paper-2); }
+.passport-face::before { left: -4px; top: -4px; } .passport-face::after { right: -4px; bottom: -4px; }
+.passport-face svg { width: 38px; height: auto; }
 .passport-k { margin: 0 0 4px; font: 400 .6875rem var(--mono); letter-spacing: .1em; color: var(--dim); }
 .danger-zone { position: relative; border-radius: 12px; padding-top: 40px; overflow: hidden; }
 .danger-zone::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 16px; border-bottom: 1px solid var(--ink);
@@ -457,7 +461,7 @@ progress::-moz-progress-bar { background: var(--line); }
   .cable-card:hover .node:first-child { transform: translateX(6px) rotate(-3deg); }
   .cable-card:hover .node:last-child { transform: translateX(-6px) rotate(3deg); }
   .passport-face { transition: transform .6s cubic-bezier(.34, 1.56, .64, 1); }
-  .passport:hover .passport-face { transform: rotate(-10deg) scale(1.08); }
+  .passport:hover .passport-face { transform: rotate(-4deg); }
   .studio-form .field > label { transition: transform .35s cubic-bezier(.34, 1.56, .64, 1); }
   .studio-form .field:focus-within > label { transform: translateY(-3px) rotate(-2deg); }
   .alter-card .sticker { animation: pop .6s cubic-bezier(.34, 1.56, .64, 1) both; }

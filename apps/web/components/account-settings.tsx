@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useRef, useState } from "react";
+import { AlterMark } from "./landing/alter-logo";
 import { useRouter } from "next/navigation";
 import { unwrap, type components } from "@alter/api-client/preview";
 import { browserApi } from "../lib/api-browser";
@@ -127,7 +128,7 @@ export function AccountSettings({
       )}
       {message && <p role="status">{message}</p>}
       <section className="card passport">
-        <span className="passport-face" aria-hidden="true">{savedName.slice(0, 1)}</span>
+        <span className="passport-face" aria-hidden="true"><AlterMark /></span>
         <p className="passport-k" aria-hidden="true">ALTER ID · INVITED MEMBER</p>
         <h2>表示名</h2>
         <p>保存済み: {savedName}</p>
