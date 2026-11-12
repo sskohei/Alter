@@ -156,6 +156,7 @@ for (const status of [409, 429, 503]) {
         includeHidden: true,
       }),
     ).toBeVisible();
+    if (status === 409) await expect(page.getByRole("alertdialog").getByRole("alert")).toContainText("同意設定");
     await page
       .getByRole("alertdialog")
       .getByRole("button", { name: "交流の開始を確定する" })
@@ -241,4 +242,30 @@ test("no agent has a creation CTA; conversation block cancellation and recovery"
   await expect(
     page.getByRole("button", { name: "この相手をブロックする" }),
   ).toBeVisible();
+});
+
+
+test("invalid budget combinations and precision never reach the settings API", async ({ page }) => {
+  await openSettings(page);
+  const patches: string[] = [];
+  page.on("request", request => {
+    if (request.method() === "PATCH" && request.url().endsWith("/settings")) patches.push(request.url());
+  });
+  await page.getByLabel("日次予算（USD）", { exact: true }).fill("0.001");
+  await page.getByRole("button", { name: "頻度・予算を保存" }).click();
+  await expect(page.locator("#max_session_usd-error")).toContainText("日次予算以下");
+  await page.getByLabel("日次予算（USD）", { exact: true }).fill("0.2000001");
+  await page.getByRole("button", { name: "頻度・予算を保存" }).click();
+  await expect(page.locator("#daily_budget_usd-error")).toContainText("6桁");
+  expect(patches).toEqual([]);
+});
+test("an approved but paused AI cannot start exchange", async ({ page }) => {
+  await signIn(page, "activity");
+  await page.route("**/api/v1/agents/me", async route => {
+    const response = await route.fetch();
+    await route.fulfill({ json: { ...await response.json(), status: "paused" } });
+  });
+  await page.goto("/settings/interaction");
+  await expect(page.getByRole("button", { name: "交流をONにする", exact: true })).toBeDisabled();
+  await expect(page.getByRole("main")).toContainText("AIが停止中または未承認");
 });

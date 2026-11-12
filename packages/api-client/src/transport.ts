@@ -74,7 +74,7 @@ export async function unwrap<T>(result: {
   throw new ApiError(
     result.response.status,
     {
-      code: error?.error?.code ?? "UNAVAILABLE",
+      code: error?.error?.code ?? "SERVICE_UNAVAILABLE",
       message:
         error?.error?.message ?? "通信に失敗しました。もう一度お試しください。",
       request_id:

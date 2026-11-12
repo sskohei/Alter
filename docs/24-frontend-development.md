@@ -70,9 +70,9 @@ Button/Input/Textarea/AlertDialogはshadcn/uiの構成（Radix/CVA/ローカル�
 契約レビューで確認する点（#7/#15）:
 
 - Agent名の上限80文字はDB仕様に合わせた契約案。プロフィール表示名の最終上限もB確認が必要。
-- revision GETが返す最新下書き/承認済み版の選択、競合409の判定と期待版の伝え方。
-- suggest応答の永続化有無。フロントは提案を採用しても改めてrevisionを保存してから承認する。
-- onboarded_atの更新タイミングはAPI側で確定し、UIから推測して書き換えない。
+- revision GETは下書き/承認済みを問わず最新版。`?version=N`は特定版、存在しない版は404。
+- suggestは保存しない`PublicPersonality`応答。提案を採用しても改めてrevisionを保存してから承認する。
+- onboarded_atは初回人格承認と同じトランザクションでAPIが設定し、再承認でも初回日時を保持する。UIから書き換えない。
 - 任意のアイコンStorageアップロードは本画面に追加していない。
 
 Mock成功は実APIの所有権/暗号化/競合保証の証明ではない。本番APIは未実装のまま。
@@ -98,7 +98,7 @@ forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現でき�
 
 依存: #17（PR #46）、#11（Figma未提供）、#21（正式API未提供）。
 `activity_preview.py`に文書を基にしたPydantic案を分離し、既存preview OpenAPI/型へ生成する。
-partner/participantsは`{id,name}`、開始前日時/未生成要約はnullの案で、#21でB確認が必要。
+partner/participantsは`{id,name}`、開始前日時/未生成要約はnull。PR #47のBレビューでこの形に合わせる方針を確認済み。
 Discord連携の読み取りだけはダッシュボードのため#26の契約案を先行する。
 
 一覧・通知・ダッシュボードは30秒、queued/runningの詳細は15秒Polling。
@@ -199,3 +199,28 @@ Vercel環境別テンプレート、build時の公開変数/接続先検査と�
 10合成IDのMock操作、375/320px axe/keyboard、live証跡の充足性判定器を追加。
 手順と実環境で必要な全caseは[MVP受け入れ](26-mvp-acceptance.md)を参照する。
 実環境未設定のため実10人の受け入れ・性能測定・本番公開は未実施。
+## PRレビュー反映（#45）
+
+OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
+このブラウザのSupabaseセッションを終了して元の拒否理由を表示する。503ではセッションを終了せず再試行できる。
+BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABLE`に統一する。
+
+## PRレビュー反映（#46）
+
+人格revision保存には編集元の版を送り、成功後だけ次の期待版に進める。409では入力を保持して明示的な再読込を案内し、自動で期待版を更新しない。
+コメントの`base_version`案に対し、PR #58の現在のPydantic正本は必須の`expected_version`なのでpreview/生成型/UI/Mockをその名前に合わせた。
+初回作成には期待版を送らず、作成後に取得した版を次の保存の基準にする。
+提案応答は版・承認日時を持たず、本人が適用・保存・承認するまで人格版を作らない。
+
+## PRレビュー反映（#47）
+
+`cost_usd`は本人AIの確定費用だけという方針をAPI説明・生成型・一覧/詳細文言に反映した。
+集計対象列と未確定時のnull/0は#21で確定待ち。nullは従来どおり未提供として表示し、0へ変換しない。
+
+## PRレビュー反映（#48）
+
+予算は小数6桁まで、1会話上限は日次予算以下として保存/開始の両方で検証する。
+交流ONには人格承認に加え`agent.status === active`が必要。停止・公開撤回はこれらの条件と独立したまま。
+開始の409は停止状態または同意設定を確認する案内、422は運営上限・小数桁・予算の大小関係を確認する案内を表示する。
+運営上限はAPI側設定を正本とし、UIに既定の$1を固定しない。現時点では応答フィールドを追加せず、422で運営への確認を案内する。
+Webの`ALTER_LLM_NAME`/`ALTER_LLM_DATA_POLICY_URL`とAPIの`ALTER_CONSENT_VERSION`は#14の承認値を同時に設定する。
