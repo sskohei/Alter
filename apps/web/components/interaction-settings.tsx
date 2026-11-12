@@ -381,6 +381,9 @@ function SettingsForm({
           {intent?.kind === "publish" && (
             <GuildDestinations guilds={destinations} />
           )}
+          {(intent?.kind === "stop" || intent?.kind === "unpublish") && (
+            <p>削除を希望する場合は運営へ連絡してください。招待時の私的な連絡先で受け付けます。</p>
+          )}
           {intent?.kind !== "start" && (
             <p>
               Discord投稿のコピー・引用・通知・スクリーンショット等は完全に回収できません。公開済み投稿の削除は可能な範囲で試みます。

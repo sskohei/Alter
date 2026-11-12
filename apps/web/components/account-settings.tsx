@@ -194,6 +194,9 @@ export function AccountSettings({
           AIを直ちに停止し、関連する共有会話を相手の画面からも非表示にします。関連記憶・通知も削除し、アプリの個人データは原則30日以内に削除します。
         </p>
         <p>
+          本文を含まない使用量等の扱いはプライバシー説明に記載します。
+        </p>
+        <p>
           Discord投稿や他人が保存したコピーは完全には回収できません。招待時の私的な連絡先で、削除後の確認や問い合わせを受け付けます。
         </p>
         <form action={reauthenticate}>
@@ -228,6 +231,7 @@ export function AccountSettings({
             <AlertDialogDescription>
               AIを停止し、共有会話を相手からも非表示にします。関連記憶・通知も削除し、原則30日以内にパージします。外部の投稿・コピーは完全回収できません。
             </AlertDialogDescription>
+            <p>本文を含まない使用量等の扱いはプライバシー説明に記載します。</p>
             <label className="check">
               <input
                 type="checkbox"
