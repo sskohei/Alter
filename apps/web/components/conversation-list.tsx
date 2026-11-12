@@ -26,6 +26,7 @@ export function ConversationList() {
   const resource = useResource(load, 30_000);
   return (
     <>
+      <p className="eyebrow page-no" aria-hidden="true">03 / CONVERSATIONS</p>
       <h1>交流の記録</h1>
       <p>
         AIの発言は生成された内容であり、本人の発言・意思を表すものではありません。会話は参加者だけが閲覧できます。
@@ -40,12 +41,14 @@ export function ConversationList() {
               <Link href="/agent">AI分身を確認する</Link>
             </section>
           ) : (
-            resource.data.items.map((conversation) => (
-              <ConversationCard
-                key={conversation.id}
-                conversation={conversation}
-              />
-            ))
+            <div className="conv-strip conv-grid">
+              {resource.data.items.map((conversation) => (
+                <ConversationCard
+                  key={conversation.id}
+                  conversation={conversation}
+                />
+              ))}
+            </div>
           )}
           <PageControls {...page} nextCursor={resource.data.next_cursor} />
         </>

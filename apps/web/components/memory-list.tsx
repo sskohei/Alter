@@ -94,6 +94,7 @@ export function MemoryList() {
   }
   return (
     <>
+      <p className="eyebrow page-no" aria-hidden="true">06 / MEMORIES</p>
       <h1>AI分身の記憶</h1>
       <p>
         会話から抽出した記憶候補です。本人の確定した事実とは限りません。出典と内容を確認し、不要な候補を削除できます。
@@ -124,14 +125,16 @@ export function MemoryList() {
               <Link href="/conversations">交流の記録を見る</Link>
             </section>
           ) : (
-            resource.data.memories.items.map((memory) => (
-              <MemoryCard
-                key={memory.id}
-                memory={memory}
-                busy={pending !== null}
-                remove={() => void remove(memory)}
-              />
-            ))
+            <div className="memo-grid">
+              {resource.data.memories.items.map((memory) => (
+                <MemoryCard
+                  key={memory.id}
+                  memory={memory}
+                  busy={pending !== null}
+                  remove={() => void remove(memory)}
+                />
+              ))}
+            </div>
           )}
           <PageControls
             {...page}
@@ -153,7 +156,11 @@ function MemoryCard({
   remove: () => void;
 }) {
   return (
-    <article className="card">
+    <article className="card memo" data-importance={memory.importance}>
+      <span className="memo-dots" aria-hidden="true">
+        {"●".repeat(memory.importance)}
+        {"○".repeat(Math.max(0, 5 - memory.importance))}
+      </span>
       <p className="eyebrow">記憶候補 · 重要度 {memory.importance} / 5</p>
       <h2 className="text-base">{memory.text}</h2>
       <p>

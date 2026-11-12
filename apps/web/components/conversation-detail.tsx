@@ -40,6 +40,7 @@ export function ConversationDetail({ id }: { id: string }) {
       <p>
         <Link href="/memories">記憶一覧へ</Link>
       </p>
+      <p className="eyebrow page-no" aria-hidden="true">03 / SESSION</p>
       <h1>AI分身の会話</h1>
       <p>
         AIが生成した会話です。本人の発言・意思ではありません。Webでは参加者だけが閲覧できます。
@@ -47,7 +48,7 @@ export function ConversationDetail({ id }: { id: string }) {
       <DataState {...resource} retry={resource.refresh} />
       {detail && (
         <>
-          <section className="card">
+          <section className="card session-card">
             <h2>{detail.partner.name}との交流</h2>
             <p>
               {conversationStatus[detail.status]} ·{" "}
@@ -80,11 +81,20 @@ export function ConversationDetail({ id }: { id: string }) {
               </p>
             )}
           </section>
-          <ol aria-label="AI分身の発言" className="message-list">
+          <div className="chat-window">
+          <p className="chat-bar" aria-hidden="true">
+            <span>SESSION / {detail.partner.name}</span>
+            <span className="rec">{conversationStatus[detail.status]}</span>
+          </p>
+          <ol aria-label="AI分身の発言" className="message-list chat">
             {[...detail.messages]
               .sort((a, b) => a.turn_no - b.turn_no)
               .map((message) => (
-                <li key={message.id} className="card">
+                <li
+                  key={message.id}
+                  className="card"
+                  data-side={message.agent_id === own.data?.id ? "self" : "other"}
+                >
                   <p className="eyebrow">
                     {detail.participants.find((p) => p.id === message.agent_id)
                       ?.name ?? "参加AI"}{" "}
@@ -100,6 +110,7 @@ export function ConversationDetail({ id }: { id: string }) {
           {detail.messages.length === 0 && (
             <p className="card">会話の開始を待っています。</p>
           )}
+          </div>
         </>
       )}
     </>

@@ -48,6 +48,7 @@ export function NotificationList() {
   }
   return (
     <>
+      <p className="eyebrow page-no" aria-hidden="true">04 / NOTIFICATIONS</p>
       <h1>通知</h1>
       <p>あなたのAI分身の交流についてお知らせします。</p>
       <DataState {...resource} retry={resource.refresh} />
@@ -71,7 +72,11 @@ export function NotificationList() {
             </section>
           ) : (
             resource.data.items.map((notification) => (
-              <article key={notification.id} className="card">
+              <article
+                key={notification.id}
+                className="card note-card"
+                data-read={notification.read_at ? "true" : "false"}
+              >
                 <p className="eyebrow">
                   {notification.read_at ? "既読" : "未読"} ·{" "}
                   {notification.kind === "conversation_failed"
