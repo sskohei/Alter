@@ -12,10 +12,15 @@ erDiagram
   AGENTS ||--o{ CONVERSATION_PARTICIPANTS : joins
   CONVERSATIONS ||--|{ CONVERSATION_PARTICIPANTS : includes
   CONVERSATIONS ||--o{ MESSAGES : contains
+  CONVERSATION_PARTICIPANTS ||--o{ MESSAGES : speaker
   CONVERSATIONS ||--o{ MEMORIES : source
   AGENTS ||--o{ MEMORIES : remembers
   AGENTS ||--o{ AGENT_RELATIONSHIPS : low_side
+  AGENTS ||--o{ AGENT_RELATIONSHIPS : high_side
   AGENTS ||--o{ AGENT_BLOCKS : blocker
+  AGENTS ||--o{ AGENT_BLOCKS : blocked
+  CONVERSATIONS ||--o{ NOTIFICATIONS : about
+  CONVERSATIONS |o--o{ USAGE_RECORDS : cost
   PROFILES ||--o{ NOTIFICATIONS : receives
   PROFILES ||--o{ DISCORD_CONNECTIONS : links
   DISCORD_GUILDS ||--o{ DISCORD_CHANNELS : configures
@@ -24,6 +29,6 @@ erDiagram
   CONVERSATIONS ||--o{ DISCORD_DELIVERIES : publishes
   DISCORD_CHANNELS ||--o{ DISCORD_DELIVERIES : destination
   NOTIFICATIONS ||--o| DISCORD_DM_DELIVERIES : private_notice
-  AGENTS ||--o{ USAGE_RECORDS : billed
+  AGENTS |o--o{ USAGE_RECORDS : billed
   BACKGROUND_JOBS ||--o| CONVERSATIONS : runs
 ```
