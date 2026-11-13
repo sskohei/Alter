@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     alter_mode: Literal["mock", "live"] = "mock"
+    # 配置先の環境。production では API の Swagger UI（/docs・/redoc）を出さない（#34）
+    alter_environment: Literal["local", "preview", "production"] = "local"
     discord_enabled: bool = False
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres"
     cors_origins: str = "http://localhost:3000"
@@ -44,6 +46,11 @@ class Settings(BaseSettings):
                 f"SUPABASE_JWT_ALGORITHMS must be a subset of {sorted(SUPPORTED_JWKS_ALGORITHMS)}"
             )
         return value
+
+    @property
+    def api_docs_enabled(self) -> bool:
+        """Swagger UI / ReDoc を出すか。/openapi.json は環境によらず公開する。"""
+        return self.alter_environment != "production"
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -2,13 +2,13 @@
 
 基点`/api/v1`、JSON、UTC ISO 8601、UUID。OpenAPIの`operationId`は固定し、FastAPIから`/openapi.json`を生成して`packages/api-client`に型・クライアントを生成する。エラー共通形は`{"error":{"code":"FORBIDDEN","message":"...","request_id":"uuid"}}`。一覧は`limit`（1〜50、既定20）と不透明`cursor`、返却は`{items,next_cursor}`。全書込はCSRF/CORSとBearer検証を通し、削除・開始・公開操作には`Idempotency-Key`を受け付ける。共通エラー: 401認証なし/期限切れ、403権限不足、404対象なし、409競合、422入力不正、429制限、503外部依存不可。利用画面の略号は [画面仕様](12-frontend-screens.md) のURLを指す。
 
-## 招待・停止・削除の共通認可（実装引き渡し）
+## 招待・停止・削除の共通認可
 
 `/health`を除く一般業務APIは[招待契約](23-invitation-consent-operations.md)の共通認可を通す。無効JWTは401 `UNAUTHENTICATED`、有効JWTでも招待外は403 `INVITATION_REQUIRED`、停止/削除要求済みは403 `ACCOUNT_INACTIVE`、招待判定障害は503 `AUTHORIZATION_UNAVAILABLE`。`GET /users/me`も例外ではなく、拒否時にプロフィールを作成しない。削除要求の本人向け状況確認は最小限の状態だけを返す専用経路とし、#30/#31でPydantic/OpenAPIを確定する。
 
 招待照合はDBの`invitations`・`invitation_identities`を参照する。DB障害・データ不整合・Auth照会障害は503で拒否する。運営専用CLIは共通ドメイン処理を利用し、公開APIに招待管理操作や招待一覧を追加しない（ADR-014）。
 
-#7 は複数のPRに分けて実装する。共通基盤・JWT検証、招待DB・運営専用CLI・招待照合のドメイン処理（`alter_domain.invitations.evaluate_access`）は実装済み。APIの停止/削除・招待の共通認可と`GET/PATCH /users/me`は次のPRで追加する。業務エンドポイントの追加時にPydantic/OpenAPIと生成TypeScriptを同時更新する。
+#7 で共通基盤・JWT検証、招待DB・運営専用CLI・招待照合のドメイン処理（`alter_domain.invitations.evaluate_access`）、APIの共通認可（`alter_api.business.BusinessConnection`）と`GET/PATCH /users/me`を実装した。停止状態は現時点では`profiles.deleted_at`と招待の失効で判定し、`deletion_requests`の進行中要求は表を追加する #30 で同じ判定に加える。業務エンドポイントの追加時にPydantic/OpenAPIと生成TypeScriptを同時更新する。
 
 ## スキーマ（公開API）
 
@@ -34,8 +34,8 @@
 
 | Method / Path | 目的・認可 | 要求 → 応答 | 主エラー | DB | 画面 |
 |---|---|---|---|---|---|
-| `GET /users/me` | 招待・有効状態を確認して自分を作成/取得 | — → `Profile` | 401,403,503 | profiles | `/onboarding`, `/settings/account` |
-| `PATCH /users/me` | 本人情報更新 | `display_name` → `Profile` | 422 | profiles | `/settings/account` |
+| `GET /users/me` | 招待・有効状態を確認して自分を作成/取得（operationId: `get_current_user`） | — → `Profile` | 401,403,503 | profiles | `/onboarding`, `/settings/account` |
+| `PATCH /users/me` | 本人情報更新（operationId: `patch_current_user`） | `display_name` → `Profile` | 401,403,422,503 | profiles | `/settings/account` |
 | `POST /users/me/deletion` | 本人の削除要求 | `confirm:true` → `202 DeletionRequest` | 409 | deletion_requests, agents | `/settings/account` |
 | `GET /agents/me` | 自分のAI取得 | — → `Agent`または404 | 404 | agents, agent_settings | `/dashboard`, `/agent` |
 | `POST /agents` | 下書き作成 | `AgentDraftInput` → `201 Agent` | 409,422 | agents, agent_profiles | `/agent/new` |
@@ -73,7 +73,7 @@
 
 ## 開発基盤の運用エンドポイント
 
-上記の業務APIは未実装。`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）のみ提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
+上記の業務APIは`GET/PATCH /users/me`を除き未実装。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
 
 ## 実装済みの共通基盤（#7 前半）
 
@@ -88,6 +88,8 @@
 | Idempotency-Key | `idempotency.idempotency_key` | 印字可能ASCII 8〜255字（UUID推奨）、形式不正は422。キーと結果の保存・再送時の同一応答は、キーを使う最初の書込APIのIssueで保存先と合わせて実装する |
 | CORS | `main.create_app` | `CORS_ORIGINS`の明示Originだけ許可（`*`は設定エラー）。メソッドGET/POST/PATCH/PUT/DELETE、ヘッダー`Authorization`/`Content-Type`/`Idempotency-Key` |
 | 認証 | `auth.CurrentPrincipal` | [認証](06-authentication-authorization.md)の手順でJWTを検証し、`Principal.sub`（UUID）を渡す。未認証・不正は401 `UNAUTHENTICATED`（`WWW-Authenticate: Bearer`）、JWKS/Auth照会障害は503 `AUTHORIZATION_UNAVAILABLE` |
+| 共通認可 | `business.BusinessConnection` | 一般業務APIはこれで業務用のDB接続（トランザクション）を受け取る。`live`モード以外は503 `SERVICE_UNAVAILABLE`（Mockで認可を迂回しない）。JWTの後、Auth管理APIで本人のidentityを取得し、招待の失効とロック順をそろえるため`invitations`・`profiles`の本人行を`FOR UPDATE`で読む。プロフィール削除済み・招待失効済みは403 `ACCOUNT_INACTIVE`、招待外・未登録/未対応identity・Authユーザー消去済みは403 `INVITATION_REQUIRED`。毎リクエスト確認しキャッシュしない。通過した最初の要求で`profiles`を`INSERT ... ON CONFLICT DO NOTHING`で作成し（初期表示名`Alter user`）、拒否した要求では作成しない。DB・Auth管理API障害、招待データ不整合は503 `AUTHORIZATION_UNAVAILABLE` |
+| `/users/me` | `users.py` | `Profile`は`{id,display_name,created_at,web_notifications,discord_dm_notifications,onboarded_at}`（#44 のpreview契約と同じ）。`GET`は共通認可が作成/確認したプロフィールを返す。`PATCH`は`display_name`だけを受け付け（他の項目は422）、前後の空白を除いて1〜80字、空白だけ・制御文字は422。削除状態のプロフィールを更新で復活させない。応答は`Cache-Control: no-store`。OpenAPIには共通エラー401/403/404/409/422/429/503を載せる |
 
 JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDIENCE`・`SUPABASE_JWT_ALGORITHMS`（ES256/RS256のみ、既定両方）・`SUPABASE_JWKS_CACHE_SECONDS`（既定300）。JWKSは`kid`ごとにキャッシュし、未知の`kid`では一度だけ再取得する（再取得は10秒以上の間隔）。ヘッダーの`alg`は許可リストかつ鍵の種類と一致する場合だけ受け付ける。時刻の許容差は30秒。JWKSが空のプロジェクトの`HS256`トークンだけを、`exp`/`iss`/`aud`/`sub`/`role`の確認後に`GET /auth/v1/user`（`apikey`は`SUPABASE_PUBLISHABLE_KEY`）で照会する。JWKSに鍵がある状態の`HS256`は拒否する。JWKS内の鍵が不正・未対応の場合は503とし、空JWKSと扱ってHS256へ切り替えない。トークン・鍵・Publishable Keyはログやエラーに出さない。`ALTER_MODE=mock`でも検証は省略しない。
 

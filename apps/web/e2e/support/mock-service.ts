@@ -110,7 +110,7 @@ const server = createServer(async (req, res) => {
       if (mode === "forbidden") response = mockError(403);
       else if (mode === "inactive")
         response = mockError(403, "ACCOUNT_INACTIVE");
-      else if (mode === "unavailable") response = mockError(503);
+      else if (mode === "unavailable") response = mockError(503, "SERVICE_UNAVAILABLE");
       else if (mode === "expired") response = mockError(401);
       else if (url.pathname === "/api/v1/users/me")
         response = Response.json({
