@@ -42,7 +42,7 @@ stateDiagram-v2
 ## 採用モデル（2026-11-13、#14）
 
 Anthropic直接APIの`claude-sonnet-5-5`を正式採用し、共通設定を`alter_domain.llm_selection`へ置く。
-API version `2026-10-21`、adaptive thinking / effort low、入力8192 / 出力512 tokens上限。
+API version `2026-10-21`、adaptive thinking / effort low、入力3072 / 出力512 tokens上限。
 出力はthinkingを含み、temperature等は送信しない。評価CLIも同じ設定を参照する。
 本番adapterは#18で接続し、本人同意/予算/公開判定の条件を引き続き確認する。
 最大token数の各呼出は既存の会話費用枠に必ず収まるわけではなく、残枠不足なら停止する。

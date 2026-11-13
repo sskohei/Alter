@@ -14,7 +14,10 @@ MODEL: Final = "claude-sonnet-5-5"
 API_VERSION: Final = "2026-10-21"
 EFFORT: Final = "low"
 MAX_OUTPUT_TOKENS: Final = 512  # Includes thinking.
-MAX_INPUT_TOKENS: Final = 8192
+# Includes system, schema, personality, memories, history and counting margin.
+MAX_INPUT_TOKENS: Final = 3072
+MAX_CONVERSATION_TURNS: Final = 8
+GENERATIONS_PER_AGENT: Final = MAX_CONVERSATION_TURNS // 2
 PRICE_CHECKED_ON: Final = "2026-11-13"
 PRICE_SOURCE: Final = "https://platform.claude.com/docs/en/models/sonnet-5-5/overview"
 
@@ -27,3 +30,13 @@ def model_price() -> ModelPrice:
         input_per_million=Decimal("2.00"),
         output_per_million=Decimal("10.00"),
     )
+
+
+def session_generation_reservation() -> Decimal:
+    """Whole-session bound per AI: four generations; MVP summaries use no extra LLM.
+
+    Provider retries are allowed only when confirmed unbilled; unknown billing stops
+    the session and retains its reservation. Additional billable moderation/summary
+    calls must be bounded separately within the same session/day/global limits.
+    """
+    return model_price().cost(MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS) * GENERATIONS_PER_AGENT

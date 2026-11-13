@@ -224,7 +224,7 @@ def test_scene_is_limited_to_eight_turns_and_alternates() -> None:
     assert contexts[1]["public_personality"] == "元気な読書好き"
 
 
-@pytest.mark.parametrize("count", [True, -1, 8000, "100"])
+@pytest.mark.parametrize("count", [True, -1, 2049, 8000, "100"])
 def test_oversized_or_invalid_count_prevents_generation(count: Any) -> None:
     seen: list[httpx.Request] = []
 
@@ -270,3 +270,68 @@ def test_sonnet_price_reservation_stops_next_call_when_budget_is_insufficient() 
         runner.generate("second", {})
     assert sum(request.url.path == "/v1/messages" for request in requests) == 1
     assert runner.reserved == Decimal("0.007368")
+
+
+def test_full_worst_case_conversation_fits_database_default_session_and_daily_budgets() -> None:
+    import re
+
+    from alter_domain.llm_selection import session_generation_reservation
+
+    # Assert against the actual SQL defaults, not separately invented test defaults.
+    ddl = Path("supabase/migrations/20261105143000_core_profiles_agents.sql").read_text()
+
+    def default(column: str) -> Decimal:
+        match = re.search(rf"{column} numeric\(12, 6\) not null default ([0-9.]+)", ddl)
+        assert match is not None
+        return Decimal(match[1])
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("count_tokens"):
+            return httpx.Response(
+                200,
+                json={
+                    "input_tokens": evaluation.INPUT_LIMIT - evaluation.COUNT_MARGIN,
+                },
+            )
+        return httpx.Response(
+            200,
+            json=provider_result(
+                usage={
+                    "input_tokens": evaluation.INPUT_LIMIT,
+                    "output_tokens": evaluation.MAX_OUTPUT,
+                }
+            ),
+        )
+
+    report = io.StringIO()
+    runner = evaluation.Evaluator(
+        httpx.Client(transport=httpx.MockTransport(handler)),
+        report,
+        default("max_session_usd") * 2,
+    )
+    evaluation.evaluate(
+        runner,
+        [],
+        [
+            evaluation.Scene(
+                id="worst-case",
+                profiles=("読書好き", "読書好き"),
+                topic="本",
+            )
+        ],
+    )
+    generation_count = sum(r.url.path == "/v1/messages" for r in requests)
+    assert generation_count == 8
+    usage = [
+        json.loads(line)
+        for line in report.getvalue().splitlines()
+        if json.loads(line)["event"] == "usage"
+    ]
+    for ordinal in (0, 1):
+        spent = sum((Decimal(r["usd"]) for r in usage[ordinal::2]), Decimal(0))
+        assert spent == session_generation_reservation() == Decimal("0.045056")
+        assert spent <= default("max_session_usd")
+        assert spent * 2 <= default("daily_budget_usd")

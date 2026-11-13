@@ -22,12 +22,14 @@ from alter_domain.llm_contract import Utterance
 from alter_domain.llm_selection import (
     API_VERSION,
     EFFORT,
+    MAX_CONVERSATION_TURNS,
     MAX_INPUT_TOKENS,
     MAX_OUTPUT_TOKENS,
     MODEL,
     PRICE_CHECKED_ON,
     PRICE_SOURCE,
     model_price,
+    session_generation_reservation,
 )
 
 MAX_OUTPUT = MAX_OUTPUT_TOKENS
@@ -221,7 +223,7 @@ def evaluate(evaluator: Evaluator, cases: list[Case], scenes: list[Scene]) -> No
         evaluator.generate(case.id, {"task": case.input})
     for scene in scenes:
         history: list[dict[str, Any]] = []
-        for turn in range(8):
+        for turn in range(MAX_CONVERSATION_TURNS):
             speaker = turn % 2
             utterance = evaluator.generate(
                 f"{scene.id}:{turn + 1}",
@@ -256,7 +258,7 @@ def run() -> None:
         parser.error("Unknown scene ID; see evaluations/llm/conversations.json")
     if requested_scenes:
         scenes = [scene for scene in scenes if scene.id in requested_scenes]
-    max_calls = len(cases) + 8 * len(scenes)
+    max_calls = len(cases) + MAX_CONVERSATION_TURNS * len(scenes)
     if not args.live:
         print(f"Dry run: {MODEL}, {len(cases)} cases, {len(scenes)} scenes, max {max_calls} calls.")
         return
@@ -286,6 +288,8 @@ def run() -> None:
                 "price": PRICE.model_dump(mode="json"),
                 "effort": EFFORT,
                 "max_output_tokens": MAX_OUTPUT,
+                "max_input_tokens": INPUT_LIMIT,
+                "session_generation_reservation_usd": str(session_generation_reservation()),
                 "budget_usd": str(args.budget_usd),
                 "fixtures_sha256": hashlib.sha256(cases_raw + scenes_raw).hexdigest(),
                 "system_sha256": hashlib.sha256(SYSTEM.encode()).hexdigest(),

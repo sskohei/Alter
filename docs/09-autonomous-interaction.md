@@ -25,10 +25,11 @@ WebのMVP公開範囲は参加者本人だけ。Discordは両者の`discord_publ
 
 `background_jobs(kind,dedupe_key)`、`conversations.job_id`、`messages(conversation_id,turn_no)`、`usage_records.idempotency_key`、`discord_deliveries(conversation_id,channel_id)`が重複防止の軸。ジョブ取得時のleaseと状態遷移は条件付きUPDATEで行う。監視指標は待ちジョブ数、最古待機時間、失敗率、LLMトークン/費用、Discord未配信件数。DB障害時はCron/Workerが失敗してもデータをローカルに保持せず、復旧後にジョブを再取得する。少なくとも1件のLLM外部呼出とDiscord投稿の完全exactly-onceは保証できない。対策は [構成](04-system-architecture.md) の境界処理。
 
-## Sonnet採用後の費用判定（#14、2026-11-13）
+## Sonnet採用後の費用判定（#14、2026-11-14レビュー修正）
 
-正式採用設定は`alter_domain.llm_selection`。入力8192/出力512 tokensを毎回使うと
-1呼出$0.021504となり、4発言と要約予備をすべて最大量で行う費用は会話枠を超える。
-会話/日次上限は維持し、#18で各呼出前に残予約と見積を照合して、不足なら追加呼出を止める。
-入力上限や8発言上限を、常に生成してよい割当量として扱わない。
+正式採用設定は`alter_domain.llm_selection`。入力3072/出力512 tokens上限で
+1呼出$0.011264、1体4発言で最大$0.045056となり、既定の$0.05に収まる。
+DBの予算既定値と会話単位の予約方式を維持する。MVPは引用記憶/要約で追加LLMを呼ばない。
+#18/#19/#20は`session_generation_reservation()`と同じ上限で生成分を事前予約し、
+追加の有料moderation等があればその上限も含めてから予約する。残枠を超える呼出は行わない。
 [通常費用と最大量シナリオ](20-cost-estimation.md)を参照。

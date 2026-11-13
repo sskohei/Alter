@@ -13,9 +13,9 @@ uv run --package alter-domain alter-llm-evaluate --live \
 - Claude直接API、正式採用モデル`claude-sonnet-5-5`、API version `2026-10-21`、adaptive thinking / effort low。
   temperature/top_p/top_kは送らない。JSON Schemaを送信し、元のUtteranceで長さ等を再検証する。
 - 1回max_tokens=512（thinking込み）、count_tokensの見積に1024 tokensの余裕を足して
-  入力8192 tokens以下を確認する。Sonnetの公式通常単価を使用する。
+  入力3072 tokens以下を確認する。Sonnetの公式通常単価を使用する。
 - 生成前に最大見積額をローカルJSONLへ記録。成功時も予約を戻さず、累積予約が予算を超える
-  呼出は止める。最大85回を各上限で呼ぶ予約見積は$1.827840。予算は既定$0.10、最大$0.50/実行。
+  呼出は止める。最大85回を各上限で呼ぶ予約見積は$0.957440。予算は既定$0.10、最大$0.50/実行。
   全件を1実行で完了できる保証はない。`--scene`で対象を絞り、枠内で順に評価する。
   token countingは推定であり課金上限の保証ではない。実usageが推定外なら直ちに停止して照合する。
 - 429/timeout/5xx/不明なusage/不正schema/拒否/出力打切り時は自動再試行せず停止。

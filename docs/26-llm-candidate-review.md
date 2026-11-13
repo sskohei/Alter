@@ -10,7 +10,7 @@ OpenRouter経由と複数社比較は採用しない。11/11のカタログは�
 Anthropic直接APIの`claude-sonnet-5-5`を採用する。
 [公式モデル仕様](https://platform.claude.com/docs/en/models/sonnet-5-5/overview)を11/13に確認。
 API version `2026-10-21`、adaptive thinking / effort low、max_tokens 512（thinking込み）、
-入力上限8192、キャッシュ/外部ツールなし、temperature/top_p/top_kは送らない。
+入力上限3072、キャッシュ/外部ツールなし、temperature/top_p/top_kは送らない。
 設定と価格の正本は`backend/alter_domain/src/alter_domain/llm_selection.py`。
 `Utterance`のJSON Schemaを送信し、ローカルで元の型/長さ制約を再検証する。
 拒否・打切り・timeout/課金不明は採用せず停止し、未課金を確認できない呼出を自動再試行しない。
@@ -35,7 +35,10 @@ Opusや他社は10人MVPの運用負担と購入済みクレジット活用方�
 キャッシュ割引/無料枠を織り込まない。[費用表](20-cost-estimation.md)を更新した。
 1会話の通常仮定は20%予備費込み$0.0564、150会話/月では$8.46。
 購入時$5で1か月の運用が保証されるわけではない。上限に達したら生成を停止する。
-最大入力/出力を毎回使う見積は既存の会話枠を超えるため、#18で残枠を確認して呼出を止める。
+11/14のPRレビュー対応で入力上限を3072へ縮小。4発言の最大見積$0.045056は
+既定の会話枠$0.05に収まる。DB既定値と会話単位の予約は変更しない。
+MVP記憶/要約は引用で生成し追加LLMを使わない。別のmoderation等が必要なら残枠内に
+追加で見積もり、枠外なら停止する。実装用の会話生成予約額は`session_generation_reservation()`。
 
 ## データ利用・保持
 
