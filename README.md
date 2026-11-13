@@ -61,10 +61,13 @@ uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
 Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIは招待認可付きの`GET/PATCH /api/v1/users/me`を提供する。人格APIは未実装。
+`/development/mock`では合成データでプロフィール・ページング・エラーを確認できる。
 
 ### Mockと無効化
 
-既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。これは初期接続確認用のMockで、認証や業務APIのMockは後続Issueで契約に合わせて追加する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+既定の`ALTER_MODE=mock`ではWorker/Cron/BotのLLM・Discord処理は合成動作となる。APIの`/health`とWebはSupabase停止中でも起動確認できる。本人プロフィールAPI（`GET/PATCH /api/v1/users/me`）はmockモードではJWT検証を通過しても共通認可処理で503 `SERVICE_UNAVAILABLE`を返し、招待確認・DB接続へ進まない。
+
+本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
 
 ```bash
 uv run --package alter-worker alter-worker --once
@@ -120,3 +123,13 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`と`GET/PATCH 
 ## MVPの成立条件
 
 招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
+
+## Claude Sonnet 5.5の採用（Issue #14）
+
+10人MVPはClaude直接APIの`claude-sonnet-5-5`を正式採用。
+共通の採用設定・単価は`alter_domain.llm_selection`、評価CLIもこの設定を使用する。
+`uv run --package alter-domain alter-llm-evaluate`は外部通信なしのdry-run。
+実評価はroot `.env`の`ANTHROPIC_API_KEY`と明示的な`--live`でのみ有効になる。
+[限定評価](evaluations/llm/sonnet-review-2026-11-13.md)・
+[評価手順](evaluations/llm/README.md)・[選定/保持条件](docs/26-llm-candidate-review.md)を参照。
+残りの品質受け入れは#37、本番Workerのadapter・moderation・費用予約の接続は#18の範囲。
