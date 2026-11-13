@@ -32,16 +32,27 @@ export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
   let agent: Preview["schemas"]["Agent"] | null = null;
   let revisions: Preview["schemas"]["ProfileRevision"][] = [];
   let privateInfo = "";
+  const icons = new Set<string>();
+  const iconUrl = (path: string | null | undefined) => path ? `https://mock.invalid/storage/v1/object/sign/agent-icons/${path}?token=synthetic` : null;
   let current = { ...profile };
   return async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
     if (url.pathname === "/health") return request.method === "GET" ? success({ status: "ok", service: "api", mode: "mock" }) : mockError(405);
-    if (!["/api/v1/users/me", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
+    if (!["/api/v1/users/me", "/api/v1/agent-icons", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
     if (["/api/v1/users/me", "/__mock/profiles"].includes(url.pathname) && !(url.pathname === "/api/v1/users/me" ? ["GET", "PATCH"] : ["GET"]).includes(request.method)) return mockError(405);
     if (!/^Bearer \S+$/i.test(request.headers.get("Authorization") ?? "")) return mockError(401);
     if (scenario === "inactive") return mockError(403, "ACCOUNT_INACTIVE");
     if (!Number.isNaN(Number(scenario))) return mockError(Number(scenario));
+    if (url.pathname === "/api/v1/agent-icons") {
+      if (request.method !== "POST") return mockError(405);
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (!["image/png", "image/jpeg", "image/webp"].includes(request.headers.get("Content-Type") ?? "") || !bytes.length || bytes.length > 2097152) return mockError(422);
+      // Synthetic transport only; real image decoding and metadata stripping are tested in Python.
+      const path = `${profile.id}/${crypto.randomUUID()}.png`;
+      icons.add(path);
+      return Response.json({ icon_path: path }, { status: 201 });
+    }
     if (url.pathname === "/__mock/profiles") {
       const limitText = url.searchParams.get("limit") ?? "20";
       const limit = Number(limitText);
@@ -73,11 +84,12 @@ export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
       if (agent) return mockError(409);
       const body: Preview["schemas"]["AgentDraftInput"] =
         await request.json();
-      if (!validDraft(body)) return mockError(422);
+      if (!validDraft(body) || (body.icon_path != null && !icons.has(body.icon_path))) return mockError(422);
       agent = {
         id: crypto.randomUUID(),
         name: body.name,
         status: "draft",
+        icon_url: iconUrl(body.icon_path),
         approved_profile_version: null,
         created_at: profile.created_at,
         settings: {
@@ -98,13 +110,11 @@ export function createMockFetch(scenario: Scenario = "normal"): typeof fetch {
       const suffix = url.pathname.slice(`/api/v1/agents/${agent.id}`.length);
       if (suffix === "" && request.method === "PATCH") {
         const body = await request.json();
-        if (
-          typeof body.name !== "string" ||
-          !body.name.trim() ||
-          body.name.length > 80
-        )
-          return mockError(422);
-        agent = { ...agent, name: body.name };
+        if ((!Object.hasOwn(body, "name") && !Object.hasOwn(body, "icon_path")) ||
+            (Object.hasOwn(body, "name") && (typeof body.name !== "string" || !body.name.trim() || body.name.length > 80)) ||
+            (body.icon_path != null && !icons.has(body.icon_path))) return mockError(422);
+        agent = { ...agent, ...(Object.hasOwn(body, "name") ? {name: body.name} : {}),
+                  ...(Object.hasOwn(body, "icon_path") ? {icon_url: iconUrl(body.icon_path)} : {}) };
         return Response.json(agent);
       }
       if (suffix === "/profile" && request.method === "GET") {

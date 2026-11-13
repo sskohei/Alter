@@ -188,6 +188,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Icon Url */
+            icon_url?: string | null;
             /**
              * Id
              * Format: uuid
@@ -206,6 +208,8 @@ export interface components {
         AgentDraftInput: {
             /** Hobbies */
             hobbies?: string[];
+            /** Icon Path */
+            icon_path?: string | null;
             /** Interaction Policy */
             interaction_policy: string;
             /** Interests */
@@ -234,8 +238,10 @@ export interface components {
         };
         /** AgentPatch */
         AgentPatch: {
+            /** Icon Path */
+            icon_path?: string | null;
             /** Name */
-            name: string;
+            name?: string | null;
         };
         /** AgentSettings */
         AgentSettings: {
@@ -378,6 +384,8 @@ export interface components {
             expected_version: number;
             /** Hobbies */
             hobbies?: string[];
+            /** Icon Path */
+            icon_path?: string | null;
             /** Interaction Policy */
             interaction_policy: string;
             /** Interests */

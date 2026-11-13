@@ -1,6 +1,212 @@
 {
   "components": {
     "schemas": {
+      "Agent": {
+        "properties": {
+          "approved_profile_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Profile Version"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "active",
+              "paused",
+              "deleted"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "approved_profile_version",
+          "created_at"
+        ],
+        "title": "Agent",
+        "type": "object"
+      },
+      "AgentDraftInput": {
+        "additionalProperties": false,
+        "properties": {
+          "hobbies": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Hobbies",
+            "type": "array"
+          },
+          "icon_path": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
+          },
+          "interaction_policy": {
+            "maxLength": 2000,
+            "title": "Interaction Policy",
+            "type": "string"
+          },
+          "interests": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Interests",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Name",
+            "type": "string"
+          },
+          "personality": {
+            "maxLength": 2000,
+            "title": "Personality",
+            "type": "string"
+          },
+          "private_info": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Private Info",
+            "type": "string"
+          },
+          "restrictions": {
+            "maxLength": 2000,
+            "title": "Restrictions",
+            "type": "string"
+          },
+          "shareable_info": {
+            "maxLength": 2000,
+            "title": "Shareable Info",
+            "type": "string"
+          },
+          "speaking_style": {
+            "maxLength": 2000,
+            "title": "Speaking Style",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Strengths",
+            "type": "array"
+          },
+          "values_text": {
+            "maxLength": 2000,
+            "title": "Values Text",
+            "type": "string"
+          },
+          "weaknesses": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personality",
+          "values_text",
+          "interests",
+          "speaking_style",
+          "interaction_policy",
+          "shareable_info",
+          "restrictions",
+          "name"
+        ],
+        "title": "AgentDraftInput",
+        "type": "object"
+      },
+      "AgentPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "icon_path": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "AgentPatch",
+        "type": "object"
+      },
       "AgentSettings": {
         "properties": {
           "autonomy_enabled": {
@@ -129,6 +335,21 @@
         "title": "AgentSettingsPatch",
         "type": "object"
       },
+      "Approval": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "Approval",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -207,6 +428,21 @@
         "title": "Health",
         "type": "object"
       },
+      "IconUpload": {
+        "properties": {
+          "icon_path": {
+            "maxLength": 128,
+            "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+            "title": "Icon Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "icon_path"
+        ],
+        "title": "IconUpload",
+        "type": "object"
+      },
       "Preferences": {
         "properties": {
           "discord_dm_notifications": {
@@ -253,6 +489,19 @@
           }
         },
         "title": "PreferencesPatch",
+        "type": "object"
+      },
+      "PrivateInfo": {
+        "properties": {
+          "private_info": {
+            "title": "Private Info",
+            "type": "string"
+          }
+        },
+        "required": [
+          "private_info"
+        ],
+        "title": "PrivateInfo",
         "type": "object"
       },
       "Profile": {
@@ -318,6 +567,229 @@
         ],
         "title": "ProfilePatch",
         "type": "object"
+      },
+      "ProfileRevision": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "hobbies": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Hobbies",
+            "type": "array"
+          },
+          "interaction_policy": {
+            "maxLength": 2000,
+            "title": "Interaction Policy",
+            "type": "string"
+          },
+          "interests": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Interests",
+            "type": "array"
+          },
+          "personality": {
+            "maxLength": 2000,
+            "title": "Personality",
+            "type": "string"
+          },
+          "restrictions": {
+            "maxLength": 2000,
+            "title": "Restrictions",
+            "type": "string"
+          },
+          "shareable_info": {
+            "maxLength": 2000,
+            "title": "Shareable Info",
+            "type": "string"
+          },
+          "speaking_style": {
+            "maxLength": 2000,
+            "title": "Speaking Style",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Strengths",
+            "type": "array"
+          },
+          "values_text": {
+            "maxLength": 2000,
+            "title": "Values Text",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "weaknesses": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personality",
+          "values_text",
+          "interests",
+          "speaking_style",
+          "interaction_policy",
+          "shareable_info",
+          "restrictions",
+          "version",
+          "approved_at"
+        ],
+        "title": "ProfileRevision",
+        "type": "object"
+      },
+      "RevisionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "hobbies": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Hobbies",
+            "type": "array"
+          },
+          "icon_path": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
+          },
+          "interaction_policy": {
+            "maxLength": 2000,
+            "title": "Interaction Policy",
+            "type": "string"
+          },
+          "interests": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Interests",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Name",
+            "type": "string"
+          },
+          "personality": {
+            "maxLength": 2000,
+            "title": "Personality",
+            "type": "string"
+          },
+          "private_info": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Private Info",
+            "type": "string"
+          },
+          "restrictions": {
+            "maxLength": 2000,
+            "title": "Restrictions",
+            "type": "string"
+          },
+          "shareable_info": {
+            "maxLength": 2000,
+            "title": "Shareable Info",
+            "type": "string"
+          },
+          "speaking_style": {
+            "maxLength": 2000,
+            "title": "Speaking Style",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Strengths",
+            "type": "array"
+          },
+          "values_text": {
+            "maxLength": 2000,
+            "title": "Values Text",
+            "type": "string"
+          },
+          "weaknesses": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personality",
+          "values_text",
+          "interests",
+          "speaking_style",
+          "interaction_policy",
+          "shareable_info",
+          "restrictions",
+          "name",
+          "expected_version"
+        ],
+        "title": "RevisionInput",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -334,6 +806,854 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/agent-icons": {
+      "post": {
+        "operationId": "upload_agent_icon",
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IconUpload"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Upload Icon",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents": {
+      "post": {
+        "operationId": "create_agent",
+        "parameters": [
+          {
+            "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentDraftInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Create Agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/me": {
+      "get": {
+        "operationId": "get_my_agent",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Get My Agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/{agent_id}": {
+      "patch": {
+        "operationId": "update_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Update Agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/{agent_id}/profile": {
+      "get": {
+        "operationId": "get_agent_profile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRevision"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Get Profile",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/{agent_id}/profile/approve": {
+      "post": {
+        "operationId": "approve_agent_profile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Approval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Approve",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/{agent_id}/profile/private": {
+      "get": {
+        "operationId": "get_private_profile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivateInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Private",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/{agent_id}/profile/revisions": {
+      "post": {
+        "operationId": "create_profile_revision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRevision"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Revision",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/api/v1/agents/{id}/blocks/{other_id}": {
       "delete": {
         "operationId": "unblock_agent",

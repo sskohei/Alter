@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 非対称署名だけを JWKS で検証する。HS256 は JWKS では検証せず Auth サーバー照会に回す。
@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # 配置先の環境。production では API の Swagger UI（/docs・/redoc）を出さない（#34）
     alter_environment: Literal["local", "preview", "production"] = "local"
     discord_enabled: bool = False
+    profile_encryption_key_v1: SecretStr = SecretStr("")
+    api_idempotency_hmac_keys: dict[PositiveInt, SecretStr] = Field(default_factory=dict)
+    api_idempotency_hmac_active_version: PositiveInt = 1
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres"
     cors_origins: str = "http://localhost:3000"
 
@@ -30,6 +33,7 @@ class Settings(BaseSettings):
     supabase_jwks_cache_seconds: int = 300
     # Supabase Auth 管理 API（招待の identity 照合）。API と運営 CLI のサーバー側だけで使う。
     supabase_secret_key: str = ""
+    supabase_storage_secret_key: SecretStr = SecretStr("")
 
     # 交流設定（#16）。利用者が設定できる 1 体あたりの日次予算の上限（USD、小数 6 桁まで）
     agent_daily_budget_max_usd: Decimal = Decimal("1.00")

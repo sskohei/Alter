@@ -4,14 +4,17 @@ from typing import Any, Literal
 
 import httpx
 import uvicorn
+from alter_domain import agents
 from alter_domain.auth_admin import SupabaseAuthAdmin
 from alter_domain.db import create_db_engine
+from alter_domain.icons import IconStorage, IconStorageUnavailable, InvalidIcon
 from alter_domain.settings import Settings
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
 
+from alter_api.agent_routes import router as agent_router
 from alter_api.auth import JwtVerifier
 from alter_api.errors import (
     REQUEST_ID_HEADER,
@@ -37,6 +40,7 @@ def create_api_v1_router() -> APIRouter:
     router = APIRouter(prefix=API_V1_PREFIX)
     router.include_router(users_router)
     router.include_router(settings_router)
+    router.include_router(agent_router)
     return router
 
 
@@ -92,9 +96,35 @@ def create_app(
     app.state.settings = settings
     app.state.db_engine = create_db_engine(settings)
     app.state.auth_admin = SupabaseAuthAdmin(settings, client)
+    app.state.icon_storage = IconStorage(settings, client)
     app.state.jwt_verifier = JwtVerifier(settings, client)
 
     install_error_handlers(app)
+
+    async def agent_not_found(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 404, "NOT_FOUND", "Agent not found")
+
+    async def agent_conflict(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 409, "CONFLICT", "Agent version or creation conflict")
+
+    async def invalid_icon(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 422, "VALIDATION_ERROR", "Invalid icon")
+
+    async def unavailable_icon(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 503, "SERVICE_UNAVAILABLE", "Icon storage is unavailable")
+
+    app.add_exception_handler(InvalidIcon, invalid_icon)
+    app.add_exception_handler(IconStorageUnavailable, unavailable_icon)
+    app.add_exception_handler(agents.AgentNotFound, agent_not_found)
+    app.add_exception_handler(agents.AgentConflict, agent_conflict)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
