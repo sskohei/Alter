@@ -120,3 +120,11 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生�
 ## MVPの成立条件
 
 招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
+
+## Claudeモデル評価（Issue #14）
+
+購入済みClaude APIクレジットを利用する10人MVP方針で、Claude直接API/Haikuを評価する。
+`uv run --package alter-domain alter-llm-evaluate`は外部通信なしのdry-run。
+実評価はrootの`.env`に`ANTHROPIC_API_KEY`を設定し、明示的な`--live`と予算枠で行う。
+[評価手順](evaluations/llm/README.md)・[単価/保持条件](docs/26-llm-candidate-review.md)を参照。
+実評価と日本語レビューは未完了。本番Workerの接続は#18の残件。
