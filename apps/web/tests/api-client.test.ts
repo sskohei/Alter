@@ -74,3 +74,9 @@ test("pagination normalizes non-finite and fractional sizes", () => {
 test("unwrap accepts a successful no-content mutation", async () => {
   await expect(unwrap({ response: new Response(null, { status: 204 }) })).resolves.toBeUndefined();
 });
+
+
+test("malformed upstream errors use the shared service-unavailable code", async () => {
+  await expect(unwrap({ response: new Response(null, { status: 503 }) }))
+    .rejects.toMatchObject({ status: 503, detail: { code: "SERVICE_UNAVAILABLE" } });
+});

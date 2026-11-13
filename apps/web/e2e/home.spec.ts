@@ -5,7 +5,7 @@ test("生成クライアントからMock APIを呼び、画面内に接続結果
     json: { status: "ok", service: "api", mode: "mock" },
     headers: { "access-control-allow-origin": "*" },
   }));
-  await page.goto("/");
+  await page.goto("/development");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("開発環境の準備ができました");
   await page.getByRole("button", { name: "APIの接続を確認" }).click();
   await expect(page.getByRole("status")).toHaveText("API: ok / mock");
