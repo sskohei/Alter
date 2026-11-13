@@ -338,11 +338,39 @@
         "title": "Profile",
         "type": "object"
       },
+      "ProfilePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Profile"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ProfilePage",
+        "type": "object"
+      },
       "ProfilePatch": {
         "additionalProperties": false,
         "properties": {
           "display_name": {
-            "maxLength": 200,
+            "description": "\u524d\u5f8c\u306e\u7a7a\u767d\u3092\u9664\u3044\u3066 1\u301c80 \u6587\u5b57\u3002\u7a7a\u767d\u3060\u3051\u30fb\u5236\u5fa1\u6587\u5b57\u306f 422",
+            "maxLength": 80,
             "minLength": 1,
             "title": "Display Name",
             "type": "string"
@@ -658,6 +686,11 @@
       "HTTPBearer": {
         "scheme": "bearer",
         "type": "http"
+      },
+      "SupabaseBearer": {
+        "description": "Supabase Auth \u306e access token\uff08refresh token \u306f\u9001\u3089\u306a\u3044\uff09",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -667,6 +700,130 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/__mock/profiles": {
+      "get": {
+        "operationId": "preview_list_synthetic_profiles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Profiles"
+      }
+    },
     "/api/v1/agents": {
       "post": {
         "operationId": "preview_create_agent",
@@ -1552,7 +1709,7 @@
     },
     "/api/v1/users/me": {
       "get": {
-        "operationId": "preview_get_current_user",
+        "operationId": "get_current_user",
         "responses": {
           "200": {
             "content": {
@@ -1637,13 +1794,16 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Get User"
+        "summary": "\u62db\u5f85\u30fb\u6709\u52b9\u72b6\u614b\u3092\u78ba\u8a8d\u3057\u3066\u81ea\u5206\u306e\u30d7\u30ed\u30d5\u30a3\u30fc\u30eb\u3092\u4f5c\u6210/\u53d6\u5f97\u3059\u308b",
+        "tags": [
+          "users"
+        ]
       },
       "patch": {
-        "operationId": "preview_patch_current_user",
+        "operationId": "patch_current_user",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1738,10 +1898,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Patch User"
+        "summary": "\u81ea\u5206\u306e\u8868\u793a\u540d\u3092\u5909\u66f4\u3059\u308b",
+        "tags": [
+          "users"
+        ]
       }
     }
   }
