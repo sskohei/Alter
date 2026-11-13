@@ -243,6 +243,11 @@ def test_patch_updates_trimmed_display_name(api: Api, engine: Engine, invited: A
     assert client.patch(ME, json={"display_name": long_name}).status_code == 200
     assert _profiles(engine, sub)[0]["display_name"] == long_name
 
+    # 前後の空白を除いて 80 文字なら、空白込みで 80 文字を超えていても受け付ける
+    padded = client.patch(ME, json={"display_name": "  " + "い" * 80 + " "})
+    assert padded.status_code == 200, padded.text
+    assert padded.json()["display_name"] == "い" * 80
+
 
 def test_patch_before_first_get_creates_profile(api: Api, engine: Engine, invited: Any) -> None:
     sub = invited()

@@ -55,6 +55,12 @@ class ProfilePatch(BaseModel):
         ),
     ]
 
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def _strip(cls, value: object) -> object:
+        # 文字数の検査（min/max_length）より前に前後の空白を除く。文字列以外は型検査で 422
+        return value.strip() if isinstance(value, str) else value
+
     @field_validator("display_name")
     @classmethod
     def _normalize(cls, value: str) -> str:

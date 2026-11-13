@@ -12,6 +12,7 @@ from alter_api.auth import get_principal
 from alter_api.auth.jwt import Principal
 from alter_api.business import business_connection
 from alter_api.main import create_app
+from alter_api.users import ProfilePatch
 from alter_domain.profiles import normalize_display_name
 from alter_domain.settings import Settings
 from fastapi.testclient import TestClient
@@ -88,6 +89,19 @@ def test_patch_rejects_invalid_display_name(validation_client: TestClient, body:
 )
 def test_normalize_display_name(value: str, expected: str) -> None:
     assert normalize_display_name(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (" " + "あ" * 80 + " ", "あ" * 80),
+        ("\u3000" + "a" * 80 + "\t", "a" * 80),
+        ("  たろう  ", "たろう"),
+    ],
+)
+def test_patch_model_counts_length_after_trimming(value: str, expected: str) -> None:
+    # 文字数の上限は前後の空白を除いたあとに数える（#66 のレビュー指摘）
+    assert ProfilePatch.model_validate({"display_name": value}).display_name == expected
 
 
 def test_openapi_users_me_contract() -> None:
