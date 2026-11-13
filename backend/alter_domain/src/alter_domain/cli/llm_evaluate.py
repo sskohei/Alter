@@ -18,19 +18,22 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from alter_domain.llm_contract import ModelPrice, Utterance
-
-MODEL = "claude-haiku-5-5"
-API_VERSION = "2026-10-21"
-MAX_OUTPUT = 512  # Includes thinking tokens. No tools, cache writes, or fast mode.
-INPUT_LIMIT = 8192
-COUNT_MARGIN = 1024  # Counting is an estimate, not a billing guarantee.
-PRICE = ModelPrice(
-    provider="anthropic",
-    model=MODEL,
-    input_per_million=Decimal("0.10"),
-    output_per_million=Decimal("0.50"),
+from alter_domain.llm_contract import Utterance
+from alter_domain.llm_selection import (
+    API_VERSION,
+    EFFORT,
+    MAX_INPUT_TOKENS,
+    MAX_OUTPUT_TOKENS,
+    MODEL,
+    PRICE_CHECKED_ON,
+    PRICE_SOURCE,
+    model_price,
 )
+
+MAX_OUTPUT = MAX_OUTPUT_TOKENS
+INPUT_LIMIT = MAX_INPUT_TOKENS
+COUNT_MARGIN = 1024  # Counting is an estimate, not a billing guarantee.
+PRICE = model_price()
 SYSTEM = (
     "あなたは本人の代わりに交流するAI分身です。本人そのものとは名乗りません。"
     "日本語で短く自然に話してください（発言は原則200文字以内）。"
@@ -125,7 +128,7 @@ class Evaluator:
             "messages": [{"role": "user", "content": json.dumps(context, ensure_ascii=False)}],
             "thinking": {"type": "adaptive"},
             "output_config": {
-                "effort": "low",
+                "effort": EFFORT,
                 "format": {"type": "json_schema", "schema": wire_schema()},
             },
         }
@@ -140,6 +143,8 @@ class Evaluator:
         emit(self.report, {"event": "reserved", "id": case_id, "usd": str(reservation)})
         started = perf_counter()
         data = self.post("messages", {**body, "max_tokens": MAX_OUTPUT})
+        if data.get("model") != MODEL:
+            raise EvaluationError("unexpected_model_billing_unknown")
         elapsed = perf_counter() - started
         self.latencies.append(elapsed)
         try:
@@ -206,7 +211,8 @@ class Evaluator:
             "calls": len(ordered),
             "p50_seconds": ordered[math.ceil(len(ordered) * 0.5) - 1] if ordered else None,
             "p95_seconds": ordered[math.ceil(len(ordered) * 0.95) - 1] if ordered else None,
-            "adoption": "pending_human_safety_and_japanese_review",
+            "adoption": "sonnet_selected_by_owner_2026-11-13",
+            "quality_review": "pending",
         }
 
 
@@ -234,6 +240,7 @@ def evaluate(evaluator: Evaluator, cases: list[Case], scenes: list[Scene]) -> No
 
 def run() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scene", action="append", default=[], help="Evaluate selected scene IDs")
     parser.add_argument("--live", action="store_true", help="Enable billable synthetic evaluation")
     parser.add_argument("--budget-usd", type=Decimal, default=Decimal("0.10"))
     parser.add_argument("--output", type=Path, default=Path("/tmp/alter-claude-evaluation.jsonl"))
@@ -243,8 +250,15 @@ def run() -> None:
     scenes_raw = (root / "conversations.json").read_bytes()
     cases = [Case.model_validate(c) for c in json.loads(cases_raw)]
     scenes = [Scene.model_validate(s) for s in json.loads(scenes_raw)]
+    requested_scenes = set(args.scene)
+    available_scenes = {scene.id for scene in scenes}
+    if requested_scenes - available_scenes:
+        parser.error("Unknown scene ID; see evaluations/llm/conversations.json")
+    if requested_scenes:
+        scenes = [scene for scene in scenes if scene.id in requested_scenes]
+    max_calls = len(cases) + 8 * len(scenes)
     if not args.live:
-        print(f"Dry run: {MODEL}, {len(cases)} cases, {len(scenes)} scenes, max 85 calls.")
+        print(f"Dry run: {MODEL}, {len(cases)} cases, {len(scenes)} scenes, max {max_calls} calls.")
         return
     key = Credentials().anthropic_api_key.get_secret_value()
     if not key or key.startswith("replace-"):
@@ -270,12 +284,14 @@ def run() -> None:
                 "model": MODEL,
                 "api_version": API_VERSION,
                 "price": PRICE.model_dump(mode="json"),
-                "effort": "low",
+                "effort": EFFORT,
                 "max_output_tokens": MAX_OUTPUT,
                 "budget_usd": str(args.budget_usd),
                 "fixtures_sha256": hashlib.sha256(cases_raw + scenes_raw).hexdigest(),
                 "system_sha256": hashlib.sha256(SYSTEM.encode()).hexdigest(),
-                "price_checked_on": "2026-11-13",
+                "price_checked_on": PRICE_CHECKED_ON,
+                "price_source": PRICE_SOURCE,
+                "selected_scenes": [scene.id for scene in scenes],
                 "synthetic_only": True,
             },
         )

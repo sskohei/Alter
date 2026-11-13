@@ -4,34 +4,38 @@
 招待制10人MVPに絞る方針を承認した。残高・有効期限は未確認。
 OpenRouter経由と複数社比較は採用しない。11/11のカタログは過去の調査資料として残す。
 
-## 決定と未完了条件
+## 正式採用（2026-11-13）
 
-供給元はAnthropic直接API、評価するモデルは`claude-haiku-5-5`。
-[公式モデル仕様](https://platform.claude.com/docs/en/models/haiku-5-5/overview)を11/13に確認。
-adaptive thinking / effort low、max_tokens 512（thinking込み）、キャッシュ/外部ツールなしで開始する。
-温度等は送らない。`Utterance`のJSON Schemaを使用し、ローカルで元の制約を再検証する。
-拒否・打切り時も課金され得るため、結果を採用せず停止する。
+決定者sskoheiが限定評価を確認し、Sonnetの正式採用と実装/pushを指示した。
+Anthropic直接APIの`claude-sonnet-5-5`を採用する。
+[公式モデル仕様](https://platform.claude.com/docs/en/models/sonnet-5-5/overview)を11/13に確認。
+API version `2026-10-21`、adaptive thinking / effort low、max_tokens 512（thinking込み）、
+入力上限8192、キャッシュ/外部ツールなし、temperature/top_p/top_kは送らない。
+設定と価格の正本は`backend/alter_domain/src/alter_domain/llm_selection.py`。
+`Utterance`のJSON Schemaを送信し、ローカルで元の型/長さ制約を再検証する。
+拒否・打切り・timeout/課金不明は採用せず停止し、未課金を確認できない呼出を自動再試行しない。
 [構造化出力](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)。
 
-**供給元の決定と実モデルの採用判定は分ける。** 実API評価2回を完了し、
-[結果と一次レビュー](../evaluations/llm/review-2026-11-13.md)を記録した。
-合計123生成、schema成功123/123、usageによる費用計算合計$0.018470。
-プロンプト補強後も未記載の体験/未経験を断定したため、現在の組み合わせの正式採用は保留。
-sskohei/F/Dによる日本語・安全性の受け入れレビューは未完了。
-合格条件は全安全ケース合格、schema成功100%、日本語各項目4/5以上。
-評価CLIは本番Workerへ接続せず、#18のliveゲートを解除しない。
+根拠は[Sonnet限定評価](../evaluations/llm/sonnet-review-2026-11-13.md)：
+単発5ケース＋Haikuで問題があった4会話、31生成、schema成功31/31、
+usageからの費用計算$0.098204、生成p50/p95は2.227/5.552秒。
+今回の4場面で未記載の体験/未経験の断定は確認せず、自然さ/話者の帰属も改善した。
+全10場面/反復評価/人の採点は未実施で、4/5以上を確認済みとは記載しない。
+採用モデルの決定と公開受け入れは区別し、残りの品質受け入れは#37で追跡する。
 
-Haikuを第一候補とする理由は、短い日本語会話のMVPで必要な品質を低費用で検証するため。
-他社モデルは購入済みクレジットを活用する方針により比較対象外。
-上位ClaudeモデルはHaikuの品質不足が確認されてから検討する。
+Haikuは2実行123生成でschemaに成功したが、体験の断定が残ったため不採用。
+[Haiku評価記録](../evaluations/llm/review-2026-11-13.md)は当時の結果として保持する。
+Opusや他社は10人MVPの運用負担と購入済みクレジット活用方針から採用しない。
+モデルの自動fallbackも実装しない。
 
 ## 単価と10人MVPの見積
 
-[公式単価](https://platform.claude.com/docs/en/models/haiku-5-5/overview)、2026-11-13確認。
-入力100K tokens以下: 入力$0.10 / 出力$0.50（各100万tokens）。100K超では$0.50/$2.50。
-評価は入力8192以下、出力512以下に制限し、thinkingも出力usageで計上する。
-通常見積は[費用表](20-cost-estimation.md)。キャッシュ割引や無料枠は予算に織り込まない。
-モデルの更新/価格変更時は同じ条件で再評価する。
+[公式単価](https://platform.claude.com/docs/en/models/sonnet-5-5/overview)、2026-11-13確認。
+入力$2 / 出力$10（各100万tokens）。thinkingも出力usageで計上する。
+キャッシュ割引/無料枠を織り込まない。[費用表](20-cost-estimation.md)を更新した。
+1会話の通常仮定は20%予備費込み$0.0564、150会話/月では$8.46。
+購入時$5で1か月の運用が保証されるわけではない。上限に達したら生成を停止する。
+最大入力/出力を毎回使う見積は既存の会話枠を超えるため、#18で残枠を確認して呼出を止める。
 
 ## データ利用・保持
 
@@ -56,8 +60,9 @@ Haikuを第一候補とする理由は、短い日本語会話のMVPで必要な
 判定に別LLM呼出が必要なら同じClaude直接APIを使い、そのtokens/費用も事前予約へ含める。
 BaselineModeratorだけでlive公開しない。分類基準・Mock回帰・実評価は#18の残件。
 
-## 状態
+## 状態と引き渡し
 
-実評価: 2回完了（2026-11-13、合成入力のみ）。エージェント一次レビュー: 要修正。
-sskohei/F/Dの日本語レビュー: 未実施。実APIキーはローカルでのみ使用し、証跡/PRへ記載しない。
-#14は実評価・採点・モデル採用記録が揃うまでopenを維持する。
+Sonnet正式採用は決定済み。採用設定・評価CLI・公式単価/データ条件・判断根拠を#14/PR #57に記録する。
+実APIキーはローカルのみで使用し、証跡/PRへ含めない。
+#18は本番adapter・usage/費用予約・moderationを接続し、#16の同意API、#37の公開受け入れを確認する。
+今回のモデル選定を理由に本番Workerを有効化しない。

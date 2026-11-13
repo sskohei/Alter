@@ -10,12 +10,13 @@ uv run --package alter-domain alter-llm-evaluate --live \
   --budget-usd 0.10 --output /tmp/alter-claude-evaluation.jsonl
 ```
 
-- Claude直接API、`claude-haiku-5-5`、API version `2026-10-21`、adaptive thinking / effort low。
+- Claude直接API、正式採用モデル`claude-sonnet-5-5`、API version `2026-10-21`、adaptive thinking / effort low。
   temperature/top_p/top_kは送らない。JSON Schemaを送信し、元のUtteranceで長さ等を再検証する。
 - 1回max_tokens=512（thinking込み）、count_tokensの見積に1024 tokensの余裕を足して
-  入力8192 tokens以下を確認する。通常帯（100K以下）の単価を使用する。
+  入力8192 tokens以下を確認する。Sonnetの公式通常単価を使用する。
 - 生成前に最大見積額をローカルJSONLへ記録。成功時も予約を戻さず、累積予約が予算を超える
-  呼出は止める。最大85回の予約見積は$0.091460。予算は既定$0.10、最大$0.50/実行。
+  呼出は止める。最大85回を各上限で呼ぶ予約見積は$1.827840。予算は既定$0.10、最大$0.50/実行。
+  全件を1実行で完了できる保証はない。`--scene`で対象を絞り、枠内で順に評価する。
   token countingは推定であり課金上限の保証ではない。実usageが推定外なら直ちに停止して照合する。
 - 429/timeout/5xx/不明なusage/不正schema/拒否/出力打切り時は自動再試行せず停止。
   課金不明時も予約記録を残す。再実行は新しい評価として別予算を消費するのでConsoleを照合する。
@@ -28,10 +29,12 @@ uv run --package alter-domain alter-llm-evaluate --live \
 
 ## 人による受け入れ
 
-2026-11-13に実評価2回を完了。[結果と一次レビュー](review-2026-11-13.md)を参照。
-未記載の経験/未経験の断定が残るため正式モデル採用は保留。実評価の完了だけで合格にしない。
+2026-11-13、Haikuの実評価2回後に[Sonnet限定評価](sonnet-review-2026-11-13.md)を実行。
+sskoheiがSonnetの正式採用を指示した。全10場面/反復評価/人による採点は未完了で、
+モデルの正式採用と、#37で行う残りの品質受け入れを区別する。
 日本語レビューはsskoheiがF/Dの観点も確認し、次の表を評価結果と一緒に残す。
-5ケースの全checks、安全性、schema成功100%、日本語各項目4/5以上を採用条件にする。
+今後の品質受け入れ目安は5ケースの全checks、安全性、schema成功100%、日本語各項目4/5以上。
+Sonnetの限定評価だけで全場面の目安を満たしたと扱わない。
 有限の評価合格は安全性の保証ではない。
 
 | 対象 | 採点/判定 | 確認すること |
@@ -48,3 +51,19 @@ Sonnet等の追加モデルは必要が判明してから別予算を確認し�
 
 採用時はJSONLの合成出力とレビュー表を確認して、秘密/個人情報を除いた証跡だけをPRへ追加する。
 通常のpytest/CIはHTTP Mockのみで、購入済みクレジットを消費しない。
+
+## Sonnetの限定評価を再現する場合
+
+以下は前回と同じ対象の5単発ケース＋4会話組。追加課金を伴うので、再実行する際だけ使う。
+今回の正式採用反映では追加API呼出を行っていない。
+
+```bash
+uv run --package alter-domain alter-llm-evaluate --live --budget-usd 0.50 \
+  --scene different-opinions --scene memory-uncertain \
+  --scene tone-distinction --scene no-invented-experience \
+  --output /tmp/alter-sonnet-focused-new.jsonl
+```
+
+モデル/単価/API version/effort/上限は`alter_domain.llm_selection`を参照し、
+任意の環境変数や一時的なmonkeypatchでモデルだけを変えない。応答のmodelが採用モデルと
+一致しなければ課金不明として停止する。HaikuのJSONLとレビューは当時の証跡として残す。

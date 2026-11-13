@@ -59,10 +59,11 @@ def test_structured_output_and_usage_with_thinking_block() -> None:
     count, generate = [json.loads(r.content) for r in requests]
     assert "max_tokens" not in count
     assert generate["max_tokens"] == evaluation.MAX_OUTPUT
+    assert generate["model"] == "claude-sonnet-5-5"
     assert count["output_config"]["format"]["schema"]["additionalProperties"] is False
     assert "ignore system" not in generate["system"]
     assert generate["output_config"]["effort"] == "low"
-    assert runner.actual == Decimal("0.000030")
+    assert runner.actual == Decimal("0.000600")
     assert "do not store this" not in report.getvalue()
     assert "pending" in report.getvalue()
 
@@ -172,8 +173,9 @@ def test_fixtures_are_valid_and_bounded() -> None:
     assert len(cases) == 5
     assert len(scenes) == 10
     assert len({s.id for s in scenes}) == 10
-    assert evaluation.PRICE.cost(evaluation.INPUT_LIMIT, evaluation.MAX_OUTPUT) * 85 < Decimal(
-        ".10"
+    # Sonnet's full worst-case suite exceeds the per-run cap; budget checks must stop it.
+    assert evaluation.PRICE.cost(evaluation.INPUT_LIMIT, evaluation.MAX_OUTPUT) * 85 > Decimal(
+        ".50"
     )
 
 
@@ -237,3 +239,34 @@ def test_oversized_or_invalid_count_prevents_generation(count: Any) -> None:
         runner.generate("test", {})
     assert len(seen) == 1
     assert runner.reserved == 0
+
+
+def test_unexpected_provider_model_is_not_charged_at_selected_model_price() -> None:
+    runner, requests, report = evaluator(provider_result(model="other-model"))
+    with pytest.raises(evaluation.EvaluationError, match="unexpected_model_billing_unknown"):
+        runner.generate("test", {})
+    assert len(requests) == 2
+    assert runner.reserved > 0
+    assert runner.actual == 0
+    assert '"event": "usage"' not in report.getvalue()
+
+
+def test_scene_selection_is_dry_run_and_rejects_unknown_ids(monkeypatch, capsys) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, "argv", ["alter-llm-evaluate", "--scene", "memory-uncertain"])
+    evaluation.run()
+    assert "1 scenes, max 13 calls" in capsys.readouterr().out
+    monkeypatch.setattr(sys, "argv", ["alter-llm-evaluate", "--live", "--scene", "unknown"])
+    with pytest.raises(SystemExit) as exc:
+        evaluation.run()
+    assert exc.value.code == 2
+
+
+def test_sonnet_price_reservation_stops_next_call_when_budget_is_insufficient() -> None:
+    runner, requests, _ = evaluator(budget="0.01")
+    runner.generate("first", {})
+    with pytest.raises(evaluation.EvaluationError, match="budget_exhausted"):
+        runner.generate("second", {})
+    assert sum(request.url.path == "/v1/messages" for request in requests) == 1
+    assert runner.reserved == Decimal("0.007368")

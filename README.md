@@ -121,11 +121,12 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生�
 
 招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
 
-## Claudeモデル評価（Issue #14）
+## Claude Sonnet 5.5の採用（Issue #14）
 
-購入済みClaude APIクレジットを利用する10人MVP方針で、Claude直接API/Haikuを評価する。
+10人MVPはClaude直接APIの`claude-sonnet-5-5`を正式採用。
+共通の採用設定・単価は`alter_domain.llm_selection`、評価CLIもこの設定を使用する。
 `uv run --package alter-domain alter-llm-evaluate`は外部通信なしのdry-run。
-実評価はrootの`.env`に`ANTHROPIC_API_KEY`を設定し、明示的な`--live`と予算枠で行う。
-[評価手順](evaluations/llm/README.md)・[単価/保持条件](docs/26-llm-candidate-review.md)を参照。
-[実評価2回](evaluations/llm/review-2026-11-13.md)を完了したが、未記載の経験の断定が残るため
-正式モデル採用は保留。日本語の受け入れレビューと本番Workerの接続（#18）は残件。
+実評価はroot `.env`の`ANTHROPIC_API_KEY`と明示的な`--live`でのみ有効になる。
+[限定評価](evaluations/llm/sonnet-review-2026-11-13.md)・
+[評価手順](evaluations/llm/README.md)・[選定/保持条件](docs/26-llm-candidate-review.md)を参照。
+残りの品質受け入れは#37、本番Workerのadapter・moderation・費用予約の接続は#18の範囲。

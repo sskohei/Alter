@@ -24,3 +24,11 @@ WebのMVP公開範囲は参加者本人だけ。Discordは両者の`discord_publ
 ## 冪等性・観測
 
 `background_jobs(kind,dedupe_key)`、`conversations.job_id`、`messages(conversation_id,turn_no)`、`usage_records.idempotency_key`、`discord_deliveries(conversation_id,channel_id)`が重複防止の軸。ジョブ取得時のleaseと状態遷移は条件付きUPDATEで行う。監視指標は待ちジョブ数、最古待機時間、失敗率、LLMトークン/費用、Discord未配信件数。DB障害時はCron/Workerが失敗してもデータをローカルに保持せず、復旧後にジョブを再取得する。少なくとも1件のLLM外部呼出とDiscord投稿の完全exactly-onceは保証できない。対策は [構成](04-system-architecture.md) の境界処理。
+
+## Sonnet採用後の費用判定（#14、2026-11-13）
+
+正式採用設定は`alter_domain.llm_selection`。入力8192/出力512 tokensを毎回使うと
+1呼出$0.021504となり、4発言と要約予備をすべて最大量で行う費用は会話枠を超える。
+会話/日次上限は維持し、#18で各呼出前に残予約と見積を照合して、不足なら追加呼出を止める。
+入力上限や8発言上限を、常に生成してよい割当量として扱わない。
+[通常費用と最大量シナリオ](20-cost-estimation.md)を参照。
