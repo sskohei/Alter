@@ -92,3 +92,5 @@
 | `/users/me` | `users.py` | `Profile`は`{id,display_name,created_at,web_notifications,discord_dm_notifications,onboarded_at}`（#44 のpreview契約と同じ）。`GET`は共通認可が作成/確認したプロフィールを返す。`PATCH`は`display_name`だけを受け付け（他の項目は422）、前後の空白を除いて1〜80字、空白だけ・制御文字は422。削除状態のプロフィールを更新で復活させない。応答は`Cache-Control: no-store`。OpenAPIには共通エラー401/403/404/409/422/429/503を載せる |
 
 JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDIENCE`・`SUPABASE_JWT_ALGORITHMS`（ES256/RS256のみ、既定両方）・`SUPABASE_JWKS_CACHE_SECONDS`（既定300）。JWKSは`kid`ごとにキャッシュし、未知の`kid`では一度だけ再取得する（再取得は10秒以上の間隔）。ヘッダーの`alg`は許可リストかつ鍵の種類と一致する場合だけ受け付ける。時刻の許容差は30秒。JWKSが空のプロジェクトの`HS256`トークンだけを、`exp`/`iss`/`aud`/`sub`/`role`の確認後に`GET /auth/v1/user`（`apikey`は`SUPABASE_PUBLISHABLE_KEY`）で照会する。JWKSに鍵がある状態の`HS256`は拒否する。JWKS内の鍵が不正・未対応の場合は503とし、空JWKSと扱ってHS256へ切り替えない。トークン・鍵・Publishable Keyはログやエラーに出さない。`ALTER_MODE=mock`でも検証は省略しない。
+
+Issue #8のMockは同じuserルーターとモデルを再利用する。`/__mock/profiles`はページングを試す合成データ専用契約で、本番APIに追加しない。手順は[フロント開発](24-frontend-development.md)を参照。

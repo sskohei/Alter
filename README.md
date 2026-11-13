@@ -60,11 +60,11 @@ uv run --package alter-discord-bot alter-bot     # 既定は無効、正常終�
 uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
-Webの「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIに業務エンドポイントはまだない。
+Webの「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIは本人プロフィールのGET/PATCHを提供する（#7）。`/development/mock`では合成データでプロフィール・ページング・エラーを確認できる。
 
 ### Mockと無効化
 
-既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。これは初期接続確認用のMockで、認証や業務APIのMockは後続Issueで契約に合わせて追加する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+既定の`ALTER_MODE=mock`ではWorker/Cron/BotのLLM・Discord処理は合成動作となる。APIの`/health`とWebはSupabase停止中でも起動確認できるが、本人プロフィールAPIはmockモードでも実際のJWT・招待確認とDB接続を行う。外部接続なしの検証には[合成Mock](docs/24-frontend-development.md)を使う。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
 
 ```bash
 uv run --package alter-worker alter-worker --once
@@ -105,7 +105,7 @@ ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/p
 
 GitHub Actionsの必須チェックは`CI required`。Python/Web/API生成差分/空Supabase migration/secret scanningの検査範囲は[テスト戦略](docs/16-testing-strategy.md)、`MainRule`の承認・保護設定は[Git運用](docs/22-git-workflow.md)を参照。
 
-OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生成し、業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
+OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`と`GET/PATCH /api/v1/users/me`を生成し、業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
 
 ## 読む順序
 

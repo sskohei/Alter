@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/__mock/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Profiles */
+        get: operations["preview_list_synthetic_profiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me": {
         parameters: {
             query?: never;
@@ -11,15 +28,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get User */
-        get: operations["preview_get_current_user"];
+        /** 招待・有効状態を確認して自分のプロフィールを作成/取得する */
+        get: operations["get_current_user"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Patch User */
-        patch: operations["preview_patch_current_user"];
+        /** 自分の表示名を変更する */
+        patch: operations["patch_current_user"];
         trace?: never;
     };
 }
@@ -63,9 +80,19 @@ export interface components {
             /** Web Notifications */
             web_notifications: boolean;
         };
+        /** ProfilePage */
+        ProfilePage: {
+            /** Items */
+            items: components["schemas"]["Profile"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** ProfilePatch */
         ProfilePatch: {
-            /** Display Name */
+            /**
+             * Display Name
+             * @description 前後の空白を除いて 1〜80 文字。空白だけ・制御文字は 422
+             */
             display_name: string;
         };
     };
@@ -77,7 +104,93 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    preview_get_current_user: {
+    preview_list_synthetic_profiles: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfilePage"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_current_user: {
         parameters: {
             query?: never;
             header?: never;
@@ -160,7 +273,7 @@ export interface operations {
             };
         };
     };
-    preview_patch_current_user: {
+    patch_current_user: {
         parameters: {
             query?: never;
             header?: never;
