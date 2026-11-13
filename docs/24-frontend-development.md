@@ -53,3 +53,11 @@ mainへ直接push/自動mergeは行わない。依存ブランチ向けPRもCI�
 OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
 このブラウザのSupabaseセッションを終了して元の拒否理由を表示する。503ではセッションを終了せず再試行できる。
 BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABLE`に統一する。
+
+`SERVICE_UNAVAILABLE`は「サービスを一時的に利用できません。時間をおいて再試行してください。」と表示する。
+認証E2Eの503ケースは実APIと同じコードを返し、PC/mobileで文言とセッションCookieの維持を確認する。
+
+`onboarded_at`は最初の`POST /agents/{id}/profile/approve`成功時にAPIが記録し、再承認では日時を保持する。
+PR #58でこの記録処理が反映された後に、初回承認→ログアウト→再ログインで
+`/onboarding`へ戻らず`/dashboard`へ遷移することを実APIで受け入れ確認する。
+Mockの既存ユーザーでの遷移確認だけでは、この受け入れ条件を完了としない。

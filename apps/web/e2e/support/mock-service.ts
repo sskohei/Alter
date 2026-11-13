@@ -37,7 +37,7 @@ const server = createServer(async (req, res) => {
       const which = tokenCase(request);
       if (which === "forbidden") response = mockError(403);
       else if (which === "inactive") response = mockError(403, "ACCOUNT_INACTIVE");
-      else if (which === "unavailable") response = mockError(503);
+      else if (which === "unavailable") response = mockError(503, "SERVICE_UNAVAILABLE");
       else if (which === "expired") response = mockError(401);
       else if (url.pathname === "/api/v1/users/me") response = Response.json({ ...profile, id: user(which).id, display_name: which === "second" ? "別のユーザー" : "招待ユーザー", onboarded_at: which === "existing" ? profile.created_at : null });
       else {

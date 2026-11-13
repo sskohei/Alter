@@ -21,7 +21,7 @@ for (const provider of ["Google", "GitHub"]) {
     await page.goto("/dashboard"); await expect(page).toHaveURL(/\/login/);
   });
 }
-for (const [which, text] of [["forbidden", "招待が確認できません"], ["inactive", "アカウントは停止中"], ["unavailable", "利用資格を確認できません"], ["cancel", "ログインを完了できません"], ["failure", "ログインを完了できません"]]) {
+for (const [which, text] of [["forbidden", "招待が確認できません"], ["inactive", "アカウントは停止中"], ["unavailable", "サービスを一時的に利用できません。時間をおいて再試行してください。"], ["cancel", "ログインを完了できません"], ["failure", "ログインを完了できません"]]) {
   test(`OAuth/API denial: ${which}`, async ({ page }) => {
     await signIn(page, which);
     await expect(page.getByRole("main").getByRole("alert")).toContainText(text);
@@ -31,6 +31,11 @@ for (const [which, text] of [["forbidden", "招待が確認できません"], ["
       await signIn(page, "normal");
       await expect(page).toHaveURL(/\/onboarding$/);
     } else {
+      if (which === "unavailable") {
+        await expect(page).toHaveURL(/\/login\?error=SERVICE_UNAVAILABLE$/);
+        const cookies = await page.context().cookies();
+        expect(cookies.some(cookie => /^sb-.*-auth-token(?:\.\d+)?$/.test(cookie.name))).toBe(true);
+      }
       await page.goto("/dashboard"); await expect(page).toHaveURL(/\/login/);
     }
   });
