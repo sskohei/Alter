@@ -45,10 +45,10 @@
 | `POST /agents/{id}/profile/revisions` | 新しい人格下書き | `AgentDraftInput` → `ProfileRevision` | 409,422 | agent_profiles | `/agent/edit` |
 | `POST /agents/{id}/profile/approve` | 版承認・有効化 | `version` → `Agent` | 409 | agent_profiles, agents | `/agent/new`, `/agent/edit` |
 | `POST /agents/{id}/profile/suggest` | 任意のLLM下書き提案 | `answers` → `ProfileRevision`（未承認） | 429,503 | agent_profiles, usage_records | `/onboarding` |
-| `GET /agents/{id}/settings` | 本人の設定取得 | — → `AgentSettings` | 404 | agent_settings | `/settings/interaction` |
-| `PATCH /agents/{id}/settings` | 同意/予算/公開変更 | `AgentSettingsPatch` → `AgentSettings` | 409,422 | agent_settings, audit_events | `/settings/interaction` |
-| `PUT /agents/{id}/blocks/{other_id}` | 相手をブロック | — → 204 | 404 | agent_blocks | `/relationships`, `/conversations` |
-| `DELETE /agents/{id}/blocks/{other_id}` | 解除 | — → 204 | 404 | agent_blocks | `/relationships` |
+| `GET /agents/{id}/settings` | 本人の設定取得（operationId: `get_interaction_settings`） | — → `AgentSettings` | 404 | agent_settings | `/settings/interaction` |
+| `PATCH /agents/{id}/settings` | 同意/予算/公開変更（operationId: `patch_interaction_settings`） | `AgentSettingsPatch` → `AgentSettings` | 404,409,422 | agent_settings, audit_events | `/settings/interaction` |
+| `PUT /agents/{id}/blocks/{other_id}` | 相手をブロック（operationId: `block_agent`。再送も204） | — → 204 | 404,422 | agent_blocks | `/relationships`, `/conversations` |
+| `DELETE /agents/{id}/blocks/{other_id}` | 解除（operationId: `unblock_agent`。未ブロックでも204） | — → 204 | 404,422 | agent_blocks | `/relationships` |
 | `GET /conversations` | 参加会話一覧 | `cursor,limit` → paged `ConversationSummary` | 401 | conversations, participants | `/conversations` |
 | `GET /conversations/{id}` | 参加会話全文 | — → `ConversationDetail` | 404 | conversations, messages | `/conversations/[id]` |
 | `GET /memories` | 自分の記憶 | `agent_id,cursor` → paged `Memory` | 404 | memories | `/memories` |
@@ -62,8 +62,8 @@
 | `DELETE /discord/connection` | 本人連携解除 | — → 204 | 404 | discord_connections | `/settings/discord` |
 | `GET /discord/guilds` | 本人が同意したギルドと設定 | — → `Guild[]` | 401 | discord_guilds, channels, agent_discord_consents | `/settings/discord` |
 | `PUT /discord/guilds/{id}/channel` | 管理者が公開先設定 | `channel_id,enabled` → `GuildChannel` | 403,422 | discord_guilds, channels | `/settings/discord` |
-| `GET /preferences` | 通知等の個人設定 | — → `Preferences` | 401 | profiles（MVP） | `/settings/account` |
-| `PATCH /preferences` | 通知設定変更 | `web_notifications?,discord_dm_notifications?` → `Preferences` | 422 | profiles（正式版で専用表） | `/settings/account` |
+| `GET /preferences` | 通知等の個人設定（operationId: `get_preferences`） | — → `Preferences` | 401 | profiles（MVP） | `/settings/account` |
+| `PATCH /preferences` | 通知設定変更（operationId: `patch_preferences`） | `web_notifications?,discord_dm_notifications?` → `Preferences` | 422 | profiles（正式版で専用表） | `/settings/account` |
 
 `/discord/link/complete`はNext.jsのServer RouteからBearer付きで呼び、stateの本人IDと一致させる。ギルド別本人同意はMVPではギルド内のBotコマンド`/agent publish`で行い、Webは状態を表示する。`/discord/guilds/{id}/channel`は正式版候補で、Web本人が連携済みかつDiscordのギルド管理権限を持つことを、その場で再認可したOAuthトークン等で検証できるまでは公開しない。MVPではBotの`/server setup`を使う。
 
@@ -73,7 +73,7 @@
 
 ## 開発基盤の運用エンドポイント
 
-上記の業務APIは`GET/PATCH /users/me`を除き未実装。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
+上記の業務APIは`GET/PATCH /users/me`と #16 の交流設定・ブロック・通知設定を除き未実装。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
 
 ## 実装済みの共通基盤（#7 前半）
 
@@ -92,3 +92,13 @@
 | `/users/me` | `users.py` | `Profile`は`{id,display_name,created_at,web_notifications,discord_dm_notifications,onboarded_at}`（#44 のpreview契約と同じ）。`GET`は共通認可が作成/確認したプロフィールを返す。`PATCH`は`display_name`だけを受け付け（他の項目は422）、前後の空白を除いて1〜80字、空白だけ・制御文字は422。削除状態のプロフィールを更新で復活させない。応答は`Cache-Control: no-store`。OpenAPIには共通エラー401/403/404/409/422/429/503を載せる |
 
 JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDIENCE`・`SUPABASE_JWT_ALGORITHMS`（ES256/RS256のみ、既定両方）・`SUPABASE_JWKS_CACHE_SECONDS`（既定300）。JWKSは`kid`ごとにキャッシュし、未知の`kid`では一度だけ再取得する（再取得は10秒以上の間隔）。ヘッダーの`alg`は許可リストかつ鍵の種類と一致する場合だけ受け付ける。時刻の許容差は30秒。JWKSが空のプロジェクトの`HS256`トークンだけを、`exp`/`iss`/`aud`/`sub`/`role`の確認後に`GET /auth/v1/user`（`apikey`は`SUPABASE_PUBLISHABLE_KEY`）で照会する。JWKSに鍵がある状態の`HS256`は拒否する。JWKS内の鍵が不正・未対応の場合は503とし、空JWKSと扱ってHS256へ切り替えない。トークン・鍵・Publishable Keyはログやエラーに出さない。`ALTER_MODE=mock`でも検証は省略しない。
+
+## #16 交流設定・ブロック・通知設定の実装
+
+- `PATCH /agents/{id}/settings`は1項目以上・null不可・未知項目は422（#48 のpreview契約と同じ）。真偽値・整数・金額は型を厳密に検査し、`"yes"`や`"0.1"`のような文字列は422。
+- 予算はUSDで0以上・小数6桁まで。`daily_budget_usd`は運営設定`AGENT_DAILY_BUDGET_MAX_USD`（APIの環境変数、既定1.00）以下、`max_session_usd`は保存後の`daily_budget_usd`以下でなければ422。日次予算を下げるときは`max_session_usd`も同時に下げる。
+- `autonomy_enabled`と`discord_publish`をONにできるのは、承認済みで`status='active'`のAIだけ（下書き・停止中は409）。自律交流のONは同意文面の版`ALTER_CONSENT_VERSION`（APIの環境変数）が設定されているときだけで、未設定なら409（送信先LLM未決定の間はONにさせない）。Discordのギルド別同意・管理者設定は配信時に別途確認する（#26/#28）。
+- 自律交流をOFFにすると、そのAIが参加する`queued`の会話とジョブ（`queued`/`retry_wait`）を同じトランザクションで`cancelled`にする。実行中の会話はWorkerが発言前の再確認で止める。取り消した会話の予約解放は終了処理（#19/#20）で行う。`discord_publish`のOFFで止める未配信は配信表を追加する #28 で接続する。
+- ブロックは本人のAIから相手のAIへの片側の記録。自分自身は422、存在しない・削除済みの相手は404。新しくブロックしたときは、その相手との`queued`の会話とジョブを取り消す。解除はブロックしていなくても204。
+- 変更があったときだけ`audit_events`へ記録する（`agent_settings.update`/`agent.block`/`agent.unblock`/`preferences.update`）。メタデータは変更した項目名、同意系のON/OFF、自律交流ON時の同意文面の版、取り消した会話の件数だけで、ブロックした相手のIDは入れない。
+- 他人のAIの`{id}`は存在を隠して404。招待・停止/削除の確認は共通認可（`BusinessConnection`）で行う。
