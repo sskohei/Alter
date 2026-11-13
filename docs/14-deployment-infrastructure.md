@@ -84,4 +84,8 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 4. Vercel PreviewでE2E、ProductionでAuth callbackとCORSを確認し、Discordテストギルドへ1件投稿する。
 5. rollbackはアプリを前版へ戻す。破壊的DDLは別リリースで実行する。DBバックアップ復元手順を定期演習する。
 
+### 自律交流ONを有効にする設定（#14・#16・#24）
+
+送信先LLMが決まり同意文面を確定したら、同じ環境で次の3つを同時に設定する。Webの`ALTER_LLM_NAME`と`ALTER_LLM_DATA_POLICY_URL`（同意画面に表示）、APIの`ALTER_CONSENT_VERSION`（監査に記録する文面の版）。どれかが空の間は自律交流をONにできない（WebはONボタンを出さず、APIは409）。片方だけ設定すると「ONボタンは押せるがAPIが409」になるため、Preview/Productionそれぞれでそろえてから公開する。文面を変えたら版も更新する。
+
 費用と無料枠は [費用試算](20-cost-estimation.md)。
