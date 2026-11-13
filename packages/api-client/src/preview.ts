@@ -1,4 +1,4 @@
-// Unapproved #7 contract. Keep distinct from the live /health client.
+// Synthetic pagination plus shared live user routes. Never serve the preview app.
 import createClient from "openapi-fetch";
 import type { paths } from "./preview-schema";
 export type { paths, components } from "./preview-schema";

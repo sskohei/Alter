@@ -61,10 +61,13 @@ uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
 Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIは招待認可付きの`GET/PATCH /api/v1/users/me`を提供する。人格APIは未実装。
+`/development/mock`では合成データでプロフィール・ページング・エラーを確認できる。
 
 ### Mockと無効化
 
-既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。これは初期接続確認用のMockで、認証や業務APIのMockは後続Issueで契約に合わせて追加する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+既定の`ALTER_MODE=mock`ではWorker/Cron/BotのLLM・Discord処理は合成動作となる。APIの`/health`とWebはSupabase停止中でも起動確認できる。本人プロフィールAPI（`GET/PATCH /api/v1/users/me`）はmockモードではJWT検証を通過しても共通認可処理で503 `SERVICE_UNAVAILABLE`を返し、招待確認・DB接続へ進まない。
+
+本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
 
 ```bash
 uv run --package alter-worker alter-worker --once

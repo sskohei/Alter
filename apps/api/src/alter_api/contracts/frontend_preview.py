@@ -1,6 +1,6 @@
-"""Review-only contracts for #7/#8; never mounted by alter_api.main.
+"""Review-only contracts; never mounted by alter_api.main.
 
-Backend review must reconcile these with #7 before live acceptance.
+User routes reuse the live contract; personality routes remain preview-only.
 """
 
 from datetime import datetime
@@ -9,24 +9,10 @@ from uuid import UUID
 
 from alter_api.contracts.activity_preview import register_activity_contract
 from alter_api.errors import ErrorResponse
-from fastapi import Depends, FastAPI, HTTPException, Query
+from alter_api.users import Profile, router
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
-
-
-class Profile(BaseModel):
-    id: UUID
-    display_name: str
-    created_at: datetime
-    web_notifications: bool
-    discord_dm_notifications: bool
-    onboarded_at: datetime | None = None
-
-
-class ProfilePatch(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    display_name: str = Field(min_length=1, max_length=200)
-
 
 Text = Annotated[str, Field(max_length=2000)]
 Items = Annotated[list[Text], Field(max_length=20)]
@@ -100,32 +86,33 @@ ERRORS: dict[int | str, dict[str, Any]] = {
 }
 
 
+class ProfilePage(BaseModel):
+    items: list[Profile]
+    next_cursor: str | None = None
+
+
 def create_contract_app() -> FastAPI:
     app = FastAPI(
         title="Alter frontend preview — NOT a live API",
         version="0.0.0-preview",
-        dependencies=[Depends(HTTPBearer())],
     )
 
-    @app.get(
-        "/api/v1/users/me",
-        response_model=Profile,
+    app.include_router(router, prefix="/api/v1")
+    preview_router = APIRouter(dependencies=[Depends(HTTPBearer())])
+
+    @preview_router.get(
+        "/__mock/profiles",
+        response_model=ProfilePage,
         responses=ERRORS,
-        operation_id="preview_get_current_user",
+        operation_id="preview_list_synthetic_profiles",
     )
-    def get_user() -> Profile:
-        raise HTTPException(503, "Contract only")
+    def list_profiles(
+        limit: Annotated[int, Query(ge=1, le=50)] = 20,
+        cursor: Annotated[str | None, Query(max_length=200)] = None,
+    ) -> ProfilePage:
+        raise HTTPException(503, "Synthetic contract only")
 
-    @app.patch(
-        "/api/v1/users/me",
-        response_model=Profile,
-        responses=ERRORS,
-        operation_id="preview_patch_current_user",
-    )
-    def patch_user(body: ProfilePatch) -> Profile:
-        raise HTTPException(503, "Contract only")
-
-    @app.get(
+    @preview_router.get(
         "/api/v1/agents/me",
         response_model=Agent,
         responses=ERRORS,
@@ -134,7 +121,7 @@ def create_contract_app() -> FastAPI:
     def get_agent() -> Agent:
         raise HTTPException(503, "Contract only")
 
-    @app.post(
+    @preview_router.post(
         "/api/v1/agents",
         response_model=Agent,
         status_code=201,
@@ -144,7 +131,7 @@ def create_contract_app() -> FastAPI:
     def create_agent(body: AgentDraftInput) -> Agent:
         raise HTTPException(503, "Contract only")
 
-    @app.patch(
+    @preview_router.patch(
         "/api/v1/agents/{id}",
         response_model=Agent,
         responses=ERRORS,
@@ -153,7 +140,7 @@ def create_contract_app() -> FastAPI:
     def patch_agent(id: UUID, body: AgentPatch) -> Agent:
         raise HTTPException(503, "Contract only")
 
-    @app.get(
+    @preview_router.get(
         "/api/v1/agents/{id}/profile",
         response_model=ProfileRevision,
         responses=ERRORS,
@@ -164,7 +151,7 @@ def create_contract_app() -> FastAPI:
     ) -> ProfileRevision:
         raise HTTPException(503, "Contract only")
 
-    @app.get(
+    @preview_router.get(
         "/api/v1/agents/{id}/profile/private",
         response_model=PrivateInfo,
         responses=ERRORS,
@@ -173,7 +160,7 @@ def create_contract_app() -> FastAPI:
     def get_private(id: UUID) -> PrivateInfo:
         raise HTTPException(503, "Contract only")
 
-    @app.post(
+    @preview_router.post(
         "/api/v1/agents/{id}/profile/revisions",
         response_model=ProfileRevision,
         responses=ERRORS,
@@ -182,7 +169,7 @@ def create_contract_app() -> FastAPI:
     def create_revision(id: UUID, body: RevisionInput) -> ProfileRevision:
         raise HTTPException(503, "Contract only")
 
-    @app.post(
+    @preview_router.post(
         "/api/v1/agents/{id}/profile/approve",
         response_model=Agent,
         responses=ERRORS,
@@ -191,7 +178,7 @@ def create_contract_app() -> FastAPI:
     def approve(id: UUID, body: Approval) -> Agent:
         raise HTTPException(503, "Contract only")
 
-    @app.post(
+    @preview_router.post(
         "/api/v1/agents/{id}/profile/suggest",
         response_model=PublicPersonality,
         responses=ERRORS,
@@ -200,5 +187,6 @@ def create_contract_app() -> FastAPI:
     def suggest(id: UUID, body: SuggestionInput) -> PublicPersonality:
         raise HTTPException(503, "Contract only")
 
-    register_activity_contract(app, ERRORS)
+    register_activity_contract(preview_router, ERRORS)
+    app.include_router(preview_router)
     return app

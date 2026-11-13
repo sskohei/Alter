@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 Limit = Annotated[int, Query(ge=1, le=50)]
@@ -67,7 +67,9 @@ class DiscordConnection(BaseModel):
     discord_user_id: str | None
 
 
-def register_activity_contract(app: FastAPI, errors: dict[int | str, dict[str, Any]]) -> None:
+def register_activity_contract(
+    app: FastAPI | APIRouter, errors: dict[int | str, dict[str, Any]]
+) -> None:
     @app.get(
         "/api/v1/conversations",
         response_model=ConversationPage,

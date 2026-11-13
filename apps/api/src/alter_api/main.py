@@ -20,6 +20,7 @@ from alter_api.errors import (
     install_error_handlers,
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
+from alter_api.settings_routes import router as settings_router
 from alter_api.users import router as users_router
 
 API_V1_PREFIX = "/api/v1"
@@ -35,6 +36,7 @@ def create_api_v1_router() -> APIRouter:
     """業務 API のルーター。各 Issue のエンドポイントはここへ追加する。"""
     router = APIRouter(prefix=API_V1_PREFIX)
     router.include_router(users_router)
+    router.include_router(settings_router)
     return router
 
 
