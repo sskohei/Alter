@@ -20,8 +20,15 @@
             "type": "string"
           },
           "icon_url": {
-            "title": "Icon Url",
-            "type": "null"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
           },
           "id": {
             "format": "uuid",
@@ -67,8 +74,17 @@
             "type": "array"
           },
           "icon_path": {
-            "title": "Icon Path",
-            "type": "null"
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
@@ -161,20 +177,33 @@
         "additionalProperties": false,
         "properties": {
           "icon_path": {
-            "title": "Icon Path",
-            "type": "null"
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "name": {
-            "maxLength": 80,
-            "minLength": 1,
-            "pattern": "\\S",
-            "title": "Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           }
         },
-        "required": [
-          "name"
-        ],
         "title": "AgentPatch",
         "type": "object"
       },
@@ -397,6 +426,21 @@
           "mode"
         ],
         "title": "Health",
+        "type": "object"
+      },
+      "IconUpload": {
+        "properties": {
+          "icon_path": {
+            "maxLength": 128,
+            "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+            "title": "Icon Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "icon_path"
+        ],
+        "title": "IconUpload",
         "type": "object"
       },
       "Preferences": {
@@ -647,8 +691,17 @@
             "type": "array"
           },
           "icon_path": {
-            "title": "Icon Path",
-            "type": "null"
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
@@ -753,6 +806,115 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/agent-icons": {
+      "post": {
+        "operationId": "upload_agent_icon",
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IconUpload"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Upload Icon",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/api/v1/agents": {
       "post": {
         "operationId": "create_agent",

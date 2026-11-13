@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     supabase_jwks_cache_seconds: int = 300
     # Supabase Auth 管理 API（招待の identity 照合）。API と運営 CLI のサーバー側だけで使う。
     supabase_secret_key: str = ""
+    supabase_storage_secret_key: SecretStr = SecretStr("")
 
     # 交流設定（#16）。利用者が設定できる 1 体あたりの日次予算の上限（USD、小数 6 桁まで）
     agent_daily_budget_max_usd: Decimal = Decimal("1.00")

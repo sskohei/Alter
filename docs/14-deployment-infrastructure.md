@@ -102,3 +102,16 @@ Webの`ALTER_LLM_NAME`には`Claude Sonnet 5.5（Anthropic直接API）`を表示
 （https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data）を指定する。
 これは学習へのopt-inやZDRの設定ではない。APIの`ALTER_CONSENT_VERSION`はdocs/23の同意文面を
 確定してから同時に設定する。今回の修正では値を自動設定せず、空の場合のON拒否を維持する。
+
+### アイコンStorage（#15）
+
+migrationでprivate bucket `agent-icons`（PNGのみ/2 MiB）と`profile-private`を作成する。
+APIにのみ`SUPABASE_STORAGE_SECRET_KEY`を設定する。Auth管理用キーをコードで流用しない。
+未設定でもアイコンなしの人格APIは動作し、アップロード/署名のみ503になる。
+キーはAPIのStorage操作に使えるプロジェクトSecretまたはservice_roleキーを秘密管理から設定する。
+モデル/LLM用キーとは無関係。Web・配信JS・Worker・Botへ渡さない。
+
+Previewではテスト画像でアップロード→作成時指定→取得→PATCH置換/解除を確認し、他人のprefix/
+未登録パス/私的bucket/SVG/破損/超過画像が拒否されることを確認する。
+署名URLの有効期限は300秒。Storage APIはローカル/CIではHTTP Mockで検証し、
+実環境のStorage接続・キー権限の確認は#37の公開受け入れに記録する。

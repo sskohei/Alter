@@ -73,7 +73,7 @@
 
 ## 開発基盤の運用エンドポイント
 
-上記の業務APIは`GET/PATCH /users/me`と #16 の交流設定・ブロック・通知設定を除き未実装。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
+上記の業務APIは`GET/PATCH /users/me`、#15の人格/アイコン、#16の交流設定・ブロック・通知設定を実装済み。その他は将来契約。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
 
 ## 実装済みの共通基盤（#7 前半）
 
@@ -129,7 +129,34 @@ HMACは暗号化鍵から独立した32byte鍵を使う。`API_IDEMPOTENCY_HMAC_
 交換時は新旧のHMAC鍵を全APIインスタンスへ配布してから現行版を切替え、旧版の最終作成成功から24時間経過後に旧鍵を外す。
 同じ鍵版の値は上書きしない。再送保証・保持契約は[DB設計](05-database-design.md)を参照。
 privateはAES-256-GCM（32byte鍵、ランダムnonce、agent/versionをAAD）で保存、応答はno-store。
-鍵不備は503。現在V1鍵のみで、鍵交換CLIとStorage検証adapterは別途必要。
-Storage所有権/MIME/サイズ検証がない間は`icon_path`の非null入力を422で拒否する。
+鍵不備は503。人格暗号化は現在V1鍵のみで、鍵交換CLI/復元訓練は#36の運用受け入れで確認する。
 業務APIはliveでのみDBを利用し、毎リクエストのAuth管理照会と招待/プロフィールロックを通す。
 Mockでも認可は迂回せず503。`GET/PATCH /users/me`（#66）および交流/通知設定（#69）のルーターも同時に登録する。
+
+## #15 アイコンのAPIと所有権（2026-11-14）
+
+`POST /api/v1/agent-icons`（operationId: `upload_agent_icon`）は本人の招待/停止状態を検証し、
+Content-Type `image/png` / `image/jpeg` / `image/webp`の**画像バイナリ本文**を受け付ける。
+multipartや任意URLは受け付けない。入力/再エンコード後とも最大2 MiB、縦横各2048pxまで。
+MIMEと実形式の一致・完全なデコード・単一フレームを検査し、PNGへ再エンコードして
+EXIF/GPS/コメント/末尾の異種データを除去する。SVG/GIF/破損/サイズ超過は422。
+成功時は201 `{icon_path: "<本人UUID>/<サーバー採番UUID>.png"}`。
+他人のprefix・未登録パス・private用途bucket・外部URLを`icon_path`へ指定すると422。
+認証/招待拒否時は画像を保存しない。Storage資格情報不備/障害/timeoutは秘密なしの503。
+
+アップロードは専用private bucket `agent-icons`へimmutableに書き込み、API専用
+`agent_icon_uploads`に本人・検証済みMIME/サイズ/hashを記録する。ブラウザは直接CRUDできない。
+私的ファイル用の`profile-private` bucketも非公開で、アイコンAPIはこのbucketを署名しない。
+アイコンの公開用途には**300秒の署名URL**を使い、無期限のpublic URLは発行しない。
+選択済みの検証済みアイコンだけが`Agent.icon_url`に入り、生パス/私的ファイルURLは返さない。
+
+`POST /agents`の`icon_path?`でアップロード済み画像を選べる。
+`PATCH /agents/{id}`は`name?`/`icon_path?`の1項目以上を受け付け、name:nullは422。
+icon_pathの省略は維持、nullは解除、非nullは検証済みの本人画像への変更。
+他人所有のAIはStorage検証前に404。人格revisionではアイコンを変更せずPATCHを使う。
+既存のアイコンは本人のGET/更新/承認応答で署名URLを再発行する。
+作成Idempotency-Keyの保存応答には署名tokenを保存せず、同じ入力の再送時は
+元のアイコンの短期URLを更新する（id/人格等の作成結果は維持）。
+
+解除/招待失効後の新規署名は拒否するが、発行済みURLは最大300秒残る。
+画像UI/ファイル選択は#17側の画面実装、APIの画像検証は本Issueの範囲。

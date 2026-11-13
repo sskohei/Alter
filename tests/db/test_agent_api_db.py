@@ -39,7 +39,26 @@ def agent_api(engine: Engine, created_users: list[uuid.UUID]):
                 conn, AuthUser(uid, (AuthIdentity("google", str(uid)),)), operator="sskohei"
             )
 
+    stored_icons: dict[str, bytes] = {}
+
     def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.startswith("/storage/v1/"):
+            if app.state.icon_storage_fail:
+                return httpx.Response(503, json={"message": "secret-provider-error"})
+            if "/object/sign/" in req.url.path:
+                relative = req.url.path.removeprefix("/storage/v1")
+                path = relative.removeprefix("/object/sign/agent-icons/")
+                if path not in stored_icons:
+                    return httpx.Response(404)
+                app.state.icon_sign_calls += 1
+                return httpx.Response(
+                    200, json={"signedURL": f"{relative}?token=mock-{app.state.icon_sign_calls}"}
+                )
+            path = req.url.path.removeprefix("/storage/v1/object/agent-icons/")
+            if path in stored_icons:
+                return httpx.Response(409)
+            stored_icons[path] = req.content
+            return httpx.Response(201, json={"Key": f"agent-icons/{path}"})
         uid = req.url.path.rsplit("/", 1)[1]
         return httpx.Response(
             200, json={"id": uid, "identities": [{"provider": "google", "id": uid}]}
@@ -50,11 +69,15 @@ def agent_api(engine: Engine, created_users: list[uuid.UUID]):
         alter_mode="live",
         database_url=engine.url.render_as_string(hide_password=False),
         supabase_secret_key="test-only",
+        supabase_storage_secret_key=SecretStr("test-only-storage"),
         profile_encryption_key_v1=base64.b64encode(os.urandom(32)).decode(),
         api_idempotency_hmac_keys={1: SecretStr(base64.b64encode(os.urandom(32)).decode())},
     )
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         app = create_app(settings, http_client=http)
+        app.state.icon_storage_fail = False
+        app.state.icon_sign_calls = 0
+        app.state.stored_icons = stored_icons
         app.dependency_overrides[get_principal] = lambda: Principal(owner, "jwks")
         with TestClient(app) as client:
             yield client, app, settings, owner, stranger
@@ -288,3 +311,188 @@ def test_expired_idempotency_response_is_not_replayed(engine: Engine, agent_api)
     with engine.begin() as conn:
         conn.execute(text("delete from public.api_idempotency where owner_id=:id"), {"id": owner})
     assert client.post("/api/v1/agents", json=DRAFT, headers=headers).status_code == 409
+
+
+def _icon_bytes():
+    import io
+
+    from PIL import Image, PngImagePlugin
+
+    output = io.BytesIO()
+    image = Image.new("RGB", (4, 4), "red")
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text("private", "secret-gps")
+    image.save(output, format="PNG", pnginfo=metadata)
+    return output.getvalue()
+
+
+def test_icon_upload_create_patch_clear_and_idempotent_signed_url(engine, agent_api):
+    client, app, settings, owner, stranger = agent_api
+    upload = client.post(
+        "/api/v1/agent-icons", content=_icon_bytes(), headers={"Content-Type": "image/png"}
+    )
+    assert upload.status_code == 201, upload.text
+    path = upload.json()["icon_path"]
+    assert path.startswith(str(owner) + "/")
+    assert b"secret-gps" not in app.state.stored_icons[path]
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("select * from public.agent_icon_uploads where path=:path"), {"path": path}
+        ).one()
+        assert row.owner_id == owner and row.content_type == "image/png"
+        assert row.size_bytes == len(app.state.stored_icons[path])
+    draft = {**DRAFT, "icon_path": path}
+    headers = {"Idempotency-Key": "icon-create"}
+    created = client.post("/api/v1/agents", json=draft, headers=headers)
+    assert created.status_code == 201, created.text
+    agent = created.json()
+    aid = agent["id"]
+    assert f"/object/sign/agent-icons/{path}?token=" in agent["icon_url"]
+    assert "icon_path" not in agent and "private_info" not in agent
+    replay = client.post("/api/v1/agents", json=draft, headers=headers)
+    assert replay.status_code == 201
+    assert replay.json()["id"] == aid
+    assert replay.json()["icon_url"] != agent["icon_url"]  # Renew URL, never replay its token.
+    with engine.connect() as conn:
+        snapshot = conn.execute(
+            text("select response from public.api_idempotency where owner_id=:id"), {"id": owner}
+        ).scalar_one()
+        assert "token=" not in str(snapshot)
+        assert snapshot["_icon_path"] == path
+    assert client.patch(f"/api/v1/agents/{aid}", json={"name": "renamed"}).json()["icon_url"]
+    # Register a second immutable object and attach it using an icon-only patch.
+    second = client.post(
+        "/api/v1/agent-icons", content=_icon_bytes(), headers={"Content-Type": "image/png"}
+    ).json()["icon_path"]
+    updated = client.patch(f"/api/v1/agents/{aid}", json={"icon_path": second})
+    assert updated.status_code == 200 and second in updated.json()["icon_url"]
+    approved = client.post(f"/api/v1/agents/{aid}/profile/approve", json={"version": 1})
+    assert approved.status_code == 200 and second in approved.json()["icon_url"]
+    cleared = client.patch(f"/api/v1/agents/{aid}", json={"icon_path": None})
+    assert cleared.status_code == 200 and cleared.json()["icon_url"] is None
+    assert client.get("/api/v1/agents/me").json()["icon_url"] is None
+
+
+def test_foreign_unknown_and_private_paths_cannot_be_attached(engine, agent_api):
+    client, app, settings, owner, stranger = agent_api
+    path = client.post(
+        "/api/v1/agent-icons", content=_icon_bytes(), headers={"Content-Type": "image/png"}
+    ).json()["icon_path"]
+    app.dependency_overrides[get_principal] = lambda: Principal(stranger, "jwks")
+    paths = [
+        path,
+        f"{stranger}/{uuid.uuid4()}.png",
+        "https://evil.test/a.png",
+        "profile-private/secret.png",
+        f"{stranger}/../secret.png",
+    ]
+    for bad in paths:
+        response = client.post("/api/v1/agents", json={**DRAFT, "icon_path": bad})
+        assert response.status_code == 422, response.text
+    with engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("select count(*) from public.agents where owner_id=:id"), {"id": stranger}
+            ).scalar_one()
+            == 0
+        )
+    aid = client.post("/api/v1/agents", json=DRAFT).json()["id"]
+    for bad in paths:
+        assert client.patch(f"/api/v1/agents/{aid}", json={"icon_path": bad}).status_code == 422
+        assert client.post("/api/v1/agents", json={**DRAFT, "icon_path": bad}).status_code in (
+            409,
+            422,
+        )
+    app.dependency_overrides[get_principal] = lambda: Principal(owner, "jwks")
+    before = app.state.icon_sign_calls
+    assert client.patch(f"/api/v1/agents/{aid}", json={"icon_path": path}).status_code == 404
+    assert (
+        client.post(f"/api/v1/agents/{aid}/profile/approve", json={"version": 1}).status_code == 404
+    )
+    assert (
+        client.post(
+            f"/api/v1/agents/{aid}/profile/revisions", json={**DRAFT, "expected_version": 1}
+        ).status_code
+        == 404
+    )
+    assert app.state.icon_sign_calls == before
+
+
+@pytest.mark.parametrize(
+    "body,mime",
+    [
+        (b"<svg/>", "image/svg+xml"),
+        (b"<script/>", "image/png"),
+        (b"x" * (2097152 + 1), "image/png"),
+    ],
+)
+def test_invalid_upload_never_reaches_storage_or_registry(engine, agent_api, body, mime):
+    client, app, settings, owner, stranger = agent_api
+    response = client.post("/api/v1/agent-icons", content=body, headers={"Content-Type": mime})
+    assert response.status_code == 422
+    assert not app.state.stored_icons
+    with engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("select count(*) from public.agent_icon_uploads where owner_id=:id"),
+                {"id": owner},
+            ).scalar_one()
+            == 0
+        )
+
+
+def test_storage_failure_is_503_without_agent_write_or_secret_leak(engine, agent_api):
+    client, app, settings, owner, stranger = agent_api
+    app.state.icon_storage_fail = True
+    response = client.post(
+        "/api/v1/agent-icons", content=_icon_bytes(), headers={"Content-Type": "image/png"}
+    )
+    assert response.status_code == 503
+    assert "secret-provider-error" not in response.text
+    app.state.icon_storage_fail = False
+    path = client.post(
+        "/api/v1/agent-icons", content=_icon_bytes(), headers={"Content-Type": "image/png"}
+    ).json()["icon_path"]
+    app.state.icon_storage_fail = True
+    response = client.post(
+        "/api/v1/agents",
+        json={**DRAFT, "icon_path": path},
+        headers={"Idempotency-Key": "sign-failure"},
+    )
+    assert response.status_code == 503
+    with engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("select count(*) from public.agents where owner_id=:id"), {"id": owner}
+            ).scalar_one()
+            == 0
+        )
+        assert (
+            conn.execute(
+                text("select count(*) from public.api_idempotency where owner_id=:id"),
+                {"id": owner},
+            ).scalar_one()
+            == 0
+        )
+
+
+def test_revoked_invitation_cannot_upload_or_sign_icons(engine, agent_api):
+    client, app, settings, owner, stranger = agent_api
+    path = client.post(
+        "/api/v1/agent-icons", content=_icon_bytes(), headers={"Content-Type": "image/png"}
+    ).json()["icon_path"]
+    client.post("/api/v1/agents", json={**DRAFT, "icon_path": path})
+    before = app.state.icon_sign_calls
+    with engine.begin() as conn:
+        invite = conn.execute(
+            text("select id from public.invitations where auth_user_id=:id"), {"id": owner}
+        ).scalar_one()
+        revoke_invitation(conn, invite, operator="test")
+    assert client.get("/api/v1/agents/me").status_code == 403
+    assert (
+        client.post(
+            "/api/v1/agent-icons", content=_icon_bytes(), headers={"Content-Type": "image/png"}
+        ).status_code
+        == 403
+    )
+    assert app.state.icon_sign_calls == before

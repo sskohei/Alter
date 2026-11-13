@@ -40,3 +40,14 @@ HMAC鍵の交換では新旧鍵を配布してから現行版を切り替え、�
 DiscordのAPI制限は [Bot仕様](11-discord-bot.md) の通り。Rate limitを固定値にしない。Discord過去メッセージを人格作成のために収集しない。
 
 MVPのAPI目安は認証済みユーザー60リクエスト/分、書込10リクエスト/分、人格提案3回/日。初期はAPI 1インスタンスのメモリ内制御にし、LLM費用はDB台帳で厳格に止める。APIを複数台に増やす前に共有ストア型のレート制限を導入する。制限値は負荷試験後に調整し、429に`Retry-After`を返す。
+
+## アイコンの画像検証と用途分離（#15）
+
+PNG/JPEG/WebPの実データを完全デコードして新しいPNGへ再エンコードし、EXIF/GPS・コメント等を
+Storageへ渡さない。MIMEだけの判定は行わず、2 MiB/2048px/単一フレームをAPIで検証する。
+本人の招待認可→アップロード/registry登録→本人registryにあるパスのみ選択、の順を守る。
+UUID採番＋upsert=false＋Storage RLSで既存画像への差替えを防ぐ。公開bucketは作らず、
+表示用画像のprivate bucketだけへ300秒の署名URLを出す。私的ファイルbucketのURLは発行しない。
+StorageキーはAPI専用`SUPABASE_STORAGE_SECRET_KEY`、Auth管理の`SUPABASE_SECRET_KEY`とは
+用途を分け、Web/Worker/Botへ配布しない。署名tokenは再送記録/監査/エラーに保存しない。
+発行済みURLは解除/失効後も最大300秒利用できる。画像の清掃/削除は#30へ接続する。

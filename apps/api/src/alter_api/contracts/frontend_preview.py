@@ -9,6 +9,7 @@ from uuid import UUID
 
 from alter_api.errors import ErrorResponse
 from alter_api.users import Profile, router
+from alter_domain.agent_models import AgentPatch
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,6 +35,7 @@ class AgentDraftInput(PublicPersonality):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80)
     private_info: Text = ""
+    icon_path: str | None = None
 
 
 class RevisionInput(AgentDraftInput):
@@ -62,10 +64,7 @@ class Agent(BaseModel):
     approved_profile_version: int | None
     created_at: datetime
     settings: AgentSettings | None = None
-
-
-class AgentPatch(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
+    icon_url: str | None = None
 
 
 class PrivateInfo(BaseModel):

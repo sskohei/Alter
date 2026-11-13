@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/agent-icons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Icon */
+        post: operations["upload_agent_icon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -226,7 +243,7 @@ export interface components {
              */
             created_at: string;
             /** Icon Url */
-            icon_url?: null;
+            icon_url?: string | null;
             /**
              * Id
              * Format: uuid
@@ -245,7 +262,7 @@ export interface components {
             /** Hobbies */
             hobbies?: string[];
             /** Icon Path */
-            icon_path?: null;
+            icon_path?: string | null;
             /** Interaction Policy */
             interaction_policy: string;
             /** Interests */
@@ -275,9 +292,9 @@ export interface components {
         /** AgentPatch */
         AgentPatch: {
             /** Icon Path */
-            icon_path?: null;
+            icon_path?: string | null;
             /** Name */
-            name: string;
+            name?: string | null;
         };
         /** AgentSettings */
         AgentSettings: {
@@ -357,6 +374,11 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** IconUpload */
+        IconUpload: {
+            /** Icon Path */
+            icon_path: string;
         };
         /** Preferences */
         Preferences: {
@@ -440,7 +462,7 @@ export interface components {
             /** Hobbies */
             hobbies?: string[];
             /** Icon Path */
-            icon_path?: null;
+            icon_path?: string | null;
             /** Interaction Policy */
             interaction_policy: string;
             /** Interests */
@@ -476,6 +498,86 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    upload_agent_icon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/jpeg": string;
+                "image/png": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IconUpload"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     create_agent: {
         parameters: {
             query?: never;

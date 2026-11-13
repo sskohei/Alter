@@ -11,13 +11,16 @@ from alter_domain.agent_models import (
     AgentDraftInput,
     AgentPatch,
     Approval,
+    IconUpload,
     PrivateInfo,
     ProfileRevision,
     RevisionInput,
 )
+from alter_domain.icons import MAX_BYTES, InvalidIcon, register_upload, require_owned_icon
 from alter_domain.profile_crypto import ProfileCipher
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 
 from alter_api.auth import CurrentPrincipal
 from alter_api.business import BusinessConnection
@@ -53,14 +56,69 @@ def request_digest(request: Request, data: AgentDraftInput, version: int) -> str
     return hmac.new(secret, data.model_dump_json().encode(), hashlib.sha256).hexdigest()
 
 
+def present_agent(
+    request: Request,
+    conn: BusinessConnection,
+    owner: UUID,
+    agent: Agent,
+    *,
+    path: str | None = None,
+    snapshot: bool = False,
+) -> Agent:
+    if not snapshot:
+        path = conn.execute(
+            text("select icon_path from public.agents where id=:id and owner_id=:owner"),
+            {"id": agent.id, "owner": owner},
+        ).scalar_one()
+    if path is not None:
+        require_owned_icon(conn, owner, path)
+        agent.icon_url = request.app.state.icon_storage.sign(path)
+    return agent
+
+
+@router.post(
+    "/agent-icons",
+    response_model=IconUpload,
+    status_code=201,
+    operation_id="upload_agent_icon",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                mime: {"schema": {"type": "string", "format": "binary"}}
+                for mime in ("image/png", "image/jpeg", "image/webp")
+            },
+        }
+    },
+)
+async def upload_icon(
+    request: Request, conn: BusinessConnection, principal: CurrentPrincipal
+) -> IconUpload:
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > MAX_BYTES:
+            raise InvalidIcon()
+        data.extend(chunk)
+    path = await run_in_threadpool(
+        register_upload,
+        conn,
+        principal.sub,
+        request.app.state.icon_storage,
+        bytes(data),
+        content_type,
+    )
+    return IconUpload(icon_path=path)
+
+
 @router.get("/agents/me", response_model=Agent, operation_id="get_my_agent")
-def get_my_agent(conn: BusinessConnection, principal: CurrentPrincipal) -> Agent:
+def get_my_agent(conn: BusinessConnection, principal: CurrentPrincipal, request: Request) -> Agent:
     agent_id = conn.execute(
         text("select id from public.agents where owner_id=:id"), {"id": principal.sub}
     ).scalar_one_or_none()
     if agent_id is None:
         raise agents.AgentNotFound()
-    return agents.owned(conn, principal.sub, agent_id)
+    return present_agent(request, conn, principal.sub, agents.owned(conn, principal.sub, agent_id))
 
 
 @router.post("/agents", response_model=Agent, status_code=201, operation_id="create_agent")
@@ -89,7 +147,15 @@ def create_agent(
             replay_digest = request_digest(request, data, old.hmac_key_version)
             if not hmac.compare_digest(old.request_hash, replay_digest):
                 raise agents.AgentConflict()
-            return Agent.model_validate(old.response)
+            # Store only the immutable source path, never an expiring bearer URL.
+            return present_agent(
+                request,
+                conn,
+                principal.sub,
+                Agent.model_validate(old.response),
+                path=old.response.get("_icon_path"),
+                snapshot=True,
+            )
     version = request.app.state.settings.api_idempotency_hmac_active_version
     digest = request_digest(request, data, version) if key_hash else None
     result = agents.create_agent(
@@ -110,22 +176,36 @@ def create_agent(
                 "key": key_hash,
                 "digest": digest,
                 "version": version,
-                "response": json.dumps(result.model_dump(mode="json")),
+                "response": json.dumps(
+                    {**result.model_dump(mode="json"), "_icon_path": data.icon_path}
+                ),
             },
         )
-    return result
+    return present_agent(request, conn, principal.sub, result)
 
 
 @router.patch("/agents/{agent_id}", response_model=Agent, operation_id="update_agent")
 def update_agent(
-    agent_id: UUID, data: AgentPatch, conn: BusinessConnection, principal: CurrentPrincipal
+    agent_id: UUID,
+    data: AgentPatch,
+    conn: BusinessConnection,
+    principal: CurrentPrincipal,
+    request: Request,
 ) -> Agent:
     agents.owned(conn, principal.sub, agent_id, lock=True)
-    conn.execute(
-        text("update public.agents set name=:name where id=:id and owner_id=:owner"),
-        {"id": agent_id, "owner": principal.sub, "name": data.name},
-    )
-    return agents.owned(conn, principal.sub, agent_id)
+    if "icon_path" in data.model_fields_set:
+        if data.icon_path is not None:
+            require_owned_icon(conn, principal.sub, data.icon_path)
+        conn.execute(
+            text("update public.agents set icon_path=:path where id=:id"),
+            {"path": data.icon_path, "id": agent_id},
+        )
+    if "name" in data.model_fields_set:
+        conn.execute(
+            text("update public.agents set name=:name where id=:id"),
+            {"name": data.name, "id": agent_id},
+        )
+    return present_agent(request, conn, principal.sub, agents.owned(conn, principal.sub, agent_id))
 
 
 @router.get(
@@ -154,6 +234,8 @@ def revision(
     principal: CurrentPrincipal,
 ) -> ProfileRevision:
     agents.owned(conn, principal.sub, agent_id, lock=True)
+    if data.icon_path is not None:
+        require_owned_icon(conn, principal.sub, data.icon_path)
     current = agents.latest(conn, agent_id)
     if current.version != data.expected_version:
         raise agents.AgentConflict()
@@ -166,9 +248,15 @@ def revision(
     "/agents/{agent_id}/profile/approve", response_model=Agent, operation_id="approve_agent_profile"
 )
 def approve(
-    agent_id: UUID, data: Approval, conn: BusinessConnection, principal: CurrentPrincipal
+    agent_id: UUID,
+    data: Approval,
+    conn: BusinessConnection,
+    principal: CurrentPrincipal,
+    request: Request,
 ) -> Agent:
-    return agents.approve(conn, principal.sub, agent_id, data.version)
+    return present_agent(
+        request, conn, principal.sub, agents.approve(conn, principal.sub, agent_id, data.version)
+    )
 
 
 @router.get(
