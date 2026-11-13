@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 import httpx
 import uvicorn
+from alter_domain.auth_admin import SupabaseAuthAdmin
+from alter_domain.db import create_db_engine
 from alter_domain.settings import Settings
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,7 @@ from alter_api.errors import (
     install_error_handlers,
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
+from alter_api.users import router as users_router
 
 API_V1_PREFIX = "/api/v1"
 
@@ -30,7 +33,9 @@ class Health(BaseModel):
 
 def create_api_v1_router() -> APIRouter:
     """業務 API のルーター。各 Issue のエンドポイントはここへ追加する。"""
-    return APIRouter(prefix=API_V1_PREFIX)
+    router = APIRouter(prefix=API_V1_PREFIX)
+    router.include_router(users_router)
+    return router
 
 
 def _add_shared_components(app: FastAPI) -> None:
@@ -68,6 +73,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
+        app.state.db_engine.dispose()
         if owns_client:
             client.close()
 
@@ -82,6 +88,8 @@ def create_app(
         redoc_url="/redoc" if docs_enabled else None,
     )
     app.state.settings = settings
+    app.state.db_engine = create_db_engine(settings)
+    app.state.auth_admin = SupabaseAuthAdmin(settings, client)
     app.state.jwt_verifier = JwtVerifier(settings, client)
 
     install_error_handlers(app)
