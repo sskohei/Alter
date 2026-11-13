@@ -10,12 +10,14 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import Connection, Row, text
 
 USD_STEP = Decimal("0.000001")
+# 入力として受け付ける金額の上限。運営上限よりも十分大きく、桁あふれ（500）を防ぐ
+USD_INPUT_MAX = Decimal("1000000")
 _SETTINGS_COLUMNS = (
     "autonomy_enabled, frequency_per_day, daily_budget_usd, max_session_usd, "
     "web_visibility, discord_publish, updated_at"
@@ -64,9 +66,16 @@ class PreferencesRecord:
 
 
 def usd(value: Decimal) -> Decimal:
-    """0 以上・小数 6 桁までの USD。それ以外は SettingsInvalid。"""
-    if not value.is_finite() or value < 0 or value != value.quantize(USD_STEP):
-        raise SettingsInvalid("USD amounts must be >= 0 with at most 6 decimal places")
+    """0 以上・小数 6 桁までの USD。それ以外は SettingsInvalid（巨大な値も 500 にしない）。"""
+    message = "USD amounts must be >= 0 with at most 6 decimal places"
+    if not value.is_finite() or value < 0 or value > USD_INPUT_MAX:
+        raise SettingsInvalid(message)
+    try:
+        quantized = value.quantize(USD_STEP)
+    except InvalidOperation:
+        raise SettingsInvalid(message) from None
+    if value != quantized:
+        raise SettingsInvalid(message)
     return value
 
 
@@ -137,8 +146,11 @@ def cancel_queued_interactions(
     """まだ始まっていない交流と、そのジョブを取り消す。取り消した会話の数を返す。
 
     ``other_agent_id`` を指定すると、その相手との交流だけを対象にする（ブロック）。
+    会話が ``queued`` でも、ジョブを Worker が取得済み（``running``）のものは取り消さない。
+    実行中の交流は Worker が発言前の再確認で止め、予約を精算する（#20）。
+    取り消した会話の未使用予約の解放は、#59 の共通解放処理を使う別 PR で接続する。
     """
-    rows = conn.execute(
+    candidates = conn.execute(
         text(
             "select c.id, c.job_id from public.conversations c "
             "join public.conversation_participants p "
@@ -147,14 +159,33 @@ def cancel_queued_interactions(
             "  and (cast(:other as uuid) is null or exists ("
             "    select 1 from public.conversation_participants o "
             "    where o.conversation_id = c.id and o.agent_id = cast(:other as uuid))) "
-            "for update of c"
+            "order by c.id for update of c"
         ),
         {"agent": agent_id, "other": other_agent_id},
     ).all()
-    if not rows:
+    if not candidates:
         return 0
-    conversation_ids = [row.id for row in rows]
-    job_ids = [row.job_id for row in rows if row.job_id is not None]
+    job_ids = [row.job_id for row in candidates if row.job_id is not None]
+    # ジョブも行ロックしてから状態を見る（Worker の取得と競合しても判断がぶれない）
+    job_status = {
+        row.id: row.status
+        for row in conn.execute(
+            text(
+                "select id, status from public.background_jobs "
+                "where id = any(:ids) order by id for update"
+            ),
+            {"ids": job_ids},
+        )
+    }
+    targets = [
+        row
+        for row in candidates
+        if row.job_id is None or job_status.get(row.job_id) in ("queued", "retry_wait")
+    ]
+    if not targets:
+        return 0
+    conversation_ids = [row.id for row in targets]
+    target_jobs = [row.job_id for row in targets if row.job_id is not None]
     conn.execute(
         text(
             "update public.conversations set status = 'cancelled', ended_at = now() "
@@ -162,13 +193,13 @@ def cancel_queued_interactions(
         ),
         {"ids": conversation_ids},
     )
-    if job_ids:
+    if target_jobs:
         conn.execute(
             text(
                 "update public.background_jobs set status = 'cancelled' "
                 "where id = any(:ids) and status in ('queued', 'retry_wait')"
             ),
-            {"ids": job_ids},
+            {"ids": target_jobs},
         )
     return len(conversation_ids)
 
@@ -197,11 +228,6 @@ def update_settings(
     for field, value in changes.items():
         merged[field] = usd(value) if field.endswith("_usd") else value
 
-    if merged["daily_budget_usd"] > max_daily_budget_usd:
-        raise SettingsInvalid("daily_budget_usd exceeds the operator limit")
-    if merged["max_session_usd"] > merged["daily_budget_usd"]:
-        raise SettingsInvalid("max_session_usd must not exceed daily_budget_usd")
-
     changed = sorted(f for f in _FIELDS if merged[f] != getattr(current, f))
     if not changed:
         return current
@@ -209,6 +235,13 @@ def update_settings(
     turning_on = [
         f for f in ("autonomy_enabled", "discord_publish") if merged[f] and not getattr(current, f)
     ]
+    # 予算の上限は、予算を変えるときと同意を ON にするときだけ確認する。
+    # 運営が上限を下げたあとでも、OFF（同意の撤回）や頻度の変更は既存予算の修正なしに通す。
+    if any(f.endswith("_usd") for f in changes) or turning_on:
+        if merged["daily_budget_usd"] > max_daily_budget_usd:
+            raise SettingsInvalid("daily_budget_usd exceeds the operator limit")
+        if merged["max_session_usd"] > merged["daily_budget_usd"]:
+            raise SettingsInvalid("max_session_usd must not exceed daily_budget_usd")
     if turning_on:
         # 承認済みで稼働中の AI だけが交流・公開に同意できる（停止中・下書きは不可）
         if agent.status != "active" or agent.approved_profile_version is None:
@@ -244,14 +277,27 @@ def update_settings(
     return _settings(row)
 
 
-def _other_agent_exists(conn: Connection, other_agent_id: uuid.UUID) -> bool:
-    return (
-        conn.execute(
-            text("select 1 from public.agents where id = :id and status <> 'deleted'"),
-            {"id": other_agent_id},
-        ).first()
-        is not None
-    )
+def _lock_pair(
+    conn: Connection, owner: uuid.UUID, agent_id: uuid.UUID, other_agent_id: uuid.UUID
+) -> bool:
+    """自分と相手の AI を ID の昇順でロックする。相手が存在すれば True。
+
+    A→B と B→A のブロックが同時に来ても、両方が同じ順でロックするのでデッドロックしない
+    （ブロック行の外部キー検査が相手の AI 行を参照するため、自分だけ先にロックすると交差する）。
+    """
+    rows = conn.execute(
+        text(
+            "select id, owner_id, status from public.agents "
+            "where id in (:me, :other) order by id for update"
+        ),
+        {"me": agent_id, "other": other_agent_id},
+    ).all()
+    by_id = {row.id: row for row in rows}
+    mine = by_id.get(agent_id)
+    if mine is None or mine.owner_id != owner or mine.status == "deleted":
+        raise AgentNotFound()
+    other = by_id.get(other_agent_id)
+    return other is not None and other.status != "deleted"
 
 
 def block_agent(
@@ -260,8 +306,7 @@ def block_agent(
     """相手をブロックする。新しくブロックしたら True。再送は何もしない（冪等）。"""
     if agent_id == other_agent_id:
         raise SettingsInvalid("an agent cannot block itself")
-    _owned_agent(conn, owner, agent_id, lock=True)
-    if not _other_agent_exists(conn, other_agent_id):
+    if not _lock_pair(conn, owner, agent_id, other_agent_id):
         raise AgentNotFound()
     inserted = conn.execute(
         text(
@@ -287,7 +332,7 @@ def unblock_agent(
     """ブロックを解除する。解除したら True。ブロックしていなければ何もしない（冪等）。"""
     if agent_id == other_agent_id:
         raise SettingsInvalid("an agent cannot block itself")
-    _owned_agent(conn, owner, agent_id, lock=True)
+    _lock_pair(conn, owner, agent_id, other_agent_id)
     deleted = conn.execute(
         text(
             "delete from public.agent_blocks "
