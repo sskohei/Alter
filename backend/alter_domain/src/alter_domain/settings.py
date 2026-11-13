@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import field_validator
@@ -30,11 +31,23 @@ class Settings(BaseSettings):
     # Supabase Auth 管理 API（招待の identity 照合）。API と運営 CLI のサーバー側だけで使う。
     supabase_secret_key: str = ""
 
+    # 交流設定（#16）。利用者が設定できる 1 体あたりの日次予算の上限（USD、小数 6 桁まで）
+    agent_daily_budget_max_usd: Decimal = Decimal("1.00")
+    # 自律交流 ON の同意文面の版（docs/23）。未設定なら ON にできない（送信先 LLM 未決定を含む）
+    alter_consent_version: str = ""
+
     @field_validator("cors_origins")
     @classmethod
     def _reject_wildcard_origin(cls, value: str) -> str:
         if any(origin.strip() == "*" for origin in value.split(",")):
             raise ValueError("CORS_ORIGINS must list explicit origins; '*' is not allowed")
+        return value
+
+    @field_validator("agent_daily_budget_max_usd")
+    @classmethod
+    def _check_budget_max(cls, value: Decimal) -> Decimal:
+        if not value.is_finite() or value < 0 or value != value.quantize(Decimal("0.000001")):
+            raise ValueError("AGENT_DAILY_BUDGET_MAX_USD must be >= 0 with at most 6 decimals")
         return value
 
     @field_validator("supabase_jwt_algorithms")
