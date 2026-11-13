@@ -22,6 +22,8 @@ from alter_api.errors import (
     install_error_handlers,
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
+from alter_api.settings_routes import router as settings_router
+from alter_api.users import router as users_router
 
 API_V1_PREFIX = "/api/v1"
 
@@ -35,6 +37,8 @@ class Health(BaseModel):
 def create_api_v1_router() -> APIRouter:
     """業務 API のルーター。各 Issue のエンドポイントはここへ追加する。"""
     router = APIRouter(prefix=API_V1_PREFIX)
+    router.include_router(users_router)
+    router.include_router(settings_router)
     router.include_router(agent_router)
     return router
 
@@ -78,7 +82,16 @@ def create_app(
         if owns_client:
             client.close()
 
-    app = FastAPI(title="Alter API", version="0.1.0", lifespan=lifespan)
+    # 本番は Swagger UI / ReDoc を閉じる。/openapi.json はスモーク確認と型生成のため公開する
+    # （API の形だけで秘密は含まない）。
+    docs_enabled = settings.api_docs_enabled
+    app = FastAPI(
+        title="Alter API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+    )
     app.state.settings = settings
     app.state.db_engine = create_db_engine(settings)
     app.state.auth_admin = SupabaseAuthAdmin(settings, client)

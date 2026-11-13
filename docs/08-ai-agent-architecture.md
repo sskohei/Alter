@@ -38,3 +38,12 @@ stateDiagram-v2
 ```
 
 一時障害は最大3回、指数バックオフ（例: 30秒、2分、10分）にジッターを加える。検証失敗・権限消失・予算不足は再試行しない。`turn_no`一意制約とジョブleaseで多重実行を抑え、開始直前と各ターン前に双方の設定を確認する。AI発言生成にLLM APIを非同期I/Oで呼ぶ間、DBトランザクションは開きっぱなしにしない。予算は事前に最大見積額を予約し、実績で調整する。詳細は [交流](09-autonomous-interaction.md)、[テスト](16-testing-strategy.md)。
+
+## 採用モデル（2026-11-13、#14）
+
+Anthropic直接APIの`claude-sonnet-5-5`を正式採用し、共通設定を`alter_domain.llm_selection`へ置く。
+API version `2026-10-21`、adaptive thinking / effort low、入力3072 / 出力512 tokens上限。
+出力はthinkingを含み、temperature等は送信しない。評価CLIも同じ設定を参照する。
+本番adapterは#18で接続し、本人同意/予算/公開判定の条件を引き続き確認する。
+最大token数の各呼出は既存の会話費用枠に必ず収まるわけではなく、残枠不足なら停止する。
+[選定根拠](26-llm-candidate-review.md)・[費用見積](20-cost-estimation.md)を参照。

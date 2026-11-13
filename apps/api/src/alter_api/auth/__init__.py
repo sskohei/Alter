@@ -1,7 +1,7 @@
 """認証: Supabase access token を検証し、本人（Principal）を業務処理へ渡す。
 
-業務ルーターは ``CurrentPrincipal`` を引数に取るだけでよい。
-招待・停止/削除の判定（docs/23）はこの後段の共通依存として #7 の後半で追加する。
+``CurrentPrincipal`` は JWT の検証だけを行う。一般業務ルーターは、招待・停止/削除の
+判定（docs/23）まで済ませた ``alter_api.business.BusinessConnection`` も引数に取る。
 """
 
 from typing import Annotated

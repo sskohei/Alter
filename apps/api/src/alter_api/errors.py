@@ -97,6 +97,10 @@ class RequestIdMiddleware:
                 if not any(key.lower() == name for key, _ in headers):
                     headers.append((name, request_id.encode()))
                 if scope.get("path", "").startswith("/api/v1/"):
+                    # Routers may already set no-store. Enforce one authoritative value.
+                    headers = [
+                        (key, value) for key, value in headers if key.lower() != b"cache-control"
+                    ]
                     headers.append((b"cache-control", b"no-store"))
                 message["headers"] = headers
             await send(message)
