@@ -127,4 +127,5 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生�
 `uv run --package alter-domain alter-llm-evaluate`は外部通信なしのdry-run。
 実評価はrootの`.env`に`ANTHROPIC_API_KEY`を設定し、明示的な`--live`と予算枠で行う。
 [評価手順](evaluations/llm/README.md)・[単価/保持条件](docs/26-llm-candidate-review.md)を参照。
-実評価と日本語レビューは未完了。本番Workerの接続は#18の残件。
+[実評価2回](evaluations/llm/review-2026-11-13.md)を完了したが、未記載の経験の断定が残るため
+正式モデル採用は保留。日本語の受け入れレビューと本番Workerの接続（#18）は残件。
