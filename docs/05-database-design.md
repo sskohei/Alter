@@ -91,3 +91,35 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 - 削除: まず新規交流と配信を停止し、対象会話→記憶→通知→AI→プロフィール→Authユーザーの順で削除する。外部Discord投稿の削除試行は別ジョブで記録する。会話CASCADE前に配送IDを本文なしで削除ジョブへ引き渡す。要求時から関連会話・派生記憶/通知を双方の参照対象外とし、招待失効後にAuthを削除する。保持期限と30日以内パージ・匿名化・復元時の扱いは[運用契約](23-invitation-consent-operations.md)に従う。
 
 [ER図](diagrams/er-diagram.md)・[認可設計](06-authentication-authorization.md)を参照。
+
+## #15 API冪等性
+
+`api_idempotency(owner_id,operation,key_hash,request_hash,hmac_key_version,response,created_at)`を追加。
+複合PKは`owner_id,operation,key_hash`、profiles削除でCASCADE、RLS default deny。
+作成応答（私的欄なし）と入力HMAC・正の鍵版を保持する。本文は保持しない。
+成功時の`created_at`から24時間を再送保証期間とし、再送で期限は延長しない。
+期限後はAPIの再送照合対象から外す。#30で`created_at <= now() - interval '24 hours'`の行を
+日次削除する（通常の物理保持は最大48時間。清掃失敗中も再送保証は延長しない）。
+`created_at`に清掃用索引を設ける。プロフィール削除時は期限によらずCASCADEで削除する。
+HMAC鍵版ごとの独立した鍵をAPIのSecretで管理し、旧版を最後に使用した作成成功から24時間は保持する。
+rollbackは`DROP TABLE public.api_idempotency`だが再送結果を失うためAPIを止めて実施する。
+
+## アイコンStorageと検証済みアップロード（#15）
+
+正本は`20261114020000_agent_icons.sql`。`agent-icons`と`profile-private`はともにprivate。
+前者は再エンコード済みの表示用PNG（2 MiBまで）のみ、後者は私的ファイル用でアイコンAPIの対象外。
+`storage.objects`のrestrictive policyはこの2 bucketへのanon/authenticated直接CRUDを拒否し、
+他bucket向けの広いpermissive policyが追加されても上書き/差替えを許可しない。
+署名URLによる読取は期限300秒のbearerアクセスであり、RLSを通す通常読取とは区別する。
+
+`agent_icon_uploads(path PK, owner_id FK profiles CASCADE, content_type, size_bytes, sha256, created_at)`
+はAPIのみが書く検証済みregistry。RLS有効・browser policyなし・anon/authenticated権限なし。
+所有権はこのowner_idと本人prefixで検証し、Storageのservice-role所有者フィールドを本人認可に使わない。
+`agents.icon_path`はregistryへのFK（削除時SET NULL）で、未登録パスを保存しない。
+
+StorageとPostgresは分散トランザクションではない。Storage成功後のDB失敗/応答不明では
+非公開の未使用objectが残り得る。#30はアカウント削除時に両bucketの本人prefix（registry未登録を含む）を
+Storage APIでパージし、未参照/未登録のアップロードは24時間超で清掃する。生のStorageメタデータの
+SQL削除だけでblobを消したと扱わない。置換後の旧objectも同じ未参照清掃に含める。
+rollbackはAPI停止→agents_icon_upload_fk解除→registryをDROP、Storage APIでobjectを消してから
+空bucketを削除。既存アイコンの参照/署名URLが失われるので、通常は前方修正を選ぶ。

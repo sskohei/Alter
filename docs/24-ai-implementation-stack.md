@@ -43,3 +43,11 @@ Sonnetの限定評価31生成で改善を確認し、sskoheiがSonnet正式採�
 #18/#19/#20は`session_generation_reservation()`を使い、仮の巨大token見積をSonnetへ流用しない。
 MVP記憶/要約は引用で追加LLMなし。追加の有料moderation等は残枠内の上限を別途予約する。
 供給元で未課金と確認できた失敗だけを再試行し、結果不明時は停止・予約保持する。
+
+## #15 / PR #58のmain統合
+
+人格API・暗号化・初回承認のonboarded_at・版指定取得・独立した版付きHMAC鍵と24時間の再送保証を実装。
+mainの#66ユーザーAPIと#69交流/通知設定APIを保持し、人格ルーターと共存させる。
+期限切れapi_idempotencyの日次清掃は#30へ引き継ぐ。
+Storageアイコンadapter・所有権/MIME/サイズ検証・用途別bucket/短期URLを実装済み。
+鍵ローテーションCLI/復元訓練は#36、実Storage/Auth接続は#37の公開受け入れで確認する。

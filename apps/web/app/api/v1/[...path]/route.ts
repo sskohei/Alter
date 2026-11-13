@@ -7,7 +7,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   const { path } = await context.params;
   const pathname = path.join("/");
   // Fixed allowlist prevents using this route as an arbitrary authenticated proxy.
-  if (!/^(users\/me|agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?)$/.test(pathname)) return new Response(null, { status: 404 });
+  if (!/^(users\/me|agent-icons|agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?)$/.test(pathname)) return new Response(null, { status: 404 });
   if (request.method !== "GET" && request.headers.get("origin") !== appOrigin(request)) return new Response(null, { status: 403 });
   const { supabase } = await serverApi();
   const { data, error } = await supabase.auth.getUser();
@@ -19,11 +19,35 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   });
   const upstream = new URL(`/api/v1/${pathname}`, process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
   upstream.search = request.nextUrl.search;
-  const headers = new Headers({ "Content-Type": "application/json" });
+  const isIcon = pathname === "agent-icons";
+  if (isIcon && request.method !== "POST") return new Response(null, { status: 405 });
+  const contentType = isIcon ? request.headers.get("Content-Type") ?? "" : "application/json";
+  const headers = new Headers({ "Content-Type": contentType });
   const idempotency = request.headers.get("Idempotency-Key");
   if (idempotency) headers.set("Idempotency-Key", idempotency);
   try {
-    const response = await transport(upstream, { method: request.method, headers, ...(request.method === "GET" ? {} : { body: await request.text() }) });
+    let body: BodyInit | undefined;
+    if (isIcon) {
+      const invalid = () => Response.json({error: {code: "VALIDATION_ERROR", message: "画像を確認してください。", request_id: crypto.randomUUID()}}, {status: 422, headers: {"Cache-Control": "no-store"}});
+      if (!["image/png", "image/jpeg", "image/webp"].includes(contentType.split(";", 1)[0].toLowerCase())) return invalid();
+      const reader = request.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      if (reader) {
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > 2097152) { await reader.cancel(); return invalid(); }
+          chunks.push(value);
+        }
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      body = bytes.buffer;
+    } else if (request.method !== "GET") body = await request.text();
+    const response = await transport(upstream, { method: request.method, headers, ...(body === undefined ? {} : { body }) });
     return new Response(response.body, { status: response.status, headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", ...(response.headers.get("X-Request-ID") ? { "X-Request-ID": response.headers.get("X-Request-ID")! } : {}) } });
   } catch { return Response.json({ error: { code: "SERVICE_UNAVAILABLE", message: "接続できません。再試行してください。", request_id: crypto.randomUUID() } }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
 }
