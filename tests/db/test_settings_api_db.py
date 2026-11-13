@@ -483,3 +483,114 @@ def test_preferences_defaults_and_update(api: Api, engine: Engine, users: list[u
     for body in ({}, {"web_notifications": None}, {"web_notifications": "no"}, {"x": True}):
         _error(client.patch("/api/v1/preferences", json=body), 422, "VALIDATION_ERROR")
     assert len(_audits(engine, sub)) == 1
+
+
+# -- #69 レビュー指摘への回帰テスト -------------------------------------------------
+
+
+def test_turn_off_is_allowed_after_operator_lowers_cap(
+    engine: Engine, users: list[uuid.UUID]
+) -> None:
+    # 既定の日次予算 $0.20 のまま、運営が上限を $0.10 に下げた状態
+    for api in _make_api(engine, agent_daily_budget_max_usd="0.10"):
+        sub = _new_user(engine, api, users)
+        with engine.begin() as conn:
+            agent = _new_agent(conn, sub)
+            conn.execute(
+                text(
+                    "update public.agent_settings set autonomy_enabled = true, "
+                    "discord_publish = true where agent_id = :id"
+                ),
+                {"id": agent},
+            )
+        client = api.as_user(sub)
+        # 同意の撤回と頻度の変更は、既存予算を直さなくても通る
+        for body in (
+            {"autonomy_enabled": False},
+            {"discord_publish": False},
+            {"frequency_per_day": 2},
+        ):
+            response = client.patch(_url(agent), json=body)
+            assert response.status_code == 200, (body, response.text)
+        # 再 ON と予算の変更は上限を確認する
+        _error(client.patch(_url(agent), json={"autonomy_enabled": True}), 422, "VALIDATION_ERROR")
+        _error(client.patch(_url(agent), json={"max_session_usd": 0.01}), 422, "VALIDATION_ERROR")
+        ok = client.patch(
+            _url(agent),
+            json={"autonomy_enabled": True, "daily_budget_usd": 0.1, "max_session_usd": 0.05},
+        )
+        assert ok.status_code == 200, ok.text
+
+
+@pytest.mark.parametrize("value", [1e30, 1e308, 1000000.000001])
+def test_huge_budget_is_validation_error_not_500(
+    api: Api, owner_agent: tuple[uuid.UUID, uuid.UUID], value: float
+) -> None:
+    sub, agent = owner_agent
+    _error(
+        api.as_user(sub).patch(_url(agent), json={"daily_budget_usd": value}),
+        422,
+        "VALIDATION_ERROR",
+    )
+
+
+def test_mutual_blocks_in_parallel_do_not_deadlock(
+    api: Api, engine: Engine, users: list[uuid.UUID]
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from alter_domain import interaction_settings as domain
+
+    a, b = _new_user(engine, api, users), _new_user(engine, api, users)
+    with engine.begin() as conn:
+        agent_a, agent_b = _new_agent(conn, a), _new_agent(conn, b)
+    rounds = 15
+    barrier = Barrier(2)
+
+    def run(owner: uuid.UUID, me: uuid.UUID, other: uuid.UUID) -> list[str]:
+        results = []
+        for _ in range(rounds):
+            barrier.wait()
+            try:
+                with engine.begin() as conn:
+                    domain.block_agent(conn, owner, me, other)
+                with engine.begin() as conn:
+                    domain.unblock_agent(conn, owner, me, other)
+                results.append("ok")
+            except Exception as exc:  # noqa: BLE001 - デッドロック（40P01）を数える
+                results.append(type(exc).__name__)
+        return results
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(run, a, agent_a, agent_b), pool.submit(run, b, agent_b, agent_a)]
+        outcomes = [r for f in futures for r in f.result()]
+    assert outcomes == ["ok"] * (rounds * 2)
+
+
+def test_queued_conversation_taken_by_worker_is_not_cancelled(
+    api: Api, engine: Engine, users: list[uuid.UUID], owner_agent: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    sub, agent = owner_agent
+    with engine.begin() as conn:
+        other = _new_agent(conn, _new_user(engine, api, users))
+        conn.execute(
+            text("update public.agent_settings set autonomy_enabled = true where agent_id = :id"),
+            {"id": agent},
+        )
+        waiting = _queue_conversation(conn, agent, other)
+        taken_conv, taken_job = _queue_conversation(conn, agent, other)
+        # Worker がジョブを取得済み（会話はまだ queued）
+        conn.execute(
+            text(
+                "update public.background_jobs set status = 'running', "
+                "lease_until = now() + interval '2 minutes' where id = :id"
+            ),
+            {"id": taken_job},
+        )
+    response = api.as_user(sub).patch(_url(agent), json={"autonomy_enabled": False})
+    assert response.status_code == 200, response.text
+    assert _statuses(engine, *waiting) == ("cancelled", "cancelled")
+    assert _statuses(engine, taken_conv, taken_job) == ("queued", "running")
+    [audit] = _audits(engine, sub)
+    assert audit["metadata"]["cancelled_conversations"] == 1
