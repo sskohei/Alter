@@ -22,9 +22,15 @@ from sqlalchemy import Connection, Row, text
 NOTIFICATION_CONVERSATION_COMPLETED = "conversation.completed"
 _OPEN_STATUSES = frozenset({"queued", "running"})
 
-# 参加者のどちらかが削除要求済み・AI 削除済みなら、その会話を双方から隠す
+# 保持期間（docs/15・docs/23）。作成時刻から数え、期限に達した時点で参照対象外にする。
+# 行の削除は日次パージ（#30）が行う。それまでの間も API からは見せない
+CONVERSATION_RETENTION_DAYS = 90
+NOTIFICATION_RETENTION_DAYS = 90
+
+# 保持期限内で、参加者のどちらも削除要求済み・AI 削除済みでない会話だけを見せる
 _VISIBLE_CONVERSATION = (
-    "not exists (select 1 from public.conversation_participants hp "
+    f"c.created_at > now() - interval '{CONVERSATION_RETENTION_DAYS} days' "
+    "and not exists (select 1 from public.conversation_participants hp "
     "join public.agents ha on ha.id = hp.agent_id "
     "join public.profiles hu on hu.id = ha.owner_id "
     "where hp.conversation_id = c.id "
@@ -221,7 +227,8 @@ _NOTIFICATION_SELECT = (
     "from public.notifications n "
     "left join public.conversations c on c.id = n.conversation_id "
     "where n.profile_id = :owner "
-    f"and (n.conversation_id is null or {_VISIBLE_CONVERSATION}) "
+    f"and n.created_at > now() - interval '{NOTIFICATION_RETENTION_DAYS} days' "
+    f"and (n.conversation_id is null or ({_VISIBLE_CONVERSATION})) "
 )
 
 
@@ -265,22 +272,28 @@ def list_notifications(
 def mark_notification_read(
     conn: Connection, owner: uuid.UUID, notification_id: uuid.UUID
 ) -> NotificationRecord:
-    """既読にする。再送しても最初の ``read_at`` を保つ（冪等）。"""
-    updated = conn.execute(
+    """既読にする。再送しても最初の ``read_at`` を保つ（冪等）。
+
+    一覧に出ない通知（他人のもの・保持期限切れ・会話が非表示）は既読にもせず 404。
+    """
+    visible = conn.execute(
+        text(_NOTIFICATION_SELECT + "and n.id = :id"),
+        {"owner": owner, "id": notification_id},
+    ).first()
+    if visible is None:
+        raise NotFound()
+    conn.execute(
         text(
             "update public.notifications set read_at = coalesce(read_at, now()) "
-            "where id = :id and profile_id = :owner returning id"
+            "where id = :id and profile_id = :owner"
         ),
         {"id": notification_id, "owner": owner},
-    ).first()
-    if updated is None:
-        raise NotFound()
+    )
     row = conn.execute(
         text(_NOTIFICATION_SELECT + "and n.id = :id"),
         {"owner": owner, "id": notification_id},
     ).first()
     if row is None:
-        # 既読にはできたが、会話が削除要求で非表示になった通知
         raise NotFound()
     return _notification(row)
 

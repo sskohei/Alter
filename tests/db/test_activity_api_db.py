@@ -7,6 +7,7 @@ Auth 管理 API は偽物、招待は共通ドメイン処理で実 DB に登録
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -127,6 +128,11 @@ def world(engine: Engine, api: Api, users: list[uuid.UUID]) -> World:
     return World(a, b, c, agent_a, agent_b, agent_c)
 
 
+def _days_ago(days: float) -> str:
+    """保持期限（90 日）の判定に合わせ、固定日付ではなく現在からの相対時刻で作る。"""
+    return (datetime.now(UTC) - timedelta(days=days)).isoformat()
+
+
 def _conversation(
     conn: Connection, status: str, first: uuid.UUID, second: uuid.UUID, *, created: str
 ) -> uuid.UUID:
@@ -172,9 +178,7 @@ def _usage(conn: Connection, agent: uuid.UUID, conv: uuid.UUID, kind: str, usd: 
 @pytest.fixture
 def convs(engine: Engine, world: World) -> dict[str, uuid.UUID]:
     with engine.begin() as conn:
-        done = _conversation(
-            conn, "completed", world.agent_a, world.agent_b, created="2026-11-01T00:00:00Z"
-        )
+        done = _conversation(conn, "completed", world.agent_a, world.agent_b, created=_days_ago(13))
         for turn, (agent, status) in enumerate(
             [(world.agent_a, "allowed"), (world.agent_b, "blocked"), (world.agent_b, "allowed")],
             start=1,
@@ -201,11 +205,11 @@ def convs(engine: Engine, world: World) -> dict[str, uuid.UUID]:
         )
         _usage(conn, world.agent_b, done, "charge", "0.5")
         running = _conversation(
-            conn, "running", world.agent_b, world.agent_a, created="2026-11-02T00:00:00Z"
+            conn, "running", world.agent_b, world.agent_a, created=_days_ago(12)
         )
         _usage(conn, world.agent_a, running, "charge", "0.01")
         others = _conversation(
-            conn, "completed", world.agent_b, world.agent_c, created="2026-11-03T00:00:00Z"
+            conn, "completed", world.agent_b, world.agent_c, created=_days_ago(11)
         )
     return {"done": done, "running": running, "others": others}
 
@@ -372,3 +376,84 @@ def test_list_and_read_notifications(
     # 他人の通知は存在を隠す
     _error(api.as_user(world.b).patch(f"/api/v1/notifications/{item['id']}/read"), 404, "NOT_FOUND")
     _error(client.patch(f"/api/v1/notifications/{uuid.uuid4()}/read"), 404, "NOT_FOUND")
+
+
+# -- 保持期限（90 日）---------------------------------------------------------------------
+
+
+def test_expired_conversations_and_notifications_are_hidden(
+    api: Api, engine: Engine, world: World, convs: dict[str, uuid.UUID]
+) -> None:
+    """期限到達時点で参照対象外（日次パージ前でも一覧に出さず、ID 指定は 404）。"""
+    with engine.begin() as conn:
+        old = _conversation(conn, "completed", world.agent_a, world.agent_b, created=_days_ago(91))
+        edge = _conversation(
+            conn, "completed", world.agent_a, world.agent_b, created=_days_ago(89.9)
+        )
+        activity.notify_conversation_completed(conn, old)
+        activity.notify_conversation_completed(conn, convs["done"])
+        # 会話は期限内だが、通知そのものが 91 日前
+        conn.execute(
+            text(
+                "update public.notifications set created_at = now() - interval '91 days' "
+                "where conversation_id = :c and profile_id = :p"
+            ),
+            {"c": convs["done"], "p": world.b},
+        )
+        activity.notify_conversation_completed(conn, edge)
+        old_note_a = conn.execute(
+            text(
+                "select id from public.notifications where conversation_id = :c and profile_id = :p"
+            ),
+            {"c": old, "p": world.a},
+        ).scalar_one()
+        old_note_b = conn.execute(
+            text(
+                "select id from public.notifications where conversation_id = :c and profile_id = :p"
+            ),
+            {"c": convs["done"], "p": world.b},
+        ).scalar_one()
+
+    client = api.as_user(world.a)
+    ids = [i["id"] for i in client.get("/api/v1/conversations").json()["items"]]
+    assert str(old) not in ids
+    assert str(edge) in ids and str(convs["done"]) in ids
+    _error(client.get(f"/api/v1/conversations/{old}"), 404, "NOT_FOUND")
+    assert client.get(f"/api/v1/conversations/{edge}").status_code == 200
+
+    # 古い会話に紐づく通知は、通知自体が新しくても出さない。既読にもできない
+    notes = [n["conversation_id"] for n in client.get("/api/v1/notifications").json()["items"]]
+    assert str(old) not in notes and str(edge) in notes
+    _error(client.patch(f"/api/v1/notifications/{old_note_a}/read"), 404, "NOT_FOUND")
+
+    # 通知そのものが 91 日前なら、会話が期限内でも出さない。既読にもできない
+    client_b = api.as_user(world.b)
+    notes_b = [n["conversation_id"] for n in client_b.get("/api/v1/notifications").json()["items"]]
+    assert str(convs["done"]) not in notes_b
+    _error(client_b.patch(f"/api/v1/notifications/{old_note_b}/read"), 404, "NOT_FOUND")
+
+    with engine.connect() as conn:
+        read = conn.execute(
+            text(
+                "select count(*) from public.notifications "
+                "where id in (:a, :b) and read_at is not null"
+            ),
+            {"a": old_note_a, "b": old_note_b},
+        ).scalar_one()
+    assert read == 0  # 404 のときは既読にしない
+
+
+def test_pagination_skips_expired_conversations(api: Api, engine: Engine, world: World) -> None:
+    with engine.begin() as conn:
+        fresh = [
+            _conversation(conn, "completed", world.agent_a, world.agent_c, created=_days_ago(d))
+            for d in (1, 2)
+        ]
+        _conversation(conn, "completed", world.agent_a, world.agent_c, created=_days_ago(95))
+    client = api.as_user(world.a)
+    first = client.get("/api/v1/conversations", params={"limit": 1}).json()
+    second = client.get(
+        "/api/v1/conversations", params={"limit": 1, "cursor": first["next_cursor"]}
+    ).json()
+    assert [i["id"] for i in first["items"] + second["items"]] == [str(c) for c in fresh]
+    assert second["next_cursor"] is None
