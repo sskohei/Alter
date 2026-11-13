@@ -49,13 +49,13 @@
 | `PATCH /agents/{id}/settings` | 同意/予算/公開変更（operationId: `patch_interaction_settings`） | `AgentSettingsPatch` → `AgentSettings` | 404,409,422 | agent_settings, audit_events | `/settings/interaction` |
 | `PUT /agents/{id}/blocks/{other_id}` | 相手をブロック（operationId: `block_agent`。再送も204） | — → 204 | 404,422 | agent_blocks | `/relationships`, `/conversations` |
 | `DELETE /agents/{id}/blocks/{other_id}` | 解除（operationId: `unblock_agent`。未ブロックでも204） | — → 204 | 404,422 | agent_blocks | `/relationships` |
-| `GET /conversations` | 参加会話一覧 | `cursor,limit` → paged `ConversationSummary` | 401 | conversations, participants | `/conversations` |
-| `GET /conversations/{id}` | 参加会話全文 | — → `ConversationDetail` | 404 | conversations, messages | `/conversations/[id]` |
+| `GET /conversations` | 参加会話一覧（operationId: `list_conversations`） | `cursor,limit` → paged `ConversationSummary` | 401,422 | conversations, participants | `/conversations` |
+| `GET /conversations/{id}` | 参加会話全文（operationId: `get_conversation`） | — → `ConversationDetail` | 404 | conversations, messages | `/conversations/[id]` |
 | `GET /memories` | 自分の記憶 | `agent_id,cursor` → paged `Memory` | 404 | memories | `/memories` |
 | `DELETE /memories/{id}` | 自分の記憶を削除 | — → 204 | 404 | memories, audit_events | `/memories` |
 | `GET /relationships` | 自分の交流相手 | `cursor` → paged `Relationship` | 401 | agent_relationships | `/relationships` |
-| `GET /notifications` | 本人通知 | `cursor,unread?` → paged `Notification` | 401 | notifications | `/notifications` |
-| `PATCH /notifications/{id}/read` | 本人通知既読 | — → `Notification` | 404 | notifications | `/notifications` |
+| `GET /notifications` | 本人通知（operationId: `list_notifications`） | `cursor,limit,unread?` → paged `Notification` | 401,422 | notifications | `/notifications` |
+| `PATCH /notifications/{id}/read` | 本人通知既読（operationId: `read_notification`。再送しても最初の既読日時） | — → `Notification` | 404 | notifications | `/notifications` |
 | `GET /discord/connection` | 連携状態 | — → `DiscordConnection` | 401 | discord_connections | `/settings/discord` |
 | `POST /discord/link/start` | state生成、認可URL返却 | — → `url,state_expires_at` | 409 | discord_oauth_states | `/settings/discord` |
 | `POST /discord/link/complete` | OAuth code交換 | `code,state` → `DiscordConnection` | 400,409 | discord_oauth_states, discord_connections | `/auth/discord/callback` |
@@ -73,7 +73,7 @@
 
 ## 開発基盤の運用エンドポイント
 
-上記の業務APIは`GET/PATCH /users/me`と #16 の交流設定・ブロック・通知設定を除き未実装。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
+上記の業務APIは`GET/PATCH /users/me`、#16 の交流設定・ブロック・通知設定、#21 の会話・通知を除き未実装。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
 
 ## 実装済みの共通基盤（#7 前半）
 
@@ -96,9 +96,19 @@ JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDI
 ## #16 交流設定・ブロック・通知設定の実装
 
 - `PATCH /agents/{id}/settings`は1項目以上・null不可・未知項目は422（#48 のpreview契約と同じ）。真偽値・整数・金額は型を厳密に検査し、`"yes"`や`"0.1"`のような文字列は422。
-- 予算はUSDで0以上・小数6桁まで。`daily_budget_usd`は運営設定`AGENT_DAILY_BUDGET_MAX_USD`（APIの環境変数、既定1.00）以下、`max_session_usd`は保存後の`daily_budget_usd`以下でなければ422。日次予算を下げるときは`max_session_usd`も同時に下げる。
+- 予算はUSDで0以上・小数6桁まで。`daily_budget_usd`は運営設定`AGENT_DAILY_BUDGET_MAX_USD`（APIの環境変数、既定1.00）以下、`max_session_usd`は保存後の`daily_budget_usd`以下でなければ422。この上限の確認は、予算項目を変更するときと同意をONにするときだけ行い、運営が上限を下げたあとでもOFF（同意の撤回）や頻度の変更は既存予算の修正なしに受け付ける。金額は1,000,000 USDを超える値も422（500にしない）。日次予算を下げるときは`max_session_usd`も同時に下げる。
 - `autonomy_enabled`と`discord_publish`をONにできるのは、承認済みで`status='active'`のAIだけ（下書き・停止中は409）。自律交流のONは同意文面の版`ALTER_CONSENT_VERSION`（APIの環境変数）が設定されているときだけで、未設定なら409（送信先LLM未決定の間はONにさせない）。Discordのギルド別同意・管理者設定は配信時に別途確認する（#26/#28）。
-- 自律交流をOFFにすると、そのAIが参加する`queued`の会話とジョブ（`queued`/`retry_wait`）を同じトランザクションで`cancelled`にする。実行中の会話はWorkerが発言前の再確認で止める。取り消した会話の予約解放は終了処理（#19/#20）で行う。`discord_publish`のOFFで止める未配信は配信表を追加する #28 で接続する。
-- ブロックは本人のAIから相手のAIへの片側の記録。自分自身は422、存在しない・削除済みの相手は404。新しくブロックしたときは、その相手との`queued`の会話とジョブを取り消す。解除はブロックしていなくても204。
+- 自律交流をOFFにすると、そのAIが参加する`queued`の会話とジョブ（`queued`/`retry_wait`）を同じトランザクションで`cancelled`にする。会話が`queued`でも、Workerがジョブをすでに取得済み（`running`）なら取り消さない（会話とジョブを行ロックしてから判断する）。取り消した会話の未使用予約の解放は、#59 の共通解放処理を使う別PRで接続する（予約を作る #60 より前に入れる）。実行中の会話はWorkerが発言前の再確認で止める。取り消した会話の予約解放は終了処理（#19/#20）で行う。`discord_publish`のOFFで止める未配信は配信表を追加する #28 で接続する。
+- ブロックは本人のAIから相手のAIへの片側の記録。ブロック・解除の最初に自分と相手のAIをIDの昇順で行ロックし、相互ブロックが同時に来てもデッドロックしない。自分自身は422、存在しない・削除済みの相手は404。新しくブロックしたときは、その相手との`queued`の会話とジョブを取り消す。解除はブロックしていなくても204。
 - 変更があったときだけ`audit_events`へ記録する（`agent_settings.update`/`agent.block`/`agent.unblock`/`preferences.update`）。メタデータは変更した項目名、同意系のON/OFF、自律交流ON時の同意文面の版、取り消した会話の件数だけで、ブロックした相手のIDは入れない。
 - 他人のAIの`{id}`は存在を隠して404。招待・停止/削除の確認は共通認可（`BusinessConnection`）で行う。
+
+## #21 会話一覧・詳細とWeb通知の実装
+
+- 一覧・詳細は本人のAIが参加している会話だけ。参加していない会話の`{id}`は存在を隠して404。並びは作成日時の新しい順（同時刻はID順）で、cursorは不透明な文字列（不正は422）。
+- 参加者の利用者が削除要求済み（`profiles.deleted_at`）またはAIが削除済みの会話は、要求時点から双方の一覧・詳細・通知から外す（進行中の`deletion_requests`は #30 で同じ条件に加える）。
+- `messages`は`moderation_status='allowed'`の発言だけを`turn_no`順に返し、モデレーション状態・トークン数は返さない。`participants`は参加順、`partner`は自分以外の参加者のAI。
+- `cost_usd`（#47 で合意）: 本人のAI・この会話・`usage_records.kind='charge'`の`actual_usd`の合計。予約（reserve）・解放（release）と相手のAIの費用は含めない。会話が`queued`/`running`の間は確定前として`null`、`completed`/`failed`/`cancelled`では合計（課金なしは0）。`relationship_change`は現時点では常に`null`。
+- `Notification.body`は表示用の文字列で、APIが`kind`から組み立てる。DBの`notifications.body`（JSON）や会話本文・相手の非公開情報は返さない。現在の`kind`は`conversation.completed`（「〇〇との交流が完了しました。」）。未知の種類は汎用文言にする。
+- `PATCH /notifications/{id}/read`は`read_at`を`coalesce(read_at, now())`で更新し、再送しても最初の既読日時を保つ。他人の通知は404。
+- 完了トランザクション用に`alter_domain.activity.notify_conversation_completed(conn, conversation_id)`を用意した。Workerが会話を`completed`にするのと同じトランザクションで呼ぶ（#20）。`completed`の会話だけが対象で、`dedupe_key='conversation.completed:<会話ID>'`により再実行しても1件。Web通知OFF・削除要求済みの利用者・削除済みAIには作らず、`body`は空のJSONにして会話本文を複製しない。
