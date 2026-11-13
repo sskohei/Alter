@@ -1,7 +1,8 @@
 # フロント先行実装とMock
 
 #8は#3（完了）/#7（契約レビュー待ち）に依存する。
-実APIの`openapi.json`は`/health`のみ。文書から起こしたレビュー用Pydantic契約は
+実APIの`openapi.json`は`/health`と`GET/PATCH /api/v1/users/me`を含む。
+文書から起こしたレビュー用Pydantic契約は
 `apps/api/src/alter_api/contracts/frontend_preview.py`を正本とし、`pnpm api:generate`で
 `preview.openapi.json`/`preview-schema.d.ts`を生成する。本番APIへはマウントしない。
 CIは両方のOpenAPI/型の未生成差分を拒否する。
@@ -23,8 +24,8 @@ HTTPエラーの本文をログへ出さない。サーバーではユーザー�
 Mockエラーも実APIの生成OpenAPIで検査する。request_idはAPIが採番するため、
 クライアントはX-Request-IDを送らず応答から取得する（APIのCORS許可ヘッダーに含まれない）。
 
-`GET/PATCH /users/me`を含む業務ルーターは未実装で、招待判定はドメイン処理まで。
-プロフィール・人格・会話等のMockを実APIへ切り替える条件はまだ満たさない。
+2026-11-13のmain統合で`GET/PATCH /api/v1/users/me`と共通の招待認可を取り込んだ。
+人格・会話等の業務APIは未実装で、Web全体のMockを実APIへ切り替える条件はまだ満たさない。
 外部OAuth/LLM/Discordを使う自動テストのMockは引き続き維持する。
 
 ## #9 SSR認証
@@ -98,6 +99,14 @@ forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現でき�
 OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
 このブラウザのSupabaseセッションを終了して元の拒否理由を表示する。503ではセッションを終了せず再試行できる。
 BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABLE`に統一する。
+
+`SERVICE_UNAVAILABLE`は「サービスを一時的に利用できません。時間をおいて再試行してください。」と表示する。
+認証E2Eの503ケースは実APIと同じコードを返し、PC/mobileで文言とセッションCookieの維持を確認する。
+
+`onboarded_at`は最初の`POST /agents/{id}/profile/approve`成功時にAPIが記録し、再承認では日時を保持する。
+PR #58でこの記録処理が反映された後に、初回承認→ログアウト→再ログインで
+`/onboarding`へ戻らず`/dashboard`へ遷移することを実APIで受け入れ確認する。
+Mockの既存ユーザーでの遷移確認だけでは、この受け入れ条件を完了としない。
 
 ## PRレビュー反映（#46）
 
