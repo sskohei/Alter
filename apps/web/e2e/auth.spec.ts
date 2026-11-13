@@ -1,11 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-export async function signIn(page: Page, which = "normal", provider = "Google") {
-  await page.goto("/login");
-  await page.getByRole("checkbox").check();
-  await page.getByRole("button", { name: `${provider}でログイン` }).click();
-  await page.getByRole("link", { name: which, exact: true }).click();
-}
+import { signIn } from "./support/sign-in";
 for (const provider of ["Google", "GitHub"]) {
   test(`${provider}: PKCE → invitation gate → onboarding → logout`, async ({ page }) => {
     await page.goto("/"); await page.getByRole("link", { name: "招待を受けた方はこちら" }).click();
