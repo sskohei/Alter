@@ -55,3 +55,11 @@
 ADR-008の供給元未確定を維持する。共通出力は`Utterance`、価格は`ModelPrice`とし、
 偽LLMで後続の契約を検証できるようにする。正式採用は日本語・安全性・保持条件の実評価後。
 評価セットと依存/残件は[AI実装スタック](../24-ai-implementation-stack.md)に記録する。
+
+## #8/#9/#17 フロント先行実装（2026-11-07、レビュー待ち）
+
+#7/#15の実装済み業務OpenAPIと#5/#10のFigmaが未提供のため、文書契約のPydantic案を
+`alter_api/contracts/frontend_preview.py`に置き、`preview.openapi.json`と型を生成する。
+本番FastAPIにはマウントせず、既存`openapi.json`と区別する。これは契約の合意済みを意味しない。
+Bの契約レビュー後に差分を解消し、正式クライアントへ移す。Dのトークン/frame承認までは仮UI。
+依存Issueと未検証事項は各Draft PRに記録し、Mock成功だけでIssue完了・本番公開にしない。
