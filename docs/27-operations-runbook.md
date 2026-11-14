@@ -105,7 +105,7 @@ DM（dm）: Discordのユーザー ID は一覧に出さない。本人に私的
 | `ANTHROPIC_API_KEY` | WorkerのPC環境ファイル（sskoheiのみ） | Consoleで新しい鍵を作り、環境ファイルを差し替えてWorkerを再起動し、古い鍵を無効にする |
 | `DISCORD_BOT_TOKEN` | Botの環境ファイル | Developer PortalでReset Token、差し替えてBotを再起動 |
 | `DISCORD_CLIENT_SECRET` | APIの環境ファイル | Developer Portalで再発行、差し替えてAPIを再起動 |
-| `SUPABASE_SECRET_KEY`・`SUPABASE_STORAGE_SECRET_KEY` | APIとPurgeの環境ファイル（ADR-016） | Supabaseで新しいsecret keyを作り、APIとPurgeの両方を差し替えてから古い鍵を削除 |
+| `SUPABASE_SECRET_KEY`・`SUPABASE_STORAGE_SECRET_KEY` | APIとPurgeの環境ファイル（ADR-018） | Supabaseで新しいsecret keyを作り、APIとPurgeの両方を差し替えてから古い鍵を削除 |
 | `PROFILE_ENCRYPTION_KEY_V1` | APIの環境ファイル | 現在はV1だけ。交換（新旧の鍵で読み、再暗号化）のCLIは未実装で、#36の残りとして扱う。漏えいが疑われる場合はAPIを止めてBに連絡する |
 
 鍵の値をチャット・Issue・コミットに書かない。交換したら日時と鍵の種類だけを運営メモに残す。
