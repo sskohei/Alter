@@ -16,8 +16,12 @@ Worker・Bot には管理鍵を渡さない（ADR-016）。
 4. Auth: Supabase Auth のユーザーを削除する（既にいなければ成功扱い）
 5. 完了: 招待と許可 identity を削除し、削除要求を ``completed`` にする
 
-ロック順は API の認可・Scheduler（#60）と同じ「招待 → プロフィール → AI → 予算」。
-未確定の LLM 呼び出しが残っている間は消さずに再試行する（費用の保留を勝手に解放しない）。
+ロック順は API の認可・Scheduler（#60）と同じ「招待 → プロフィール → AI → 予算」のあと、
+Discord の配信行。未確定の LLM 呼び出しや、Bot が送信中の投稿が残っている間は消さずに
+再試行する（費用の保留を勝手に解放しない・作成中のスレッドを取りこぼさない）。
+
+ジョブの更新は取り出しごとの ``lease_token`` で所有を確かめる。リース切れのあとに
+取り直した実行がある場合、古い実行は結果を書かない（完了した状態を上書きしない）。
 """
 
 import json
@@ -61,6 +65,10 @@ class ExternalUnavailable(Exception):
         self.code = code
 
 
+class LeaseLost(Exception):
+    """リースが切れて別の実行がジョブを取り直した。この実行は結果を書かずに終わる。"""
+
+
 class AuthDeleter(Protocol):
     def delete_user(self, user_id: uuid.UUID) -> None: ...
 
@@ -75,6 +83,7 @@ class PurgeJob:
     request_id: uuid.UUID
     profile_id: uuid.UUID
     attempts: int
+    lease_token: uuid.UUID
 
 
 # -- ジョブの取り出しと結果 ----------------------------------------------------------------
@@ -97,12 +106,13 @@ def claim_job(conn: Connection, now: datetime) -> PurgeJob | None:
     ).first()
     if row is None:
         return None
+    token = uuid.uuid4()
     conn.execute(
         text(
             "update public.background_jobs set status = 'running', attempts = attempts + 1, "
-            "lease_until = :lease, last_error = null where id = :id"
+            "lease_until = :lease, lease_token = :token, last_error = null where id = :id"
         ),
-        {"id": row.id, "lease": now + timedelta(minutes=LEASE_MINUTES)},
+        {"id": row.id, "lease": now + timedelta(minutes=LEASE_MINUTES), "token": token},
     )
     conn.execute(
         text(
@@ -111,7 +121,20 @@ def claim_job(conn: Connection, now: datetime) -> PurgeJob | None:
         ),
         {"id": row.request_id},
     )
-    return PurgeJob(row.id, row.request_id, row.profile_id, row.attempts + 1)
+    return PurgeJob(row.id, row.request_id, row.profile_id, row.attempts + 1, token)
+
+
+def _ensure_owned(conn: Connection, job: PurgeJob) -> None:
+    """この実行がまだジョブを持っていることを確かめ、行をロックする。違えば ``LeaseLost``。"""
+    owned = conn.execute(
+        text(
+            "select 1 from public.background_jobs "
+            "where id = :id and status = 'running' and lease_token = :token for update"
+        ),
+        {"id": job.job_id, "token": job.lease_token},
+    ).first()
+    if owned is None:
+        raise LeaseLost()
 
 
 def mark_failed(conn: Connection, job: PurgeJob, code: str, now: datetime) -> None:
@@ -120,11 +143,16 @@ def mark_failed(conn: Connection, job: PurgeJob, code: str, now: datetime) -> No
     ``failed`` は運営（sskohei）が確認して利用者へ連絡する（docs/23）。
     """
     code = code[:64]
+    try:
+        _ensure_owned(conn, job)
+    except LeaseLost:
+        # 取り直した実行が結果を書く（完了・再試行を古い実行が上書きしない）
+        return
     if job.attempts >= MAX_ATTEMPTS:
         conn.execute(
             text(
                 "update public.background_jobs set status = 'failed', lease_until = null, "
-                "last_error = :code where id = :id"
+                "lease_token = null, last_error = :code where id = :id"
             ),
             {"id": job.job_id, "code": code},
         )
@@ -141,7 +169,7 @@ def mark_failed(conn: Connection, job: PurgeJob, code: str, now: datetime) -> No
     conn.execute(
         text(
             "update public.background_jobs set status = 'retry_wait', lease_until = null, "
-            "last_error = :code, run_at = :run_at where id = :id"
+            "lease_token = null, last_error = :code, run_at = :run_at where id = :id"
         ),
         {"id": job.job_id, "code": code, "run_at": now + delay},
     )
@@ -153,6 +181,7 @@ def mark_failed(conn: Connection, job: PurgeJob, code: str, now: datetime) -> No
 
 def complete(conn: Connection, job: PurgeJob, now: datetime) -> None:
     """招待と許可 identity を削除し、削除要求とジョブを完了にする。"""
+    _ensure_owned(conn, job)
     conn.execute(
         text("delete from public.invitations where auth_user_id = :p"), {"p": job.profile_id}
     )
@@ -166,7 +195,7 @@ def complete(conn: Connection, job: PurgeJob, now: datetime) -> None:
     conn.execute(
         text(
             "update public.background_jobs set status = 'completed', lease_until = null, "
-            "last_error = null where id = :id"
+            "lease_token = null, last_error = null where id = :id"
         ),
         {"id": job.job_id},
     )
@@ -213,6 +242,21 @@ def purge_database(conn: Connection, owner: uuid.UUID) -> None:
     except budget.UnsettledBudget:
         raise PurgeBlocked("llm_unsettled") from None
 
+    # Bot が送信中（sending）の投稿があれば待つ。スレッドを作ってから ID を保存するまでの
+    # 間に会話を消すと、配信行だけが消えて ID の保存が空振りし、スレッドが削除対象から漏れる。
+    # 取り出し中の行は for update で待つ（取り出しが確定すると sending として読み直す）。
+    # 送信中のまま止まった行は 10 分で needs_review になる（discord_delivery.recover_stale_sending）
+    in_flight = conn.execute(
+        text(
+            "select status from public.discord_deliveries "
+            "where conversation_id = any(cast(:c as uuid[])) and status in ('pending', 'sending') "
+            "order by id for update"
+        ),
+        {"c": conversations},
+    ).scalars()
+    if "sending" in set(in_flight):
+        raise PurgeBlocked("discord_sending")
+
     # Discord のスレッド ID だけを退避（会話の CASCADE で配信行が消える前に）
     conn.execute(
         text(
@@ -226,6 +270,7 @@ def purge_database(conn: Connection, owner: uuid.UUID) -> None:
     for conversation in conversations:
         budget.release_for_deletion(conn, conversation=conversation)
         conn.execute(text("delete from public.conversations where id = :c"), {"c": conversation})
+    _delete_related_jobs(conn, owner, agents, conversations)
 
     _anonymize_audit(conn, owner, agents, conversations)
     for agent in agents:
@@ -233,6 +278,29 @@ def purge_database(conn: Connection, owner: uuid.UUID) -> None:
         conn.execute(text("delete from public.agents where id = :a"), {"a": agent})
     # 通知・Discord 連携・OAuth state・冪等記録・アイコン台帳は CASCADE
     conn.execute(text("delete from public.profiles where id = :p"), {"p": owner})
+
+
+def _delete_related_jobs(
+    conn: Connection,
+    owner: uuid.UUID,
+    agents: list[uuid.UUID],
+    conversations: list[uuid.UUID],
+) -> None:
+    """dedupe_key・payload に本人・本人の AI・共有会話の ID を含むジョブを消す。
+
+    会話のジョブ（conversation.run）は dedupe_key に双方の AI ID、payload に会話 ID を持つ。
+    会話が先に消えて conversations.job_id で辿れないものも、ID の一致で消える。削除ジョブ
+    自身は削除要求の ID だけを持つので対象外（保持期限の削除で消える）。
+    """
+    ids = [str(owner), *(str(a) for a in agents), *(str(c) for c in conversations)]
+    conn.execute(
+        text(
+            "delete from public.background_jobs where kind <> :purge "
+            "and exists (select 1 from unnest(cast(:ids as text[])) i "
+            "  where strpos(dedupe_key, i) > 0 or strpos(payload::text, i) > 0)"
+        ),
+        {"purge": PURGE_JOB_KIND, "ids": ids},
+    )
 
 
 def _anonymize_audit(
@@ -270,6 +338,7 @@ def run_one(
         return None
     try:
         with engine.begin() as conn:
+            _ensure_owned(conn, job)
             purge_database(conn, job.profile_id)
         for bucket in STORAGE_BUCKETS:
             storage.purge_prefix(bucket, job.profile_id)
@@ -277,6 +346,8 @@ def run_one(
         with engine.begin() as conn:
             complete(conn, job, now)
         logger.info("account purge completed: %s", job.request_id)
+    except LeaseLost:
+        logger.warning("account purge lease lost: %s", job.request_id)
     except (PurgeBlocked, ExternalUnavailable) as exc:
         logger.warning("account purge retry: %s (%s)", job.request_id, exc.code)
         with engine.begin() as conn:

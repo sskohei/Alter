@@ -1,6 +1,8 @@
 """#30 後半: アカウント削除のパージと保持期限の削除（DB 統合テスト。Auth・Storage は偽物）。"""
 
 import asyncio
+import threading
+import time
 import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -411,6 +413,147 @@ def test_expired_lease_is_reclaimed_and_concurrent_claims_differ(
 def test_refuses_profile_without_deletion_request(engine: Engine, world: World) -> None:
     with engine.begin() as conn, pytest.raises(account_purge.PurgeBlocked):
         account_purge.purge_database(conn, world.partner)
+
+
+def test_sending_post_blocks_until_thread_id_is_saved(engine: Engine, world: World) -> None:
+    # Bot がスレッドを作っている途中（sending・ID 未保存）にパージすると取りこぼすので待つ
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "update public.discord_deliveries set status = 'sending', "
+                "discord_thread_id = null, discord_message_id = null where conversation_id = :c"
+            ),
+            {"c": world.conversation},
+        )
+    _make_due(engine)
+    auth = FakeAuth()
+    account_purge.run_one(engine, auth, FakeStorage(), NOW)
+    assert not auth.deleted
+    assert _count(engine, "select count(*) from public.conversations where id = :c",
+                  c=world.conversation) == 1  # fmt: skip
+    assert _one(engine, "select error_code from public.deletion_requests where profile_id = :p",
+                p=world.owner).error_code == "discord_sending"  # fmt: skip
+    # Bot が ID を保存して送り終えたあとの再試行で、スレッド ID を退避して消す
+    delivery_id = _one(engine, "select id from public.discord_deliveries where conversation_id "
+                       "= :c", c=world.conversation).id  # fmt: skip
+    with engine.begin() as conn:
+        dd.record_thread(conn, delivery_id, THREAD)
+        dd.mark_post_sent(conn, delivery_id, THREAD, THREAD)
+    account_purge.run_one(engine, auth, FakeStorage(), NOW + timedelta(minutes=3))
+    assert auth.deleted == [world.owner]
+    assert _one(engine, "select thread_id from public.discord_cleanup_tasks").thread_id == THREAD
+
+
+def test_purge_waits_for_a_claim_in_progress(engine: Engine, world: World) -> None:
+    # Bot の取り出し（pending → sending）の途中なら、確定を待ってから sending として読み直す
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "update public.discord_deliveries set status = 'pending', "
+                "discord_thread_id = null, discord_message_id = null where conversation_id = :c"
+            ),
+            {"c": world.conversation},
+        )
+    result: list[BaseException | None] = []
+
+    def purge() -> None:
+        try:
+            with engine.begin() as conn:
+                account_purge.purge_database(conn, world.owner)
+            result.append(None)
+        except BaseException as exc:  # noqa: BLE001
+            result.append(exc)
+
+    with engine.connect() as bot, bot.begin():
+        bot.execute(
+            text("select id from public.discord_deliveries where conversation_id = :c for update"),
+            {"c": world.conversation},
+        )
+        worker = threading.Thread(target=purge)
+        worker.start()
+        time.sleep(0.5)
+        assert worker.is_alive()  # Bot のロックを待っている
+        bot.execute(
+            text(
+                "update public.discord_deliveries set status = 'sending' where conversation_id = :c"
+            ),
+            {"c": world.conversation},
+        )
+    worker.join(10)
+    assert isinstance(result[0], account_purge.PurgeBlocked)
+    assert result[0].code == "discord_sending"
+
+
+def test_stale_run_cannot_overwrite_a_completed_job(engine: Engine, world: World) -> None:
+    _make_due(engine)
+    with engine.begin() as conn:
+        stale = account_purge.claim_job(conn, NOW)
+    assert stale is not None
+    # 古い実行が止まっている間にリースが切れ、別の実行が取り直して完了する
+    auth = FakeAuth()
+    fresh = account_purge.run_one(engine, auth, FakeStorage(), NOW + timedelta(minutes=16))
+    assert fresh is not None and fresh.lease_token != stale.lease_token
+    assert auth.deleted == [world.owner]
+    # 古い実行の失敗・完了は書かれない
+    with engine.begin() as conn:
+        account_purge.mark_failed(conn, stale, "internal_error", NOW + timedelta(minutes=17))
+    with engine.begin() as conn, pytest.raises(account_purge.LeaseLost):
+        account_purge.complete(conn, stale, NOW + timedelta(minutes=17))
+    row = _one(
+        engine,
+        "select r.status, r.error_code, j.status as job, j.last_error from "
+        "public.deletion_requests r join public.background_jobs j "
+        "on cast(j.payload ->> 'deletion_request_id' as uuid) = r.id where r.profile_id = :p",
+        p=world.owner,
+    )
+    assert tuple(row) == ("completed", None, "completed", None)
+
+
+def test_conversation_jobs_with_owner_ids_are_deleted(engine: Engine, world: World) -> None:
+    other_agent = uuid.uuid4()
+    with engine.begin() as conn:
+        linked = conn.execute(
+            text(
+                "insert into public.background_jobs (kind, dedupe_key, payload, status) values "
+                "('conversation.run', :k, cast(:p as jsonb), 'completed') returning id"
+            ),
+            {
+                "k": f"2026-11-19:3:{world.agent}:{world.partner_agent}",
+                "p": f'{{"conversation_id": "{world.conversation}", "seed": 1}}',
+            },
+        ).scalar_one()
+        conn.execute(
+            text("update public.conversations set job_id = :j where id = :c"),
+            {"j": linked, "c": world.conversation},
+        )
+        # 会話がすでに消えていて job_id で辿れないもの、相手だけのもの
+        conn.execute(
+            text(
+                "insert into public.background_jobs (kind, dedupe_key, payload, status) values "
+                "('conversation.run', :orphan, '{}', 'cancelled'), "
+                "('conversation.run', :other, '{}', 'completed')"
+            ),
+            {
+                "orphan": f"2026-11-18:1:{world.agent}:{other_agent}",
+                "other": f"2026-11-18:1:{world.partner_agent}:{other_agent}",
+            },
+        )
+    _make_due(engine)
+    account_purge.run_one(engine, FakeAuth(), FakeStorage(), NOW)
+    keys = [
+        r.dedupe_key
+        for r in _all(
+            engine, "select dedupe_key from public.background_jobs where kind = 'conversation.run'"
+        )  # fmt: skip
+    ]
+    assert keys == [f"2026-11-18:1:{world.partner_agent}:{other_agent}"]
+    with engine.begin() as conn:
+        conn.execute(text("delete from public.background_jobs where kind = 'conversation.run'"))
+
+
+def _all(engine: Engine, sql: str, **params: Any) -> list[Any]:
+    with engine.begin() as conn:
+        return list(conn.execute(text(sql), params))
 
 
 # -- 保持期限 ------------------------------------------------------------------------------
