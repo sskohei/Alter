@@ -67,3 +67,17 @@ def test_account_preview_reuses_formal_contract() -> None:
         "DeletionRequest",
     ):
         assert preview["components"]["schemas"][name] == live["components"]["schemas"][name]
+
+
+def test_discord_preview_reuses_formal_contract() -> None:
+    preview = create_contract_app().openapi()
+    live = create_app().openapi()
+    for path in (
+        "/api/v1/discord/connection",
+        "/api/v1/discord/guilds",
+        "/api/v1/discord/link/start",
+        "/api/v1/discord/link/complete",
+    ):
+        assert preview["paths"][path] == live["paths"][path]
+    for name in ("DiscordConnection", "DiscordLinkStart", "DiscordLinkComplete", "Guild"):
+        assert preview["components"]["schemas"][name] == live["components"]["schemas"][name]
