@@ -416,3 +416,70 @@ def test_status_is_404_before_request_and_only_own(
     api.as_user(b, _fresh()).post(PATH, json={"confirm": True})
     assert api.as_user(a).get(PATH).status_code == 404
     assert api.as_user(b).get(PATH).status_code == 200
+
+
+def test_generated_account_client_with_real_http(
+    engine: Engine, api: Api, users: list[uuid.UUID]
+) -> None:
+    """#31: generated production TS client checks the real API and shared deletion effects."""
+    import shutil
+    import socket
+    import subprocess
+    from pathlib import Path
+
+    import uvicorn
+    from fastapi import Request
+
+    owner = _user(engine, api, users)
+    partner = _user(engine, api, users)
+    with engine.begin() as conn:
+        conversation = _queued_conversation(conn, _agent(conn, owner), _agent(conn, partner))
+
+    def principal(request: Request) -> Principal:
+        freshness, sub = request.headers["authorization"].removeprefix("Bearer ").split(":")
+        return Principal(uuid.UUID(sub), "jwks", _fresh() if freshness == "fresh" else ())
+
+    api.app.dependency_overrides[get_principal] = principal
+    pnpm = shutil.which("pnpm")
+    assert pnpm
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        server = uvicorn.Server(uvicorn.Config(api.app, log_level="error"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            deadline = time.monotonic() + 10
+            while not server.started and thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert server.started
+            result = subprocess.run(
+                [
+                    pnpm,
+                    "--filter",
+                    "@alter/api-client",
+                    "exec",
+                    "tsx",
+                    "tests/account-live.ts",
+                    f"http://127.0.0.1:{port}",
+                    str(owner),
+                    str(partner),
+                    str(conversation),
+                ],
+                cwd=Path(__file__).resolve().parents[2],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+            with engine.connect() as conn:
+                state = _state(conn, owner)
+                assert state["autonomy_enabled"] is False
+                assert state["agent_status"] == "paused"
+                assert state["invitation_status"] == "revoked"
+                assert state["requests"] == 1
+        finally:
+            server.should_exit = True
+            thread.join(timeout=10)
+            assert not thread.is_alive()

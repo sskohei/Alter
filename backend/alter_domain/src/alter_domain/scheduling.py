@@ -81,9 +81,14 @@ def select_due(
                         text(
                             "insert into public.conversation_participants "
                             "(conversation_id,agent_id,ordinal,discord_consent,web_consent) "
-                            "values (:conv,:agent,:ordinal,false,true)"
+                            "values (:conv,:agent,:ordinal,:discord_consent,true)"
                         ),
-                        {"conv": conversation, "agent": row["id"], "ordinal": ordinal},
+                        {
+                            "conv": conversation,
+                            "agent": row["id"],
+                            "ordinal": ordinal,
+                            "discord_consent": row["discord_publish"],
+                        },
                     )
                     reserve(
                         conn,

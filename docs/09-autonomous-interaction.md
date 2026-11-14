@@ -47,7 +47,7 @@ mockはDBへ接続しない。`SCHEDULER_BATCH_SIZE`は1〜10、1回の起動で
 Render Cronは`*/15 * * * *`（UTC）、実行コマンドは
 `uv run --package alter-scheduler alter-scheduler`とする。
 
-10人MVPでは費用advisory lock→招待→profiles→agents→settingsの順で、各表をID順にロックする。
+10人MVPでは招待→profiles→agents→settings→費用advisory lockの順で、各表をID順にロックする。
 承認済み・active・双方ON・頻度が正・有効招待・削除要求なしを確認し、
 片側ブロック、queued/runningの既存会話、未完/課金結果不明のLLM実行を除外する。
 日次枠はUTC当日作成の参加会話を数え、取消/失敗も消費する保守的な扱いとする。
@@ -58,7 +58,9 @@ UTC日付/15分slot/ID昇順ペアのdedupe_keyで、終了済みジョブの同
 `kind=conversation.run`のjob・会話・承認版スナップショット・2参加者・双方の`session_reservation()`を
 savepoint内で一括作成する。片側/全体の予算不足は全体を戻し、次候補を試す。
 予算は#18の正式モデル設定を利用し、Workerは同じ予約をconsumeする。
-Discord公開不同意は非公開交流を妨げず、Schedulerは配送を許可しない。
+会話開始時の各参加者の`discord_publish`を`conversation_participants.discord_consent`へ保存する。
+Discord公開不同意は非公開交流を妨げない。配送処理（#28/#74）が完了時と投稿直前に
+双方の現在の公開設定・ギルド別同意・チャンネル設定・安全性を再確認し、配送可否を決める。
 OFF/ブロックによるqueued取消後も、#20のWorkerが未使用予約とcancelled eventを一度だけ精算する。
 
 

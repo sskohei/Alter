@@ -8,6 +8,8 @@ const links = [
   ["/settings/interaction", "交流設定"],
   ["/memories", "記憶"],
   ["/relationships", "交流相手"],
+  ["/settings/account", "アカウント設定"],
+  ["/settings/discord", "Discord連携"],
 ] as const;
 export function AppNavigation() {
   const primary = links.filter(([href]) =>

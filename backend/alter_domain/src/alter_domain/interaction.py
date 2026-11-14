@@ -10,7 +10,6 @@ from alter_domain.budget import lock_budget
 
 def lock_interactions(conn: Connection) -> None:
     # MVP <=10 owners: coarse, stable lock order also serializes with invitation revocation.
-    lock_budget(conn)
     for table, key in (
         ("invitations", "id"),
         ("profiles", "id"),
@@ -18,6 +17,8 @@ def lock_interactions(conn: Connection) -> None:
         ("agent_settings", "agent_id"),
     ):
         conn.execute(text(f"select {key} from public.{table} order by {key} for update")).all()
+    # API authorization locks invitations/profiles before entering the budget boundary.
+    lock_budget(conn)
 
 
 def eligible_agents(conn: Connection, *, active_run: UUID | None = None) -> list[RowMapping]:
