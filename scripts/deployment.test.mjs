@@ -10,6 +10,7 @@ const valid = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic",
   API_URL: "https://api.example.invalid",
   ALTER_PRODUCTION_SUPABASE_URL: "https://production.supabase.co",
+  ALTER_PRODUCTION_API_URL: "https://api-production.example.invalid",
   ALTER_REGISTERED_WEB_ORIGINS: "https://preview.example.invalid",
 };
 test("local build does not require deployed configuration", () =>
@@ -23,6 +24,7 @@ for (const [name, value] of Object.entries({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_secret_synthetic",
   ALTER_PRODUCTION_SUPABASE_URL: "https://preview.supabase.co",
   ALTER_REGISTERED_WEB_ORIGINS: "*",
+  ALTER_PRODUCTION_API_URL: "https://api.example.invalid",
   NEXT_PUBLIC_API_URL: "https://other.invalid",
   NEXT_PUBLIC_LLM_API_KEY: "synthetic",
   DISCORD_BOT_TOKEN: "synthetic",
@@ -47,6 +49,7 @@ test("production approval binds current commit", () => {
     ...valid,
     VERCEL_ENV: "production",
     ALTER_PREVIEW_SUPABASE_URL: "https://other.supabase.co",
+    ALTER_PREVIEW_API_URL: "https://api-preview.example.invalid",
     VERCEL_GIT_COMMIT_SHA: "a".repeat(40),
     ALTER_APPROVED_PRODUCTION_COMMIT: "a".repeat(40),
   };
@@ -198,3 +201,49 @@ test("smoke operations exist in the formal generated OpenAPI", () => {
     }
   }
 });
+
+for (const value of [
+  undefined,
+  "http://127.0.0.1:8000",
+  "https://api-production.example.invalid/path",
+]) {
+  test(`reject missing or invalid other-environment API origin: ${value}`, () => {
+    assert.ok(
+      checkWebEnvironment({ ...valid, ALTER_PRODUCTION_API_URL: value })
+        .includes("API: distinct Preview and Production HTTPS origins required"),
+    );
+  });
+}
+test("production also rejects the Preview API origin", () => {
+  const errors = checkWebEnvironment({
+    ...valid,
+    VERCEL_ENV: "production",
+    ALTER_PREVIEW_SUPABASE_URL: "https://other.supabase.co",
+    ALTER_PREVIEW_API_URL: valid.API_URL,
+    VERCEL_GIT_COMMIT_SHA: "a".repeat(40),
+    ALTER_APPROVED_PRODUCTION_COMMIT: "a".repeat(40),
+  });
+  assert.deepEqual(errors, [
+    "API: distinct Preview and Production HTTPS origins required",
+  ]);
+});
+
+for (const environment of ["preview", "production"]) {
+  test(`${environment} template passes after replacing the public key and approval SHA`, () => {
+    const template = readFileSync(
+      new URL(`../config/web/${environment}/.env.example`, import.meta.url), "utf8",
+    );
+    const env = Object.fromEntries(template.split("\n")
+      .filter((line) => line && !line.startsWith("#"))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        return [line.slice(0, separator), line.slice(separator + 1)];
+      }));
+    env.VERCEL_ENV = environment;
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_synthetic";
+    env.VERCEL_GIT_COMMIT_SHA = "a".repeat(40);
+    env.ALTER_APPROVED_PRODUCTION_COMMIT = env.VERCEL_GIT_COMMIT_SHA;
+    assert.equal(env.NEXT_PUBLIC_API_URL, env.API_URL);
+    assert.deepEqual(checkWebEnvironment(env), []);
+  });
+}

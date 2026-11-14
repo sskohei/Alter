@@ -4,15 +4,16 @@
 flowchart LR
   U[Web利用者] --> W[Next.js / Vercel]
   W --> A[Supabase Auth]
-  W -->|Bearer access token / HTTPS| API[FastAPI / Render Web]
+  W -->|Bearer access token / HTTPS| HTTPS[公開HTTPS経路]
+  HTTPS --> API[FastAPI / 手元PC]
   API -->|SQL / TLS| DB[(Supabase PostgreSQL)]
-  C[Render Cron] -->|候補選定・ジョブ登録| DB
-  WK[Render Worker] -->|ジョブ取得・結果保存| DB
+  C[OS定期実行 / 手元PC] -->|候補選定・ジョブ登録| DB
+  WK[Worker / 手元PC] -->|ジョブ取得・結果保存| DB
   WK -->|API key| LLM[LLM API]
-  BOT[Render Discord Bot] -->|SQL / TLS| DB
+  BOT[Discord Bot / 手元PC] -->|SQL / TLS| DB
   BOT <--> DC[Discord API / Gateway]
   API -->|管理操作| DB
-  W -.->|Polling 15〜30秒| API
+  W -.->|Polling 15〜30秒 / HTTPS| HTTPS
 ```
 
 ## 通信と整合性
@@ -21,7 +22,11 @@ Next.jsは`@supabase/ssr`でCookieセッションを保持する。Server Compon
 
 API・Worker・Bot・Cronは共通Pythonドメインパッケージと同一DBを使い、HTTPで互いのプロセスを呼ばない。Workerの会話と通知はDBトランザクションで確定し、Discordはoutbox型の通知ジョブを取得する。会話はDBが唯一の正本。Bot停止時も生成は継続し、復帰後に未配信ジョブを拾う。各処理は冪等キーと一意制約で重複を抑止する。詳細は [交流](09-autonomous-interaction.md) と [Discord](11-discord-bot.md)。
 
-MVPはAPI=Render有料Web Service、Worker=有料Background Worker、Bot=有料Background Worker、Scheduler=Render Cron Jobで分離する。1サービスにまとめるとデプロイ・障害・スケール単位が混ざり、無料Web Serviceはアイドル停止するため採用しない。[Renderの無料サービス制約](https://render.com/docs/free)、[Background Worker](https://render.com/docs/background-workers)、[Cron Jobs](https://render.com/docs/cronjobs)を2026-10-27に確認。
+MVPはWeb=Vercel Hobby、DB/Auth=Supabase Free、API・Worker・Bot・Scheduler=運営者の手元PCとする（2026-11-14、ADR-015、#75）。API・Worker・Botは同じPC上の独立プロセス、SchedulerはOSからUTCで15分ごとの短命実行とし、共通ドメイン/DBジョブの境界は維持する。プロセス単位で停止/再起動できるが、PC全体・電源・回線は共通の障害点となる。
+
+公開WebのブラウザとVercelのサーバー処理から到達できるHTTPS API URLを用意する。`localhost`は参加者自身/Vercelを指すため使えない。PCのAPIはloopbackで待受け、HTTPSトンネル等の中継を経由する。提供元と固定URLの確保は #34 で検証する。[配置・接続・秘密管理](14-deployment-infrastructure.md)を参照。
+
+PC稼働中は参加者がブラウザを閉じても交流する。停止/スリープ/回線断中はAPI・生成・Discordコマンド/投稿・削除処理が利用できない。Web/DBのクラウド配置だけで24時間利用を保証しない。再開時は現在のスケジュール枠から予約し、停止中の枠をまとめて取り戻す生成を行わない。常時稼働が必要になった場合は、同じ独立プロセスをVPS等へ移す構成を再評価する。
 
 ## 障害復旧
 

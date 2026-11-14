@@ -4,9 +4,10 @@
 Vercel接続・callback登録・実OAuthの成功は未確認。#33/#34もOpenであり、設定ファイルとMock検証だけでは#35をcloseしない。
 依存は #3/#33/#34/#23/#24/#25/#29/#31。自律交流の実接続には#19/#20/#28も必要。Mockを本番APIとして配置しない。
 
-## Vercelの登録
+## Vercel Hobbyの登録
 
-1. #33でPreview/Productionの別Supabaseプロジェクト、#34でRender APIを用意する。
+1. ADR-015に従い、#33でSupabase FreeのPreview/Production別プロジェクト、
+   #34で手元PCの環境別APIプロセス・待受ポートと公開HTTPS経路を用意する。
    #4の公開条件、#36の監視とrollback担当を確定する。
 2. VercelでこのGitリポジトリを選択し、Root Directoryを`apps/web`、FrameworkをNext.js、Node.jsを24.xに設定する。
    workspaceの`packages/api-client`とroot scriptsを参照するため、Root Directory外のソースを含める設定を有効にする。
@@ -14,12 +15,13 @@ Vercel接続・callback登録・実OAuthの成功は未確認。#33/#34もOpen�
 3. `config/web/preview/.env.example`と`config/web/production/.env.example`を環境別に登録する。
    テンプレート値を実値に置換し、Publishable Key以外のbackend秘密はWebへ登録しない。
    Vercelの公開システム変数の自動露出は無効にする（NEXT_PUBLIC_*は検査のallowlistのみ）。
-   反対環境のSupabase URLも公開URLとして登録し、プロジェクト混同を検査する。
+   反対環境のSupabase URLとAPI URL（`ALTER_PRODUCTION_API_URL`または`ALTER_PREVIEW_API_URL`）も登録し、環境混同を検査する。
+   `API_URL`はVercel SSR/BFFの接続先、`NEXT_PUBLIC_API_URL`は公開可能な同じHTTPS Originに合わせる。
 4. Previewは固定aliasを登録し、`NEXT_PUBLIC_SITE_URL`をそのHTTPS Originに合わせる。
    登録していないブランチ固有URLではOAuth受け入れをしない。API URLも同じ環境へ揃える。
    `ALTER_REGISTERED_WEB_ORIGINS`は運営が実登録を確認したOriginのCSVで、APIのCORS設定そのものではない。
 5. `git.deploymentEnabled:false`でGit自動デプロイは停止したままとする。
-   手動のPreviewデプロイもbuild時に環境検査を通す。公開担当がプラン・有料席・ドメイン・費用を実利用条件で記録する。
+   手動のPreviewデプロイもbuild時に環境検査を通す。公開担当がHobbyの用途/使用量条件・無料枠と追加費用を実利用条件で記録する。
    このPRはプラン契約・プロジェクト作成・ドメイン購入を行わない。
 
 ## CallbackとCORS（B/F共同確認）
@@ -61,7 +63,7 @@ logoutでOAuth/削除確認の短命cookieも消す。Nextの全応答にsame-or
   削除/失効再適用は#30/#36の手順に従う。
 
 接続後に記録するもの：プロジェクト名、Preview/Production URL、対象SHA、API/Supabaseの環境対応、
-プラン・席数と見積日、callback/CORS確認担当、実行日時・結果・rollback先。秘密と招待identityは記録しない。
+Hobby/Freeの条件確認日と費用見積日、callback/CORS確認担当、実行日時・結果・rollback先。秘密と招待identityは記録しない。
 実環境での受け入れは未記録。本番公開必須ゲートは2026-11-17または公開前日の早い方までに確認し、未完了なら延期する。
 
 参照：[Vercel monorepos](https://vercel.com/docs/monorepos)、
@@ -82,7 +84,7 @@ JavaScript無効のOAuth→logoutも回帰検査する。
 | 項目 | Preview | Production |
 |---|---|---|
 | Web / API Origin、Supabaseプロジェクト、対象SHA | 未確認 | 未確認 |
-| Vercel Root Directory・workspace build、プラン/席数/見積日 | 未確認 | 未確認 |
+| Vercel Root Directory・workspace build、Hobby/Free条件・見積日 | 未確認 | 未確認 |
 | Google / GitHub成功callback、キャンセル復帰、再認証 | 未実施 | 未実施 |
 | Discord本人連携・解除とcallback（テスト用本人/ギルド） | 未実施 | 未実施 |
 | `web:check-env` / `web:smoke`の実行日時・結果 | 未実施 | 未実施 |
@@ -93,4 +95,18 @@ JavaScript無効のOAuth→logoutも回帰検査する。
 
 公開変数はbuild時に固定されるため、Previewでbuildした成果物をProductionへそのまま昇格しない。
 Productionの環境でレビュー済みの同じソースSHAを再buildし、限定スモークを実行する。
-プラン/席数/料金は契約者が実利用条件で確定する。現時点で特定プランの契約や金額の受け入れは行っていない。
+Vercel Hobby/Supabase Freeの採用方針はADR-015で確定済み。用途/使用量/プロジェクト数が無料枠に収まるかは公開前に実利用条件で確認する。
+PCの電気代・回線・LLM・追加のHTTPS経路/ドメイン費は別途記録し、固定契約費$0が成立するかを確認する。
+
+
+## 手元PCのAPIと接続する際の確認
+
+- `API_URL`/`NEXT_PUBLIC_API_URL`には、ブラウザとVercel SSR/BFFの両方から到達できる公開HTTPS Originを指定する。
+  公開WebにloopbackやPC内だけのURLを設定しない。APIはPCのloopbackで待受け、#34で用意するHTTPS経路だけを公開する。
+- Preview/Productionは同じPCでもAPIプロセス・待受ポート・公開Origin・環境ファイルを分ける。
+  環境検査はOriginの重複を拒否するが、実際の中継先やSupabase JWT issuerの対応はB/Fが実接続で照合する。
+- API公開URLの変更時は両Web変数と反対環境の照合用URLを更新して再buildし、CORS/401とSSR/BFF疎通を再確認する。
+  Google/GitHub/Discordのcallbackは引き続きWeb/Supabaseの登録先であり、API URLへ変更しない。
+- PC停止/スリープ/回線断ではAPI・交流・Discord連携・削除処理が停止する。Webのエラー復帰を確認し、Mockへ自動退避しない。
+  停止中の削除依頼窓口と稼働時間を参加者へ案内し、削除期限を延長しない。
+- スモークはPCとHTTPS経路が稼働中に実行する。復旧後のlease/課金/配送照合・期限内パージ・バックアップ復元は#36/#37で検証する。

@@ -73,6 +73,15 @@ export function checkWebEnvironment(env) {
     errors.push(
       "Supabase: distinct Preview and Production project origins required",
     );
+  const otherApi = env[
+    env.VERCEL_ENV === "preview"
+      ? "ALTER_PRODUCTION_API_URL"
+      : "ALTER_PREVIEW_API_URL"
+  ];
+  if (!origin(otherApi) || origin(otherApi) === origin(env.API_URL))
+    errors.push(
+      "API: distinct Preview and Production HTTPS origins required",
+    );
   const allowed = (env.ALTER_REGISTERED_WEB_ORIGINS ?? "")
     .split(",")
     .map((value) => value.trim());
