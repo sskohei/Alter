@@ -159,3 +159,5 @@ Webの環境別設定、callback/CORS登録、限定スモークと#35の完了�
 
 PCのsystemd設定・HTTPS候補・起動前検査・停止/復旧・実機受け入れ記録は
 [PC運用手順](28-pc-services-https.md)を参照する。
+Supabaseの環境別設定・接続検査・migration・バックアップの具体手順と未実施記録は
+[Supabase運用手順](27-supabase-operations.md)を参照する。
