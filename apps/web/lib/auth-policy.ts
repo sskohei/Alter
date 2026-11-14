@@ -1,7 +1,7 @@
 export function safeReturnPath(value: unknown) {
   if (typeof value !== "string") return "/dashboard";
   // Restrict to implemented routes; disallow protocol-relative URLs and encodings.
-  return /^\/(dashboard|onboarding|deletion-status|agent(?:\/new|\/edit)?)$/.test(value) ? value : "/dashboard";
+  return /^\/(dashboard|onboarding|deletion-status|settings\/(?:discord|account|interaction)|agent(?:\/new|\/edit)?)$/.test(value) ? value : "/dashboard";
 }
 export function accessMessage(code: string) {
   const messages: Record<string, string> = {
