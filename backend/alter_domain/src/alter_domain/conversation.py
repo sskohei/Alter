@@ -22,6 +22,7 @@ from alter_domain.budget import (
 )
 from alter_domain.interaction import ELIGIBLE_AGENTS_SQL, lock_interactions
 from alter_domain.llm import (
+    ConversationTurn,
     StructuredLLMClient,
     TemporaryLLMError,
     UnknownLLMOutcome,
@@ -290,15 +291,19 @@ def prepare(
     lease: Lease,
     now: datetime,
     global_limit: Decimal,
-) -> tuple[uuid.UUID, int, list[str]]:
+) -> tuple[uuid.UUID, int, list[ConversationTurn]]:
     lock_interactions(conn)
     assert_lease(conn, lease, now)
-    turns = list(
-        conn.execute(
-            text("select content from public.messages where conversation_id=:id order by turn_no"),
+    turns = [
+        ConversationTurn(row.agent_id, row.turn_no, row.content)
+        for row in conn.execute(
+            text(
+                "select agent_id,turn_no,content from public.messages "
+                "where conversation_id=:id order by turn_no"
+            ),
             {"id": lease.conversation},
-        ).scalars()
-    )
+        )
+    ]
     turn = len(turns) + 1
     # Check crash markers before consent/budget: unknown requests must never release holds.
     invocation = conn.execute(

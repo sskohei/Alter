@@ -5,6 +5,7 @@ import httpx
 import pytest
 from alter_domain.agent_models import AgentDraftInput, ProfileInput, SuggestionInput
 from alter_domain.llm import (
+    DialogueTurn,
     PromptMessage,
     RateLimitedLLMError,
     SafetyModerator,
@@ -171,13 +172,21 @@ def test_context_trim_preserves_profile_system_and_schema():
         bodies.append(json.loads(req.content))
         return httpx.Response(200, json={"input_tokens": 2500 if len(bodies) < 4 else 100})
 
-    messages = build_prompt(ProfileInput(**PROFILE), ["old turn"], ["old memory"], "old summary")
+    turns = [
+        DialogueTurn(turn_no=1, speaker="partner", content="old turn"),
+        DialogueTurn(turn_no=2, speaker="self", content="読書が好きです。"),
+        DialogueTurn(turn_no=3, speaker="partner", content="どんな本が好きですか？"),
+    ]
+    messages = build_prompt(ProfileInput(**PROFILE), turns, ["old memory"], "old summary")
     original = messages[1].content
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         SonnetClient(configured(), http).prepare(messages, Utterance)
     data = json.loads(bodies[-1]["messages"][0]["content"])
     assert data["quoted_summary"] is None
-    assert data["quoted_memories"] == [] and data["quoted_turns"] == []
+    assert data["quoted_memories"] == []
+    assert data["quoted_turns"] == [turn.model_dump() for turn in turns[1:]]
+    assert data["conversation"]["next_turn"] == 4
+    assert data["conversation"]["reply_to_turn"] == 3
     assert data["approved_profile"]["personality"] == "穏やか"
     assert bodies[0]["system"] == bodies[-1]["system"]
     assert bodies[0]["output_config"] == bodies[-1]["output_config"]

@@ -182,6 +182,8 @@ class SonnetClient:
                 history = data.get("quoted_memories") or data.get("quoted_turns")
                 if not isinstance(history, list) or not history:
                     raise ValueError
+                if history is data.get("quoted_turns") and len(history) <= 2:
+                    raise UnsafeOutput("Recent dialogue exceeds the token bound")
                 history.pop(-1 if data.get("quoted_memories") else 0)
                 body["messages"][0]["content"] = json.dumps(data, ensure_ascii=False)
             except (ValueError, TypeError, AttributeError):

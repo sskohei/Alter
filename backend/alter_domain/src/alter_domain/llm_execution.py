@@ -15,6 +15,8 @@ from sqlalchemy import Connection, Engine, text
 
 from alter_domain import budget, memory
 from alter_domain.llm import (
+    ConversationTurn,
+    DialogueTurn,
     LLMResponse,
     PromptMessage,
     SafetyModerator,
@@ -380,21 +382,45 @@ class LLMExecution:
                 raise UnknownLLMOutcome("Provider outcome is unknown") from None
             raise
 
-    def conversation_turn(self, agent: UUID, conversation: UUID, turns: list[str]) -> Utterance:
+    def conversation_turn(
+        self, agent: UUID, conversation: UUID, turns: list[ConversationTurn]
+    ) -> Utterance:
         self.memory_snapshot = None
         with self.transaction() as conn:
             if not self.guard_before_dispatch:
                 _conversation_allowed(conn, agent, conversation)
-            other = conn.execute(
+            participants = conn.execute(
                 text(
-                    "select agent_id from public.conversation_participants "
-                    "where conversation_id=:conv and agent_id<>:agent"
+                    "select a.id,a.name from public.conversation_participants cp "
+                    "join public.agents a on a.id=cp.agent_id "
+                    "where cp.conversation_id=:conv order by cp.ordinal"
                 ),
-                {"conv": conversation, "agent": agent},
-            ).scalar_one()
+                {"conv": conversation},
+            ).all()
+            own = next(row for row in participants if row.id == agent)
+            partner = next(row for row in participants if row.id != agent)
+            other = partner.id
+            if any(turn.agent_id not in (agent, other) for turn in turns):
+                raise UnsafeOutput("Unknown conversation speaker")
+            dialogue = [
+                DialogueTurn(
+                    turn_no=turn.turn_no,
+                    speaker="self" if turn.agent_id == agent else "partner",
+                    content=turn.content,
+                )
+                for turn in turns
+            ]
             memories, summary = memory.prompt_context(conn, agent, other)
             self.memory_snapshot = agent, other, memories, summary
-            messages = approved_prompt(conn, agent, turns, memories, summary)
+            messages = approved_prompt(
+                conn,
+                agent,
+                dialogue,
+                memories,
+                summary,
+                self_name=own.name,
+                partner_name=partner.name,
+            )
         return self.execute(agent, messages, Utterance, conversation=conversation)
 
 
@@ -447,9 +473,12 @@ def _strings(value: object) -> list[str]:
 def approved_prompt(
     conn: Connection,
     agent: UUID,
-    turns: list[str] | None = None,
+    turns: list[DialogueTurn] | None = None,
     memories: list[str] | None = None,
     summary: str | None = None,
+    *,
+    self_name: str | None = None,
+    partner_name: str | None = None,
 ) -> list[PromptMessage]:
     """Load ONLY the approved public revision. Worker supplies separately authorized quotes."""
     from alter_domain.agents import get_profile
@@ -463,4 +492,11 @@ def approved_prompt(
     profile = get_profile(conn, agent, version)
     if profile.approved_at is None:
         raise UnsafeOutput("An approved profile is required")
-    return build_prompt(profile, turns or [], memories, summary)
+    return build_prompt(
+        profile,
+        turns or [],
+        memories,
+        summary,
+        self_name=self_name,
+        partner_name=partner_name,
+    )
