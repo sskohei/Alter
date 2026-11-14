@@ -2,6 +2,12 @@
 
 更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。Sonnetの費用付き生成/独立安全判定と任意人格提案APIを実装。独立Workerの会話生成・安全判定・費用精算を接続済み。実OAuth/Storage/LLMの公開受け入れ・本番配備は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
 
+## MVPの配置方針
+
+WebはVercel Hobby、DB/AuthはSupabase Freeの無料枠を使い、API・Worker・Discord Bot・Schedulerは運営者の手元PCで動かす（[ADR-015](docs/decisions/architecture-decisions.md)、[Issue #75](https://github.com/sskohei/Alter/issues/75)）。各プロセスは独立させ、SchedulerはOSから15分ごとに実行する。公開WebからAPIへ到達するHTTPS経路が必要で、`localhost`を公開WebのAPI URLには使わない。
+
+PCの電源・回線・プロセスが稼働している間に利用できる構成で、PC停止/スリープ中はAPI・交流生成・Discord連携・削除処理が停止する。クラウドのWeb/DBが残っていてもアプリ全体の利用は保証しない。無料枠の条件、秘密管理、停止/復旧、バックアップは[デプロイ](docs/14-deployment-infrastructure.md)、電気代・LLM費は[費用](docs/20-cost-estimation.md)を参照。本変更は配置方針の文書化であり、HTTPS公開経路・OS起動設定・実環境受け入れは #34〜#37 で整備する。
+
 ## ローカル開発（最初に実行）
 
 前提: Git、Node.js **24.18.0**（`.nvmrc`）、pnpm **10.34.9**、uv **0.13.6**、Docker Engine/Desktop（稼働中）。Python **3.13.12**はuvが取得する。Supabase CLI **2.122.0**はpnpmで固定しており、グローバルインストールやSupabaseへのログインは不要。
@@ -122,7 +128,7 @@ OpenAPIの正本はFastAPI/Pydantic。ユーザー/人格/交流設定/会話/�
 
 ## MVPの成立条件
 
-招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
+招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。運営者のPCが稼働中なら参加者がブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を抑止する。PC停止中は処理も停止し、復帰時に未完ジョブと課金/配送結果を照合する。
 
 ## Claude Sonnet 5.5の採用（Issue #14）
 
@@ -156,7 +162,7 @@ APIサーバーに`ALTER_MODE=live`、`LLM_ENABLED=true`、`ANTHROPIC_API_KEY`�
 
 `ALTER_MODE=live SCHEDULER_ENABLED=true uv run --package alter-scheduler alter-scheduler`
 で同意・枠・予算内のペアをDBへ予約し、終了する。LLM通信やAPIキーは不要。
-Render CronはUTCで15分ごと。選定seed、承認版、双方の費用予約を保存し、
+手元PCのOS定期実行はUTCで15分ごと。選定seed、承認版、双方の費用予約を保存し、
 同時起動の重複予約を防ぐ。詳細は[交流契約](docs/09-autonomous-interaction.md)。
 会話生成/終了時の精算はWorker（#20）へ接続済み。本番配備は#34で行う。
 

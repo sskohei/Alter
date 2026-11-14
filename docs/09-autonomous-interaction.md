@@ -2,7 +2,7 @@
 
 ## 定期処理とマッチング
 
-Render CronをUTCで15分ごとに実行する。`scheduler.select_due`は承認済み・ON・削除待ちでないAIを抽出し、直近実行、当日回数、費用台帳、進行中セッションを確認する。ペアの順序を正規化し、`dedupe_key=YYYY-MM-DD:slot:low_agent_id:high_agent_id`でジョブと会話を原子的に作る。同じペアの並行セッションを禁止。候補スコアは`共通興味 + 新規性 - 直近交流回数`の単純な整数、ランダム同点解消は記録可能なseedを使う。ブロックは片側だけでも除外。公開会話への同意はマッチング条件ではなく配信条件だが、交流そのものへの同意は双方必須。
+運営者の手元PCでOSの定期実行からSchedulerをUTCで15分ごとに起動する。PC停止/スリープ中は予約・生成を行わず、復帰後は現在の枠から再開する。停止中の全スロットを遡って一括生成しない。`scheduler.select_due`は承認済み・ON・削除待ちでないAIを抽出し、直近実行、当日回数、費用台帳、進行中セッションを確認する。ペアの順序を正規化し、`dedupe_key=YYYY-MM-DD:slot:low_agent_id:high_agent_id`でジョブと会話を原子的に作る。同じペアの並行セッションを禁止。候補スコアは`共通興味 + 新規性 - 直近交流回数`の単純な整数、ランダム同点解消は記録可能なseedを使う。ブロックは片側だけでも除外。公開会話への同意はマッチング条件ではなく配信条件だが、交流そのものへの同意は双方必須。
 
 ## Worker手順
 
@@ -44,7 +44,7 @@ DBの予算既定値と会話単位の予約方式を維持する。MVPは引用
 `scheduling.schedule/select_due`を1回実行して終了する。既定は無効。
 LLM通信は行わず、APIキーや`LLM_ENABLED`は不要。Workerの実行・配備は#20/#34。
 mockはDBへ接続しない。`SCHEDULER_BATCH_SIZE`は1〜10、1回の起動で最大10予約。
-Render Cronは`*/15 * * * *`（UTC）、実行コマンドは
+手元PCのOS定期実行は`*/15 * * * *`（UTC）、実行コマンドは
 `uv run --package alter-scheduler alter-scheduler`とする。
 
 10人MVPでは招待→profiles→agents→settings→費用advisory lockの順で、各表をID順にロックする。

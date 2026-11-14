@@ -74,13 +74,13 @@ Scheduler/Workerが使う索引とトランザクション境界:
 
 ## RLSと接続ロール
 
-全`public`業務テーブルでRLSを有効にし、`anon`の読み書きを禁止する。`authenticated`には直接DML権限を与えず、MVPでは**すべての表でRLSポリシー0件（default deny）**とする。対象は上表の全24表で、`invitations`・`invitation_identities`・`profiles`・`agents`・`agent_profiles`・`agent_settings`・`conversations`・`conversation_participants`・`messages`・`memories`・`agent_relationships`・`agent_blocks`・`notifications`・`discord_connections`・`discord_oauth_states`・`discord_guilds`・`discord_channels`・`agent_discord_consents`・`discord_deliveries`・`discord_dm_deliveries`・`usage_records`・`background_jobs`・`audit_events`・`deletion_requests`。将来、公開プロフィール投影を追加する場合は別VIEWと限定SELECTポリシーを設計する。`postgres`等の管理権限はRLSを迂回し得るため、APIはJWT検証と所有権SQL条件を必須とする。Worker/Botは別の最小権限DB資格情報を持つのが正式版目標。MVPでは管理接続を使う場合、秘密をRenderだけに置き、各操作の`WHERE owner_id=...`と参加者検証をテストで必須とする。新規関数の既定権限は、スキーマ単位の付与を外すことに加え、グローバルのPUBLIC EXECUTEも取り消す。RLSをAPI側の認可代替と数えない。[Supabase RLS資料](https://supabase.com/docs/guides/database/postgres/row-level-security)、[JWT資料](https://supabase.com/docs/guides/auth/jwts)。
+全`public`業務テーブルでRLSを有効にし、`anon`の読み書きを禁止する。`authenticated`には直接DML権限を与えず、MVPでは**すべての表でRLSポリシー0件（default deny）**とする。対象は上表の全24表で、`invitations`・`invitation_identities`・`profiles`・`agents`・`agent_profiles`・`agent_settings`・`conversations`・`conversation_participants`・`messages`・`memories`・`agent_relationships`・`agent_blocks`・`notifications`・`discord_connections`・`discord_oauth_states`・`discord_guilds`・`discord_channels`・`agent_discord_consents`・`discord_deliveries`・`discord_dm_deliveries`・`usage_records`・`background_jobs`・`audit_events`・`deletion_requests`。将来、公開プロフィール投影を追加する場合は別VIEWと限定SELECTポリシーを設計する。`postgres`等の管理権限はRLSを迂回し得るため、APIはJWT検証と所有権SQL条件を必須とする。Worker/Botは別の最小権限DB資格情報を持つのが正式版目標。MVPでは管理接続を使う場合、秘密を手元PCのバックエンド専用のアクセス制限付き環境ファイル/OS秘密管理にだけ置き、各操作の`WHERE owner_id=...`と参加者検証をテストで必須とする。新規関数の既定権限は、スキーマ単位の付与を外すことに加え、グローバルのPUBLIC EXECUTEも取り消す。RLSをAPI側の認可代替と数えない。[Supabase RLS資料](https://supabase.com/docs/guides/database/postgres/row-level-security)、[JWT資料](https://supabase.com/docs/guides/auth/jwts)。
 
 招待2表の参照・変更はAPIの認可/限定管理処理と運営CLIに限定し、Worker/Bot/Cronは停止状態を業務表経由で確認する。運営CLIは招待・停止/取消・監査に必要な処理だけを共通ドメイン経由で実行する。
 
 論理アクセス権はAPIが全24表のうち公開REST操作に必要な行、Workerが`agents`/人格/設定/会話/発言/記憶/関係/通知/費用/ジョブ/配信、Cronが`agents`/設定/ブロック/関係/費用/会話/ジョブ、BotがDiscord連携/ギルド/同意/配信/通知/設定に限定する。ブラウザの`anon`と`authenticated`は全24表へ直接アクセス不可。MVPで同じ管理DB資格情報を共有する場合も、サービス層のリポジトリを分けてこの論理権限だけを呼べるようにする。
 
-API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザクションはtransaction mode、セッション状態が要る処理はsession modeを検証する。`SKIP LOCKED`はトランザクション内で使い、セッションロックに依存しない。マイグレーションはsession/direct接続で実行。接続数とIPv4経路はデプロイ時に検証する。[Supabase接続資料](https://supabase.com/docs/guides/database/connecting-to-postgres)、[Renderからの接続資料](https://render.com/articles/how-to-connect-a-render-service-to-supabase-postgres)。
+API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザクションはtransaction mode、セッション状態が要る処理はsession modeを検証する。`SKIP LOCKED`はトランザクション内で使い、セッションロックに依存しない。マイグレーションはsession/direct接続で実行。接続数とIPv4経路はデプロイ時に検証する。[Supabase接続資料](https://supabase.com/docs/guides/database/connecting-to-postgres)。
 
 ## トランザクション境界
 
