@@ -155,7 +155,7 @@ memories_guard_candidateとguard_memory_candidate()、追加3表の順で除去�
 本文・回答・出力・秘密は保存しない。RLS default deny/ブラウザ権限なし。
 `reserved/generating/generated/moderating/unknown`は1体1行までの部分UNIQUEで並行呼出を拒否する。
 UTC日次のsuggestion行数で失敗も含め3回を検査。金額の正本はusage_records。
-プロセス停止後も自動で再実行/予約解放しない。#36で照合後に状態と台帳を確定する。
+プロセス停止後も自動で再実行/予約解放しない。#36の`alter-ops llm-settle`で、運営がConsoleの使用量と照合してから状態と台帳を確定する（`failed`・`unknown_outcome`。課金ありなら通常と同じ鍵で課金を記録し、残りの予約を解放する。手順は[運用手順書](27-operations-runbook.md) §4）。
 メタデータの保持は費用台帳と同じ12か月とし、#30のパージで完了行を清掃する。
 新規migrationは`20261114130000_llm_runs.sql`。戻すときは未完実行を照合してから表を削除する。
 
