@@ -24,10 +24,12 @@ ErrorCode = Literal[
     "FORBIDDEN",
     "INVITATION_REQUIRED",
     "ACCOUNT_INACTIVE",
+    "REAUTHENTICATION_REQUIRED",
     "NOT_FOUND",
     "METHOD_NOT_ALLOWED",
     "CONFLICT",
     "VALIDATION_ERROR",
+    "OAUTH_STATE_INVALID",
     "RATE_LIMITED",
     "AUTHORIZATION_UNAVAILABLE",
     "SERVICE_UNAVAILABLE",
@@ -97,6 +99,10 @@ class RequestIdMiddleware:
                 if not any(key.lower() == name for key, _ in headers):
                     headers.append((name, request_id.encode()))
                 if scope.get("path", "").startswith("/api/v1/"):
+                    # Routers may already set no-store. Enforce one authoritative value.
+                    headers = [
+                        (key, value) for key, value in headers if key.lower() != b"cache-control"
+                    ]
                     headers.append((b"cache-control", b"no-store"))
                 message["headers"] = headers
             await send(message)

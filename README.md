@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-02。`docs/`が実装契約で、現在は開発用Monorepo雛形とIssue #3のCI・PR品質ゲートを実装済み。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
+更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。Sonnetの費用付き生成/独立安全判定と任意人格提案APIを実装。実OAuth/Storage/LLMの公開受け入れ・本番Worker接続は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
 
 ## ローカル開発（最初に実行）
 
@@ -26,7 +26,7 @@ cp .env.example .env
 ```bash
 pnpm db:start          # 初回はDockerイメージをダウンロードする
 pnpm db:status        # URLとローカルキーを確認（出力は共有しない）
-# WebのAuth実装に必要な公開キー取得（現在はログイン画面未実装）
+# WebのAuth実装に必要な公開キー取得（SSRログイン画面用。実OAuth登録は#33/#35が依存）
 pnpm exec supabase status -o env
 pnpm db:stop           # データを保持して停止
 # 必要時のみ: ローカルDBのデータを削除しmigrations/seedを再適用
@@ -60,11 +60,14 @@ uv run --package alter-discord-bot alter-bot     # 既定は無効、正常終�
 uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
-Webの「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIに業務エンドポイントはまだない。
+Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIは招待認可付きのユーザー/人格/交流設定等を提供する（[API設計](docs/07-api-design.md)）。
+`/development/mock`では合成データでプロフィール・ページング・エラーを確認できる。
 
 ### Mockと無効化
 
-既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。これは初期接続確認用のMockで、認証や業務APIのMockは後続Issueで契約に合わせて追加する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+既定の`ALTER_MODE=mock`ではWorker/Cron/BotのLLM・Discord処理は合成動作となる。APIの`/health`とWebはSupabase停止中でも起動確認できる。本人プロフィールAPI（`GET/PATCH /api/v1/users/me`）はmockモードではJWT検証を通過しても共通認可処理で503 `SERVICE_UNAVAILABLE`を返し、招待確認・DB接続へ進まない。
+
+本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Workerの`live`処理は未実装なので明示的にエラー終了する。Cronは`SCHEDULER_ENABLED=true`でDBへの交流予約を1回実行する（既定無効）。
 
 ```bash
 uv run --package alter-worker alter-worker --once
@@ -105,7 +108,7 @@ ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/p
 
 GitHub Actionsの必須チェックは`CI required`。Python/Web/API生成差分/空Supabase migration/secret scanningの検査範囲は[テスト戦略](docs/16-testing-strategy.md)、`MainRule`の承認・保護設定は[Git運用](docs/22-git-workflow.md)を参照。
 
-OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生成し、業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
+OpenAPIの正本はFastAPI/Pydantic。ユーザー/人格/交流設定/会話/通知/Discord連携/削除受付の実装を生成し、詳細と将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
 
 ## 読む順序
 
@@ -120,3 +123,39 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生�
 ## MVPの成立条件
 
 招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
+
+## Claude Sonnet 5.5の採用（Issue #14）
+
+10人MVPはClaude直接APIの`claude-sonnet-5-5`を正式採用。
+共通の採用設定・単価は`alter_domain.llm_selection`、評価CLIもこの設定を使用する。
+`uv run --package alter-domain alter-llm-evaluate`は外部通信なしのdry-run。
+実評価はroot `.env`の`ANTHROPIC_API_KEY`と明示的な`--live`でのみ有効になる。
+[限定評価](evaluations/llm/sonnet-review-2026-11-13.md)・
+[評価手順](evaluations/llm/README.md)・[選定/保持条件](docs/26-llm-candidate-review.md)を参照。
+残りの品質受け入れは#37、本番Workerのadapter・moderation・費用予約の接続は#18の範囲。
+
+## アイコンAPI（#15）
+
+`POST /api/v1/agent-icons`へPNG/JPEG/WebPのバイナリを送ると、検証済みの本人用`icon_path`を返す。
+作成時または`PATCH /agents/{id}`で指定でき、GET等では300秒の`icon_url`だけを返す。
+入力/正規化後とも2 MiB以下・2048px以下・単一フレーム。実画像をデコード/PNG再エンコードし、
+EXIF/GPS等のメタデータを削除する。専用のprivate bucketとAPI専用Storageキーを使う。
+[API契約](docs/07-api-design.md)・[Storage設定](docs/14-deployment-infrastructure.md)を参照。
+
+
+## 費用付きLLM実行（#18）
+
+人格提案APIは公開answers辞書から未承認の人格案を返す（保存/承認は本人操作）。
+APIサーバーだけに`ALTER_MODE=live`、`LLM_ENABLED=true`、`ANTHROPIC_API_KEY`を設定して有効化する。
+既定は無効。Web/CIへ実キーを渡さない。外部テストはMock。
+生成と独立安全判定を事前予約し、UTC日次3回・AI日次/会話/全体の費用上限を検査する。
+課金結果不明は予約を保持して追加実行を停止する。[実行契約](docs/08-ai-agent-architecture.md)を参照。
+
+
+## 自律交流Scheduler（#19）
+
+`ALTER_MODE=live SCHEDULER_ENABLED=true uv run --package alter-scheduler alter-scheduler`
+で同意・枠・予算内のペアをDBへ予約し、終了する。LLM通信やAPIキーは不要。
+Render CronはUTCで15分ごと。選定seed、承認版、双方の費用予約を保存し、
+同時起動の重複予約を防ぐ。詳細は[交流契約](docs/09-autonomous-interaction.md)。
+会話生成/終了時の精算はWorker（#20）、本番配備は#34で行う。
