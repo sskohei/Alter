@@ -1,0 +1,36 @@
+[Unit]
+Description=Alter ops status check (%i)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=alter-%i
+Group=alter-%i
+WorkingDirectory=/opt/alter/%i/current
+EnvironmentFile=/etc/alter/%i/ops.env
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+RuntimeDirectory=alter-%i-ops
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 0 /run/alter-%i-ops/run.lock /opt/alter/%i/current/.venv/bin/python scripts/run_service.py ops %i
+Restart=no
+RestartPreventExitStatus=78
+RestartSec=15
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=90
+TimeoutStartSec=5min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# 出力は件数と固定の警告コードだけ（本文・ID を含まない。#36）なので journal に残す。
+StandardOutput=journal
+StandardError=null

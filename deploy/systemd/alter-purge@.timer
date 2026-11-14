@@ -1,0 +1,12 @@
+[Unit]
+Description=Alter hourly account purge (%i)
+
+[Timer]
+OnCalendar=hourly
+# PC が止まっていて逃した回は、起動後に 1 回だけ実行する（削除の 30 日の期限を守るため）
+Persistent=true
+RandomizedDelaySec=5min
+Unit=alter-purge@%i.service
+
+[Install]
+WantedBy=timers.target

@@ -299,15 +299,18 @@ Google/GitHub両方を検証する。1人分の総合passで未実施操作を�
 
 ## PC起動管理の実装方式（2026-11-14、#34）
 
+当初は ADR-016 としていたが、#64 のデザイン（ADR-016）と番号が重なったため ADR-019 に付け直した（パージは ADR-018、#85）。
+
 | ID | 決定 | 理由 / 再検討条件 |
 |---|---|---|
-| ADR-016 | Linux向けsystemdで環境別API/Worker/Bot/tunnelを独立管理し、SchedulerはUTC timer+flock、Persistent=falseとする | repo/uv.lockを共用しつつ停止/再起動と秘密を分離する。運用PCのOSは未確認のため、Linux以外では方式を再検討する |
+| ADR-019 | Linux向けsystemdで環境別API/Worker/Bot/tunnelを独立管理し、SchedulerはUTC timer+flock、Persistent=falseとする | repo/uv.lockを共用しつつ停止/再起動と秘密を分離する。運用PCのOSは未確認のため、Linux以外では方式を再検討する |
 
 HTTPSはCloudflare named Tunnelを設定候補として用意する。既存ドメインが未準備のため、
 無料固定URLの成立・ドメイン費・提供条件・別端末/Vercelからの疎通は未決定の受け入れ項目とする。
 採用/契約を完了したとは扱わず、#34の実施記録と#37公開ゲートで判断する。
 Quick Tunnelを固定URLの代わりに使わない。APIのJWT/招待/所有権・両者/ギルド同意は維持する。
 実PCでの自動再開方針は#36の結果不明照合後に確定し、それまでは生成/配送timerの自動起動を有効化しない。
+削除のパージ（`alter-purge@.timer`、毎時、`Persistent=true`）と状態確認（`alter-ops@.timer`、15分ごと、`Persistent=false`）は生成/配送と独立したoneshot+flockのtimerとして同じ方式で管理し、先に有効化してよい。パージは停止中に逃した回を起動後に1回実行し、削除の30日の期限を延ばさない。
 
 ## 発表用の一時配置（2026-11-14、#34）
 

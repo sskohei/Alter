@@ -23,7 +23,8 @@ Python実体を専用ユーザーから読める配置にする（担当者のho
 サービス実行時はインストール済み`.venv/bin`を直接起動し、ネットワーク依存のsyncやreloadは行わない。
 
 運用checkoutにはroot `.env`を作らない。`config/pc/<environment>/*.env.example`を参考に、
-API/Worker/Bot/Schedulerごとに別の`/etc/alter/<environment>/<role>.env`を作る。
+API/Worker/Bot/Scheduler/Purge/Opsごとに別の`/etc/alter/<environment>/<role>.env`を作る。
+Purge（#30、ADR-018）にはAuth/Storageの管理鍵（`SUPABASE_SECRET_KEY`・`SUPABASE_STORAGE_SECRET_KEY`）だけをAPIと共有し、人格の暗号鍵・再送HMAC鍵・Discordの秘密・LLM/Botの鍵は置かない。Ops（#36の`alter-ops status`）は読み取りだけで、DB接続と`MAX_DAILY_COST_USD`以外の鍵を置かない。どちらも起動時の検査で、置いてはいけない鍵が入っていれば起動しない。
 ファイルはroot所有600（systemdが読み、対象プロセスにのみ渡す）、親dirはrootと対象環境groupだけが辿れる750。
 CA証明書は対象環境で読取可、tunnel JSONは対象環境ユーザー所有600とする。
 テンプレートのREPLACE、example.invalidは起動前検査で拒否される。shellのsourceや値のログ表示はしない。
@@ -50,6 +51,10 @@ sudo systemctl enable --now alter-tunnel@preview.service
 # 生成対象/費用/課金不明の照合後、最後に定期実行を有効化
 sudo systemctl start alter-scheduler@preview.timer
 systemctl list-timers alter-scheduler@preview.timer
+# 削除のパージ（毎時）と状態確認（15分ごと）。生成/配送とは独立しているので先に有効化してよい
+sudo systemctl enable --now alter-purge@preview.timer
+sudo systemctl enable --now alter-ops@preview.timer
+systemctl list-timers 'alter-purge@preview.timer' 'alter-ops@preview.timer'
 ```
 
 `/health`は生存確認、`/ready`はliveとcheckoutが必要とするDB全migrationの適用だけを確認する。
@@ -70,6 +75,18 @@ oneshotとflock、DB一意制約で重複を抑止する。直接CLIでOSロッ�
 timerはstartで今回の稼働中だけ動き、enable後はOS起動時にも動く。
 #36の復旧演習承認後にWorker/Bot/serviceとScheduler/timerをenableする。
 timerの次回日時と実行終了状態を実機で確認する。
+
+Purge（`alter-purge@.timer`）は毎時（`OnCalendar=hourly`、最大5分ずらす）に`alter-api-purge --max-jobs 20`を1回実行する。
+`Persistent=true`で、PC停止中に逃した回は起動後に1回だけ実行する（削除の30日の期限を延ばさないため）。
+削除ジョブは15分のリースとskip lockedで重複しないが、flockでも同時実行を防ぐ。出力（削除要求IDを含む）は破棄する。
+結果は`alter-ops status`の`deletion_failed`・`deletion_near_deadline`と削除要求の状態で確認する。
+
+Ops（`alter-ops@.timer`）は15分ごと（Schedulerと重ならない毎時5/20/35/50分、UTC）に`alter-ops status`を実行する。
+出力は件数と固定の警告コードだけなのでjournalに残す（`journalctl -u alter-ops@preview -n 20`）。
+警告があると終了コード3でunitが`failed`になる。`systemctl --failed`か
+`systemctl show alter-ops@preview.service -p Result -p ExecMainStatus`で確認し、
+[運用手順書](27-operations-runbook.md)の警告コードごとの対応に進む。運営者への通知（メール等）の方法は未定。
+`--env production`は「DBの接続先がローカルでない」確認で、Preview環境でも同じ指定になる。照合系の書き込みコマンドは定期実行しない。
 
 ## 公開HTTPS経路
 

@@ -12,10 +12,13 @@ API_ONLY = {
     "API_IDEMPOTENCY_HMAC_KEYS",
     "DISCORD_CLIENT_SECRET",
 }
+# パージ（#30、ADR-018）は Auth・Storage の管理鍵だけを API と共有する
+PURGE_KEYS = {"SUPABASE_SECRET_KEY", "SUPABASE_STORAGE_SECRET_KEY"}
+ROLES = {"api", "worker", "bot", "scheduler", "purge", "ops"}
 
 
 def validate(role: str, environment: str, env: dict[str, str]) -> None:
-    if role not in {"api", "worker", "bot", "scheduler"}:
+    if role not in ROLES:
         raise ValueError("Unknown service")
     if environment not in {"preview", "production"}:
         raise ValueError("Unknown environment")
@@ -39,7 +42,9 @@ def validate(role: str, environment: str, env: dict[str, str]) -> None:
     ):
         raise ValueError("Expected project transaction pooler with verified TLS")
     forbidden = {"SUPABASE_DB_URL", "SUPABASE_ACCESS_TOKEN", "SUPABASE_DB_PASSWORD"}
-    if role != "api":
+    if role == "purge":
+        forbidden |= API_ONLY - PURGE_KEYS
+    elif role != "api":
         forbidden |= API_ONLY
     if role not in {"api", "worker"}:
         forbidden.add("ANTHROPIC_API_KEY")
@@ -58,6 +63,11 @@ def validate(role: str, environment: str, env: dict[str, str]) -> None:
             raise ValueError("Web HTTPS Origin required")
         if env.get("CORS_ORIGINS") != origin:
             raise ValueError("One fixed Web Origin required")
+    if role == "purge":
+        if env.get("SUPABASE_URL") != f"https://{ref}.supabase.co":
+            raise ValueError("Auth project mismatch")
+        if not all(env.get(key) for key in PURGE_KEYS):
+            raise ValueError("Purge requires Auth and Storage admin keys")
     if role == "scheduler" and env.get("SCHEDULER_ENABLED") != "true":
         raise ValueError("Scheduler must be explicitly enabled")
 
@@ -81,6 +91,19 @@ def command(role: str, environment: str, root: Path) -> list[str]:
             "--no-proxy-headers",
             "--timeout-graceful-shutdown",
             "60",
+        ]
+    if role == "purge":
+        return [str(binary / "alter-api-purge"), "--max-jobs", "20"]
+    if role == "ops":
+        # 読み取りだけの状態確認。警告があれば終了コード 3（unit は failed になる）。
+        # --env production は「接続先がローカルでない」確認で、preview の DB にも使う
+        return [
+            str(binary / "alter-ops"),
+            "--env",
+            "production",
+            "--operator",
+            f"systemd-{environment}",
+            "status",
         ]
     entry = {"worker": "alter-worker", "bot": "alter-bot", "scheduler": "alter-scheduler"}
     return [str(binary / entry[role])]
