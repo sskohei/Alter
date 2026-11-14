@@ -22,41 +22,6 @@
       "alias": "tester-3",
       "provider": null,
       "status": "not_run"
-    },
-    {
-      "alias": "tester-4",
-      "provider": null,
-      "status": "not_run"
-    },
-    {
-      "alias": "tester-5",
-      "provider": null,
-      "status": "not_run"
-    },
-    {
-      "alias": "tester-6",
-      "provider": null,
-      "status": "not_run"
-    },
-    {
-      "alias": "tester-7",
-      "provider": null,
-      "status": "not_run"
-    },
-    {
-      "alias": "tester-8",
-      "provider": null,
-      "status": "not_run"
-    },
-    {
-      "alias": "tester-9",
-      "provider": null,
-      "status": "not_run"
-    },
-    {
-      "alias": "tester-10",
-      "provider": null,
-      "status": "not_run"
     }
   ],
   "checks": [
@@ -74,10 +39,10 @@
       }
     },
     {
-      "id": "ten_account_operations",
+      "id": "participant_operations",
       "status": "not_run",
       "evidence": {
-        "path": null,
+        "path": "participants.json",
         "sha256": null,
         "source": "live",
         "environment": "staging",
@@ -272,7 +237,7 @@
       "id": "performance_measurements",
       "status": "not_run",
       "evidence": {
-        "path": null,
+        "path": "performance.json",
         "sha256": null,
         "source": "live",
         "environment": "staging",
