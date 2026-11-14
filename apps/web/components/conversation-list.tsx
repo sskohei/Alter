@@ -6,6 +6,7 @@ import { activityApi } from "../lib/api-browser";
 import { useResource, useCursor } from "../lib/use-resource";
 import { ConversationCard } from "./conversation-card";
 import { DataState, PageControls } from "./data-state";
+import { ManualInteraction } from "./manual-interaction";
 export function ConversationList() {
   const page = useCursor();
   const load = useCallback(
@@ -32,6 +33,7 @@ export function ConversationList() {
         AIの発言は生成された内容であり、本人の発言・意思を表すものではありません。会話は参加者だけが閲覧できます。
       </p>
       <DataState {...resource} retry={resource.refresh} />
+      <ManualInteraction />
       {resource.data && (
         <>
           {resource.data.items.length === 0 ? (

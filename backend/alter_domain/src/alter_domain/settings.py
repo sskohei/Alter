@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     alter_environment: Literal["local", "preview", "production"] = "local"
     discord_enabled: bool = False
     scheduler_enabled: bool = False
+    # Explicit local-demo exception; never enables manual starts in preview/production.
+    demo_manual_interactions_enabled: bool = False
     scheduler_batch_size: int = Field(default=10, ge=1, le=10)
     profile_encryption_key_v1: SecretStr = SecretStr("")
     api_idempotency_hmac_keys: dict[PositiveInt, SecretStr] = Field(default_factory=dict)

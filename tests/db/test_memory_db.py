@@ -16,6 +16,7 @@ from alter_domain.memory import (
     delete_conversation,
     enrich_pending,
     extract_completed,
+    prompt_context,
     recent_summary,
 )
 from alter_domain.scheduling import schedule
@@ -52,6 +53,10 @@ def test_memory_api_ownership_cursor_delete_replay_and_no_resurrection(
         ).scalar_one()
         assert context(conn, ai_pair[0], ai_pair[1])
         assert recent_summary(conn, ai_pair[0], ai_pair[1])
+        assert prompt_context(conn, ai_pair[0], ai_pair[1]) == (
+            context(conn, ai_pair[0], ai_pair[1]),
+            recent_summary(conn, ai_pair[0], ai_pair[1]),
+        )
         assert (
             conn.execute(
                 text("select conversation_count from public.agent_relationships")
@@ -123,6 +128,7 @@ def test_memory_api_ownership_cursor_delete_replay_and_no_resurrection(
     with engine.begin() as conn:
         assert context(conn, ai_pair[0], ai_pair[1]) == []
         assert recent_summary(conn, ai_pair[0], ai_pair[1]) is None
+        assert prompt_context(conn, ai_pair[0], ai_pair[1]) == ([], None)
         assert context(conn, ai_pair[1], ai_pair[0])
         # Simulate a repeated extraction event even if consumer progress was lost.
         conn.execute(

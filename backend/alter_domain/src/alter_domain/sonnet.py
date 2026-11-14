@@ -35,6 +35,14 @@ class LLMUnavailable(Exception):
     pass
 
 
+class RequestNotSent(Exception):
+    """A pre-dispatch authorization guard failed before any provider request."""
+
+    def __init__(self, reason: Exception) -> None:
+        super().__init__("Request rejected before dispatch")
+        self.reason = reason
+
+
 class Usage(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
     input_tokens: int = Field(ge=0)
@@ -93,7 +101,10 @@ class SonnetClient:
     def _post(self, path: str, body: dict[str, Any], *, billable: bool) -> dict[str, Any]:
         self.require_enabled()
         if self.before_request is not None:
-            self.before_request()
+            try:
+                self.before_request()
+            except Exception as exc:
+                raise RequestNotSent(exc) from None
         try:
             response = self._http.post(
                 "https://api.anthropic.com/v1/" + path,

@@ -430,6 +430,59 @@ def test_live_sonnet_http_mock_uses_generation_and_independent_review(engine, ai
     assert job_state(engine)[1:] == (1, 1)
 
 
+def test_full_guarded_conversation_fits_cloud_database_roundtrip_budget(engine, ai_pair):
+    import httpx
+    from alter_domain.llm_selection import MODEL
+    from alter_domain.settings import Settings
+    from alter_domain.sonnet import SonnetClient
+    from sqlalchemy import event
+
+    queued(engine)
+    requests = []
+    roundtrips = []
+
+    def count(*args):
+        roundtrips.append(1)
+
+    def respond(request):
+        requests.append(request.url.path)
+        if request.url.path.endswith("count_tokens"):
+            return httpx.Response(200, json={"input_tokens": 20})
+        review = json.loads(request.content)["max_tokens"] == 16
+        output = (
+            '{"allowed":true}' if review else '{"utterance":"読書が好きです。","should_end":false}'
+        )
+        return httpx.Response(
+            200,
+            json={
+                "model": MODEL,
+                "stop_reason": "end_turn",
+                "content": [{"type": "text", "text": output}],
+                "usage": {"input_tokens": 20, "output_tokens": 10},
+            },
+        )
+
+    settings = Settings(
+        _env_file=None, alter_mode="live", llm_enabled=True, anthropic_api_key="synthetic"
+    )
+    event.listen(engine, "before_cursor_execute", count)
+    event.listen(engine, "begin", count)
+    event.listen(engine, "commit", count)
+    event.listen(engine, "rollback", count)
+    try:
+        with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+            assert run_one(engine, SonnetClient(settings, http))
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+        event.remove(engine, "begin", count)
+        event.remove(engine, "commit", count)
+        event.remove(engine, "rollback", count)
+    assert job_state(engine)[1] == 8
+    assert requests == ["/v1/messages/count_tokens", "/v1/messages"] * 16
+    # Measured cloud RTT is ~0.3s. Leave at least 60s of the 5-minute limit for the LLM.
+    assert len(roundtrips) * 0.3 < 240, f"Too many cloud roundtrips: {len(roundtrips)}"
+
+
 def test_lease_reclaimed_during_provider_call_rejects_stale_output_but_records_cost(
     engine, ai_pair
 ):
