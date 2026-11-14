@@ -34,8 +34,9 @@ STALE_SENDING_MINUTES = 10
 # - 会話は完了・Web で見える範囲（90 日・削除要求なし・削除済み AI なし）
 # - 投稿先とギルドが有効
 # - 参加者 2 人とも: 会話開始時の Discord 公開の同意、AI の全体設定 ON、稼働中の AI、
-#   削除要求なし、有効な Discord 連携、そのギルドへの有効な同意
+#   削除要求なし、有効な招待、有効な Discord 連携、そのギルドへの有効な同意
 # - どちらかがもう一方をブロックしていない
+# 投稿先は 1 会話につき 1 つ。候補が複数あるときは送らず保留する（docs/09・#28）
 _POSTABLE = (
     "c.status = 'completed' and " + _VISIBLE_CONVERSATION + " "
     "and ch.enabled and g.enabled "
@@ -43,6 +44,7 @@ _POSTABLE = (
     "  join public.agents a on a.id = p.agent_id and a.status = 'active' "
     "  join public.agent_settings s on s.agent_id = a.id and s.discord_publish "
     "  join public.profiles u on u.id = a.owner_id and u.deleted_at is null "
+    "  join public.invitations i on i.auth_user_id = u.id and i.status = 'active' "
     "  join public.agent_discord_consents k on k.agent_id = a.id and k.guild_id = g.id "
     "    and k.revoked_at is null "
     "  where p.conversation_id = c.id and p.discord_consent "
@@ -61,6 +63,8 @@ _DM_SENDABLE = (
     "n.kind = :kind and n.created_at > now() - interval '90 days' "
     "and u.deleted_at is null and u.discord_dm_notifications "
     "and dc.revoked_at is null "
+    "and exists (select 1 from public.invitations i "
+    "  where i.auth_user_id = u.id and i.status = 'active') "
     "and (n.conversation_id is null or exists (select 1 from public.conversations c "
     "  where c.id = n.conversation_id and " + _VISIBLE_CONVERSATION + "))"
 )
@@ -93,24 +97,51 @@ class DmJob:
 # -- 配信行の作成 ---------------------------------------------------------------------------
 
 
-def enqueue_conversation_posts(conn: Connection, conversation_id: uuid.UUID) -> int:
-    """完了した会話の投稿を、条件を満たす投稿先ごとに 1 件作る（再実行しても増えない）。
-
-    取り消し済み（cancelled）の行は ``on conflict do nothing`` のため復活させない。
-    """
-    return int(
+def _postable_channels(conn: Connection, conversation_id: uuid.UUID) -> list[str]:
+    return list(
         conn.execute(
             text(
-                "insert into public.discord_deliveries (conversation_id, channel_id) "
-                "select c.id, ch.id from public.conversations c "
+                "select ch.id from public.conversations c "
                 "cross join public.discord_channels ch "
                 "join public.discord_guilds g on g.id = ch.guild_id "
-                "where c.id = :id and " + _POSTABLE + " "
-                "on conflict (conversation_id, channel_id) do nothing"
+                "where c.id = :id and " + _POSTABLE + " order by ch.id"
             ),
             {"id": conversation_id},
-        ).rowcount
+        ).scalars()
     )
+
+
+def enqueue_conversation_posts(conn: Connection, conversation_id: uuid.UUID) -> int:
+    """完了した会話の投稿行を作る（再実行しても増えない）。作った行の件数を返す。
+
+    - 条件を満たす投稿先が 1 つなら ``pending`` で 1 件
+    - 2 つ以上（両者が複数のギルドに同意している）なら、どれにも送らず候補を
+      ``needs_review``（``ambiguous_target``）で残し、運営・管理者が選ぶ（docs/09）
+    取り消し済み（cancelled）の行は ``on conflict do nothing`` のため復活させない。
+    """
+    channels = _postable_channels(conn, conversation_id)
+    if not channels:
+        return 0
+    held = len(channels) > 1
+    created = 0
+    for channel in channels:
+        created += int(
+            conn.execute(
+                text(
+                    "insert into public.discord_deliveries "
+                    "(conversation_id, channel_id, status, last_error) "
+                    "values (:c, :ch, :status, :error) "
+                    "on conflict (conversation_id, channel_id) do nothing"
+                ),
+                {
+                    "c": conversation_id,
+                    "ch": channel,
+                    "status": "needs_review" if held else "pending",
+                    "error": "ambiguous_target" if held else None,
+                },
+            ).rowcount
+        )
+    return created
 
 
 def enqueue_dm_notifications(conn: Connection, conversation_id: uuid.UUID) -> int:
@@ -197,6 +228,10 @@ def claim_next_post(conn: Connection) -> PostJob | None:
         ).first()
         if ok is None:
             _set_post(conn, row.id, "cancelled", "not_eligible")
+            continue
+        if len(_postable_channels(conn, row.conversation_id)) > 1:
+            # 作成後に別のギルドでも条件がそろった。どこへ送るか決まらないので保留する
+            _set_post(conn, row.id, "needs_review", "ambiguous_target")
             continue
         lines = tuple(
             Line(m.name, m.content)
