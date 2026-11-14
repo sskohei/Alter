@@ -246,3 +246,9 @@ previewも正式settings routerを再利用し、Patchの厳密型・null/未知
 `source_conversation_id`はDBに合わせnullable。`blocked`は本人からのブロックを表す。
 回数は残存する可視completed会話から再計算し、共通興味は双方の承認済み公開人格を使う。
 生成/抽出/Worker consumerは#22の後続実装で、#25の閲覧・削除完了と区別する。
+
+### 稼働準備確認（#34）
+
+`GET /ready`は認証不要。liveかつcheckoutが必要とするDB全migrationが適用済みすれば200（Health型）、
+それ以外は503共通エラー。no-storeとしDB接続詳細を返さない。
+`/health`は引き続きDBに依存しない生存確認。OAuth/LLM/Discordの実疎通は別の受け入れで確認する。

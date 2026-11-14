@@ -15,13 +15,13 @@ docs/                     本仕様と意思決定
 .github/workflows/        lint/test/OpenAPI差分
 pnpm-workspace.yaml
 pyproject.toml            uv workspace
-docker-compose.yml        手元PCのプロセス管理候補（未実装、#34で方式選定）
+deploy/systemd/           Linux PCの環境別サービス/timerテンプレート（#34）
 .env.example              ダミー値・取得先・必須/任意
 ```
 
-`uv`でPythonの共通パッケージをworkspace依存にし、手元PCの各Pythonプロセスはrepo rootと同じlockfileを使う。`pnpm`もlockfileをrootに置く。ローカルはSupabase CLIでDB/Authを起動し、`uv run`でAPI/Worker/Bot（Botはテスト用ギルド）、`pnpm --filter web dev`でWebを起動する。この開発環境のローカルSupabaseと、MVP運用時のクラウドSupabaseを区別する。MVP運用ではDBをPC上に追加せず、Supabase Freeの環境別プロジェクトへ接続する。OSサービス管理またはDocker Composeによる起動/再起動の具体化は #34 で行う。CIではRuff、mypy、pytest、ESLint、TypeScript、Vitest、Playwrightの必要ゲートを実行する。
+`uv`でPythonの共通パッケージをworkspace依存にし、手元PCの各Pythonプロセスはrepo rootと同じlockfileを使う。`pnpm`もlockfileをrootに置く。ローカルはSupabase CLIでDB/Authを起動し、`uv run`でAPI/Worker/Bot（Botはテスト用ギルド）、`pnpm --filter web dev`でWebを起動する。この開発環境のローカルSupabaseと、MVP運用時のクラウドSupabaseを区別する。MVP運用ではDBをPC上に追加せず、Supabase Freeの環境別プロジェクトへ接続する。Linux向けsystemdテンプレートを#34で用意し、実OSでの受け入れは別途行う。CIではRuff、mypy、pytest、ESLint、TypeScript、Vitest、Playwrightの必要ゲートを実行する。
 
-Issue #2で開発用雛形を配置済み。固定バージョン、初回設定、起動・停止・reset、Mockの制約は[README](../README.md#ローカル開発最初に実行)を参照。認証/人格/活動等のAPIは実装済み。SchedulerのDB交流予約は #19 で実装済み。Workerの会話生成・安全判定・費用精算は #20 で接続済み。実配置の受け入れは #34/#37 で継続する。本節のPC起動設定・HTTPS公開経路・定期実行・バックアップは配置契約であり、本変更では実装/設定していない。
+Issue #2で開発用雛形を配置済み。固定バージョン、初回設定、起動・停止・reset、Mockの制約は[README](../README.md#ローカル開発最初に実行)を参照。認証/人格/活動等のAPIは実装済み。SchedulerのDB交流予約は #19 で実装済み。Workerの会話生成・安全判定・費用精算は #20 で接続済み。実配置の受け入れは #34/#37 で継続する。PC起動/定期実行のテンプレートとHTTPS設定候補は[PC運用手順](28-pc-services-https.md)に記載し、実環境での登録・受け入れは未実施。
 
 ## 配置と起動
 
@@ -156,3 +156,6 @@ Previewではテスト画像でアップロード→作成時指定→取得→P
 実環境のStorage接続・キー権限の確認は#37の公開受け入れに記録する。
 
 Webの環境別設定、callback/CORS登録、限定スモークと#35の完了記録は[Webデプロイ手順](25-web-deployment.md)を参照する。
+
+PCのsystemd設定・HTTPS候補・起動前検査・停止/復旧・実機受け入れ記録は
+[PC運用手順](28-pc-services-https.md)を参照する。

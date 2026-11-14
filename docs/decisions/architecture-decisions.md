@@ -288,3 +288,16 @@ Webの環境検査は反対環境のAPI URLも照合し、Preview/Productionの�
 Google/GitHub両方を検証する。1人分の総合passで未実施操作を覆い隠さない。
 人数だけを変更し、Doneの8条件、法務・保持確認、実OAuth/Discord、性能、安全性、限定本番スモークは維持する。
 配置はADR-015に従う手元PCの独立プロセスとし、PC停止/回線断・復旧と利用時間の説明を受け入れる。
+
+
+## PC起動管理の実装方式（2026-11-14、#34）
+
+| ID | 決定 | 理由 / 再検討条件 |
+|---|---|---|
+| ADR-016 | Linux向けsystemdで環境別API/Worker/Bot/tunnelを独立管理し、SchedulerはUTC timer+flock、Persistent=falseとする | repo/uv.lockを共用しつつ停止/再起動と秘密を分離する。運用PCのOSは未確認のため、Linux以外では方式を再検討する |
+
+HTTPSはCloudflare named Tunnelを設定候補として用意する。既存ドメインが未準備のため、
+無料固定URLの成立・ドメイン費・提供条件・別端末/Vercelからの疎通は未決定の受け入れ項目とする。
+採用/契約を完了したとは扱わず、#34の実施記録と#37公開ゲートで判断する。
+Quick Tunnelを固定URLの代わりに使わない。APIのJWT/招待/所有権・両者/ギルド同意は維持する。
+実PCでの自動再開方針は#36の結果不明照合後に確定し、それまでは生成/配送timerの自動起動を有効化しない。

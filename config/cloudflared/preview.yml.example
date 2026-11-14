@@ -1,0 +1,9 @@
+# /etc/alter/preview/cloudflared.yml (600); credentials JSONはrepo外。
+tunnel: REPLACE-TUNNEL-UUID
+credentials-file: /etc/alter/preview/tunnel.json
+metrics: 127.0.0.1:20242
+loglevel: error
+ingress:
+  - hostname: preview-api.example.invalid
+    service: http://127.0.0.1:8001
+  - service: http_status:404
