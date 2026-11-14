@@ -2,10 +2,12 @@
 
 - DB の outbox（``alter_domain.discord_delivery``）から 1 件ずつ取り出して送る
 - 取り出し（``sending`` にする）をコミットしてから Discord へ送る。送信中に DB を握らない
+- 書き込み（スレッド作成・発言・DM）は内部で再送しない ``rest.DiscordRest`` で送る
+  （discord.py は 5xx・接続断で書き込みも再送し、二重投稿になり得るため）
 - 送ったか分からない失敗は自動で再送しない（``needs_review``）。送っていないことが確かな
   失敗だけ、間隔をあけて再試行する
 - メンションは一切解決しない（``AllowedMentions.none()``）。URL の埋め込みも出さない
-- レート制限は discord.py が ``Retry-After`` に従って待つ（固定値を持たない）
+- レート制限（429）は Discord が処理していないので、``Retry-After`` に従って待って送り直す
 """
 
 import asyncio
@@ -18,6 +20,7 @@ from alter_domain import discord_delivery as dd
 from sqlalchemy import Connection
 
 from alter_discord_bot.permissions import bot_can_post
+from alter_discord_bot.rest import RestError
 
 logger = logging.getLogger("alter_discord_bot.delivery")
 T = TypeVar("T")
@@ -30,8 +33,19 @@ THREAD_ARCHIVE_MINUTES = 1440
 Phase = Literal["read", "write", "partial"]
 
 
+class RestApi(Protocol):
+    async def create_thread(self, channel_id: str, name: str, archive_minutes: int) -> str: ...
+
+    async def send_message(self, channel_id: str, content: str) -> str: ...
+
+    async def open_dm(self, user_id: str) -> str: ...
+
+
 class DeliveryBot(Protocol):
     web_url: str
+
+    @property
+    def rest(self) -> RestApi: ...
 
     def in_transaction(self, work: Callable[[Connection], T]) -> Awaitable[T]: ...
 
@@ -39,20 +53,15 @@ class DeliveryBot(Protocol):
 
     def fetch_channel(self, channel_id: int, /) -> Awaitable[Any]: ...
 
-    def get_user(self, id: int, /) -> Any: ...
-
-    def fetch_user(self, user_id: int, /) -> Awaitable[Any]: ...
-
 
 def classify(exc: BaseException, phase: Phase) -> tuple[dd.Outcome, str]:
     """失敗を「再試行 / 取消 / 要確認」に分ける。"""
     if phase == "partial":
         # スレッドや一部の発言はもう公開されている。続きを自動で送ると重複する
         return "needs_review", f"partial:{_code(exc)}"
-    if isinstance(exc, discord.Forbidden | discord.NotFound):
+    status = _status(exc)
+    if status is not None and 400 <= status < 500 and status != 429:
         # Discord が拒否した（作られていない）。権限・チャンネル・DM 拒否は待っても直らない
-        return "cancelled", _code(exc)
-    if isinstance(exc, discord.HTTPException) and 400 <= exc.status < 500 and exc.status != 429:
         return "cancelled", _code(exc)
     # 5xx・429・通信断・タイムアウト: 書き込みを出したあとなら成功したか分からない
     if phase == "write":
@@ -60,8 +69,14 @@ def classify(exc: BaseException, phase: Phase) -> tuple[dd.Outcome, str]:
     return "retry", _code(exc)
 
 
+def _status(exc: BaseException) -> int | None:
+    if isinstance(exc, RestError | discord.HTTPException):
+        return int(exc.status)
+    return None
+
+
 def _code(exc: BaseException) -> str:
-    if isinstance(exc, discord.HTTPException):
+    if isinstance(exc, RestError | discord.HTTPException):
         return f"http_{exc.status}:{exc.code}"
     return type(exc).__name__
 
@@ -82,20 +97,15 @@ async def send_post(bot: DeliveryBot, job: dd.PostJob) -> None:
             await _post_failed(bot, job, "cancelled", "missing_permissions")
             return
         phase = "write"
-        thread = await channel.create_thread(
-            name=dd.thread_name(job),
-            type=discord.ChannelType.public_thread,
-            auto_archive_duration=THREAD_ARCHIVE_MINUTES,
+        thread_id = await bot.rest.create_thread(
+            job.channel_id, dd.thread_name(job), THREAD_ARCHIVE_MINUTES
         )
         phase = "partial"
-        thread_id = str(thread.id)
         await bot.in_transaction(lambda c: dd.record_thread(c, job.delivery_id, thread_id))
         first: str | None = None
         for content in dd.render_post(job, bot.web_url):
-            message = await thread.send(
-                content, allowed_mentions=discord.AllowedMentions.none(), suppress_embeds=True
-            )
-            first = first or str(message.id)
+            sent = await bot.rest.send_message(thread_id, content)
+            first = first or sent
         assert first is not None
         message_id = first
         await bot.in_transaction(
@@ -111,18 +121,14 @@ async def send_post(bot: DeliveryBot, job: dd.PostJob) -> None:
 async def send_dm(bot: DeliveryBot, job: dd.DmJob) -> None:
     phase: Phase = "read"
     try:
-        user = bot.get_user(int(job.discord_user_id)) or await bot.fetch_user(
-            int(job.discord_user_id)
-        )
+        # DM チャンネルを開くのは何度でも同じ結果（重複しない）なので read と同じ扱い
+        channel_id = await bot.rest.open_dm(job.discord_user_id)
         phase = "write"
-        message = await user.send(
-            dd.render_dm(job, bot.web_url), allowed_mentions=discord.AllowedMentions.none()
-        )
-        message_id = str(message.id)
+        message_id = await bot.rest.send_message(channel_id, dd.render_dm(job, bot.web_url))
         await bot.in_transaction(lambda c: dd.mark_dm_sent(c, job.delivery_id, message_id))
     except Exception as exc:  # noqa: BLE001
         outcome, code = classify(exc, phase)
-        if isinstance(exc, discord.Forbidden):
+        if _status(exc) == 403:
             # DM を受け付けない設定。Web 通知は残っているので、無限に再試行しない
             code = "dm_forbidden"
         logger.warning("dm delivery %s failed: %s (%s)", job.delivery_id, code, outcome)
