@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "../../lib/api-server";
+import { AppNavigation } from "../../components/app-navigation";
 import { LogoutButton } from "../../components/logout-button";
 export const dynamic = "force-dynamic";
 export default async function ProtectedLayout({
@@ -9,7 +10,7 @@ export default async function ProtectedLayout({
 }) {
   const profile = await requireProfile();
   return (
-    <div className="app-shell">
+    <div className="app-shell" key={profile.id}>
       <a href="#content" className="skip-link">
         本文へ移動
       </a>
@@ -20,11 +21,7 @@ export default async function ProtectedLayout({
         <span>{profile.display_name}</span>
         <LogoutButton />
       </header>
-      <nav aria-label="メインナビゲーション" className="app-nav">
-        <Link href="/dashboard">ホーム</Link>
-        <Link href="/agent">AI分身</Link>
-        <Link href="/onboarding">作成ガイド</Link>
-      </nav>
+      <AppNavigation />
       <main id="content" className="app-content">
         {children}
       </main>

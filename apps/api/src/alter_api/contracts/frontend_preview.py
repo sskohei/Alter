@@ -1,12 +1,14 @@
 """Review-only contracts; never mounted by alter_api.main.
 
-User routes reuse the live contract; personality routes remain preview-only.
+User and activity routes reuse the live contract; personality routes remain preview-only.
 """
 
 from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
+from alter_api.activity_routes import router as activity_router
+from alter_api.contracts.activity_preview import register_activity_contract
 from alter_api.errors import ErrorResponse
 from alter_api.users import Profile, router
 from alter_domain.agent_models import AgentPatch
@@ -96,6 +98,7 @@ def create_contract_app() -> FastAPI:
     )
 
     app.include_router(router, prefix="/api/v1")
+    app.include_router(activity_router, prefix="/api/v1")
     preview_router = APIRouter(dependencies=[Depends(HTTPBearer())])
 
     @preview_router.get(
@@ -185,5 +188,6 @@ def create_contract_app() -> FastAPI:
     def suggest(id: UUID, body: SuggestionInput) -> PublicPersonality:
         raise HTTPException(503, "Contract only")
 
+    register_activity_contract(preview_router, ERRORS)
     app.include_router(preview_router)
     return app
