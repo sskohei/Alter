@@ -303,6 +303,11 @@ select is(
 
 -- ---------------------------------------------------------------------------
 -- 9. 削除動作
+-- 結果照合後、残予約を解放してから削除する（#18）。
+insert into public.usage_records
+  (agent_id, conversation_id, provider, model, estimated_usd, kind, idempotency_key) values
+  ('10000000-0000-0000-0000-00000000000a', '30000000-0000-0000-0000-000000000001',
+   'mock', 'mock-1', 0.05, 'release', 'release:30000000:a');
 -- ---------------------------------------------------------------------------
 select throws_ok(
   $$delete from public.agents where id = '10000000-0000-0000-0000-00000000000a'$$,
@@ -339,7 +344,7 @@ insert into public.usage_records
 
 delete from public.agents where id = '10000000-0000-0000-0000-00000000000a';
 select is((select count(*)::int from public.memories), 0, '削除: AI を消すと記憶も消える');
-select is((select count(*)::int from public.usage_records), 2, '削除: AI を消しても費用台帳は残る（12 か月保持）');
+select is((select count(*)::int from public.usage_records), 3, '削除: AI を消しても費用台帳は残る（12 か月保持）');
 select is(
   (select count(*)::int from public.usage_records where agent_id is not null or conversation_id is not null),
   0, '削除: 残った費用台帳から AI・会話への紐付けが外れる'
@@ -351,7 +356,7 @@ select is(
 );
 select is(
   (select sum(estimated_usd)::text || '/' || sum(actual_usd)::text from public.usage_records),
-  '0.060000/0.008000', '削除: 金額は残り、運営全体の日次集計が減らない'
+  '0.110000/0.008000', '削除: 金額は残り、運営全体の日次集計が減らない'
 );
 select throws_ok(
   $$update public.usage_records set agent_id = '10000000-0000-0000-0000-00000000000b'$$,

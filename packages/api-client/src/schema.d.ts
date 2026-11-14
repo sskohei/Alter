@@ -140,6 +140,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{agent_id}/profile/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suggest */
+        post: operations["suggest_agent_profile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{id}/blocks/{other_id}": {
         parameters: {
             query?: never;
@@ -870,6 +887,29 @@ export interface components {
             /** Web Notifications */
             web_notifications: boolean;
         };
+        /** ProfileInput */
+        ProfileInput: {
+            /** Hobbies */
+            hobbies?: string[];
+            /** Interaction Policy */
+            interaction_policy: string;
+            /** Interests */
+            interests: string[];
+            /** Personality */
+            personality: string;
+            /** Restrictions */
+            restrictions: string;
+            /** Shareable Info */
+            shareable_info: string;
+            /** Speaking Style */
+            speaking_style: string;
+            /** Strengths */
+            strengths?: string[];
+            /** Values Text */
+            values_text: string;
+            /** Weaknesses */
+            weaknesses?: string[];
+        };
         /** ProfilePatch */
         ProfilePatch: {
             /**
@@ -956,6 +996,13 @@ export interface components {
             values_text: string;
             /** Weaknesses */
             weaknesses?: string[];
+        };
+        /** SuggestionInput */
+        SuggestionInput: {
+            /** Answers */
+            answers: {
+                [key: string]: string;
+            };
         };
     };
     responses: never;
@@ -1577,6 +1624,86 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    suggest_agent_profile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestionInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileInput"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

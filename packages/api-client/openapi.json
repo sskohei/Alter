@@ -1214,6 +1214,92 @@
         "title": "Profile",
         "type": "object"
       },
+      "ProfileInput": {
+        "additionalProperties": false,
+        "properties": {
+          "hobbies": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Hobbies",
+            "type": "array"
+          },
+          "interaction_policy": {
+            "maxLength": 2000,
+            "title": "Interaction Policy",
+            "type": "string"
+          },
+          "interests": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Interests",
+            "type": "array"
+          },
+          "personality": {
+            "maxLength": 2000,
+            "title": "Personality",
+            "type": "string"
+          },
+          "restrictions": {
+            "maxLength": 2000,
+            "title": "Restrictions",
+            "type": "string"
+          },
+          "shareable_info": {
+            "maxLength": 2000,
+            "title": "Shareable Info",
+            "type": "string"
+          },
+          "speaking_style": {
+            "maxLength": 2000,
+            "title": "Speaking Style",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Strengths",
+            "type": "array"
+          },
+          "values_text": {
+            "maxLength": 2000,
+            "title": "Values Text",
+            "type": "string"
+          },
+          "weaknesses": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personality",
+          "values_text",
+          "interests",
+          "speaking_style",
+          "interaction_policy",
+          "shareable_info",
+          "restrictions"
+        ],
+        "title": "ProfileInput",
+        "type": "object"
+      },
       "ProfilePatch": {
         "additionalProperties": false,
         "properties": {
@@ -1503,6 +1589,26 @@
           "expected_version"
         ],
         "title": "RevisionInput",
+        "type": "object"
+      },
+      "SuggestionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            "maxProperties": 11,
+            "minProperties": 1,
+            "title": "Answers",
+            "type": "object"
+          }
+        },
+        "required": [
+          "answers"
+        ],
+        "title": "SuggestionInput",
         "type": "object"
       }
     },
@@ -2363,6 +2469,114 @@
           }
         ],
         "summary": "Revision",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/{agent_id}/profile/suggest": {
+      "post": {
+        "operationId": "suggest_agent_profile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileInput"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Suggest",
         "tags": [
           "agents"
         ]
