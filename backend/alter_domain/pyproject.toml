@@ -14,6 +14,7 @@ dependencies = [
 [project.scripts]
 alter-llm-evaluate = "alter_domain.cli.llm_evaluate:run"
 alter-invitations = "alter_domain.cli.invitations:run"
+alter-ops = "alter_domain.cli.ops:run"
 
 [build-system]
 requires = ["hatchling"]
