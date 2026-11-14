@@ -1,0 +1,300 @@
+{
+  "commit": null,
+  "source": "live",
+  "environment": "staging",
+  "recorded_at": null,
+  "reviewer": null,
+  "policy_version": null,
+  "release_owner": null,
+  "rollback_owner": null,
+  "testers": [
+    {
+      "alias": "tester-1",
+      "provider": null,
+      "status": "not_run"
+    },
+    {
+      "alias": "tester-2",
+      "provider": null,
+      "status": "not_run"
+    },
+    {
+      "alias": "tester-3",
+      "provider": null,
+      "status": "not_run"
+    }
+  ],
+  "checks": [
+    {
+      "id": "oauth_invitation",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "participant_operations",
+      "status": "not_run",
+      "evidence": {
+        "path": "participants.json",
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "autonomous_browser_closed",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "dual_consent_discord",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "ownership_direct_api",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "independent_process_recovery",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "duplicate_cron_worker",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "unknown_delivery_hold",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "stop_and_budget",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "deletion_and_external_retention",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "mobile_axe_keyboard_screen_reader",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "legal_retention_provider_pricing",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "invitation_cli",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "invitation_rls_limit_identity",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "invitation_fail_closed_atomic_revoke",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "purge_reoauth_restore",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "performance_measurements",
+      "status": "not_run",
+      "evidence": {
+        "path": "performance.json",
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "web_security_callbacks",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "monitoring_rollback_handoff",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "staging",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    },
+    {
+      "id": "production_smoke",
+      "status": "not_run",
+      "evidence": {
+        "path": null,
+        "sha256": null,
+        "source": "live",
+        "environment": "production",
+        "commit": null,
+        "recorded_at": null,
+        "reviewer": null
+      }
+    }
+  ],
+  "metrics": {
+    "read_samples": null,
+    "read_p95_ms": null,
+    "reservation_samples": null,
+    "reservation_max_seconds": null,
+    "new_llm_calls_after_stop": null,
+    "budget_breaches": null,
+    "duplicate_conversations": null,
+    "duplicate_posts": null,
+    "unknown_auto_resends": null
+  }
+}
