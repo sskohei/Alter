@@ -61,3 +61,7 @@ Thumbs.db
 *.swo
 
 # Lockfiles such as pnpm-lock.yaml and uv.lock must be committed.
+
+# Private acceptance evidence and browser session credentials
+artifacts/acceptance/
+playwright/.auth/

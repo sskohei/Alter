@@ -7,6 +7,11 @@ async function verify(page: Page) {
   await page
     .getByRole("link", { name: "同じアカウントで本人確認を完了" })
     .click();
+  // This control appears after the hydrated page has loaded preferences.
+  // The SSR deletion button can already be enabled before keyboard handlers attach.
+  await expect(
+    page.getByRole("checkbox", { name: "Webで交流のお知らせを受け取る", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "アカウントを削除する", exact: true }),
   ).toBeEnabled();
