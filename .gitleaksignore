@@ -1,0 +1,4 @@
+# PR #81: blank ANTHROPIC_API_KEY entries in historical env examples.
+# https://github.com/sskohei/Alter/pull/81#issuecomment-6873572075
+2c5da2da8f0b01280c91a1632f569c6adbd42e4c:config/pc/preview/worker.env.example:generic-api-key:9
+2c5da2da8f0b01280c91a1632f569c6adbd42e4c:config/pc/production/worker.env.example:generic-api-key:9
