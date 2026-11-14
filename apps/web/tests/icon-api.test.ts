@@ -7,7 +7,7 @@ vi.mock("../lib/api-server", () => ({serverApi: async () => ({supabase: {auth: {
   getSession: async () => ({data: {session: {access_token: "synthetic"}}}),
 }}})}));
 vi.mock("../lib/origin", () => ({appOrigin: () => "http://localhost:3000"}));
-import { GET, POST } from "../app/api/v1/[...path]/route";
+import { DELETE, GET, POST, PUT } from "../app/api/v1/[...path]/route";
 
 beforeEach(() => { vi.unstubAllGlobals(); });
 const context = {params: Promise.resolve({path: ["agent-icons"]})};
@@ -81,4 +81,24 @@ test("BFF forwards activity requests and preserves Retry-After", async () => {
   expect(result.headers.get("Retry-After")).toBe("60");
   expect(result.headers.get("X-Request-ID")).toBe("synthetic-request");
   expect(result.headers.get("Cache-Control")).toBe("private, no-store");
+});
+
+
+test.each([{method: "PUT", handler: PUT}, {method: "DELETE", handler: DELETE}])("BFF forwards authenticated $method blocks with empty 204 responses", async ({method, handler}) => {
+  const upstream = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    expect(request.headers.get("Authorization")).toBe("Bearer synthetic");
+    return new Response(null, {status: 204});
+  });
+  vi.stubGlobal("fetch", upstream);
+  const path = ["agents", "10000000-0000-4000-8000-000000000001", "blocks", "20000000-0000-4000-8000-000000000001"];
+  const request = (origin: string) => new NextRequest(`http://localhost:3000/api/v1/${path.join("/")}`, {
+    method, headers: {Origin: origin},
+  });
+  const result = await handler(request("http://localhost:3000"), {params: Promise.resolve({path})});
+  expect(result.status).toBe(204);
+  expect(await result.text()).toBe("");
+  expect(upstream).toHaveBeenCalledOnce();
+  expect((await handler(request("http://evil.test"), {params: Promise.resolve({path})})).status).toBe(403);
+  expect(upstream).toHaveBeenCalledOnce();
 });

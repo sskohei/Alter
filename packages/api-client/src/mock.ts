@@ -9,6 +9,7 @@ const ajv = new Ajv2020({ strict: false });
 addFormats(ajv);
 ajv.addSchema(schema, "live");
 const validPatch = ajv.compile({ $ref: "live#/components/schemas/ProfilePatch" });
+const validSettingsPatch = ajv.compile({ $ref: "live#/components/schemas/AgentSettingsPatch" });
 
 export const scenarios = ["normal", "empty", "401", "403", "inactive", "404", "409", "422", "429", "503"] as const;
 export type Scenario = typeof scenarios[number];
@@ -39,6 +40,7 @@ export function createMockFetch(
   let agent: Preview["schemas"]["Agent"] | null = null;
   let revisions: Preview["schemas"]["ProfileRevision"][] = [];
   let privateInfo = "";
+  const blocked = new Set<string>();
   const icons = new Set<string>();
   const iconUrl = (path: string | null | undefined) => path ? `https://mock.invalid/storage/v1/object/sign/agent-icons/${path}?token=synthetic` : null;
   let current = { ...profile };
@@ -77,7 +79,7 @@ export function createMockFetch(
     const request = new Request(input, init);
     const url = new URL(request.url);
     if (url.pathname === "/health") return request.method === "GET" ? success({ status: "ok", service: "api", mode: "mock" }) : mockError(405);
-    if (!/^\/api\/v1\/(?:conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/connection)$/.test(url.pathname) && !["/api/v1/users/me", "/api/v1/agent-icons", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
+    if (!/^\/api\/v1\/(?:conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds))$/.test(url.pathname) && !["/api/v1/users/me", "/api/v1/agent-icons", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/blocks\/[a-f\d-]{36}|\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
     if (["/api/v1/users/me", "/__mock/profiles"].includes(url.pathname) && !(url.pathname === "/api/v1/users/me" ? ["GET", "PATCH"] : ["GET"]).includes(request.method)) return mockError(405);
     if (!/^Bearer \S+$/i.test(request.headers.get("Authorization") ?? "")) return mockError(401);
     if (scenario === "inactive") return mockError(403, "ACCOUNT_INACTIVE");
@@ -189,16 +191,68 @@ export function createMockFetch(
         };
         return Response.json(agent);
       }
+      if (suffix === "/settings" && request.method === "GET")
+        return Response.json(agent.settings);
+      if (suffix === "/settings" && request.method === "PATCH") {
+        const parsed: unknown = await request.json();
+        if (!validSettingsPatch(parsed) || Object.values(parsed as object).some(value => value === null)) return mockError(422);
+        const body = parsed as Partial<components["schemas"]["AgentSettings"]>;
+        const next = { ...agent.settings!, ...body };
+        if (
+          typeof next.autonomy_enabled !== "boolean" ||
+          typeof next.discord_publish !== "boolean" ||
+          !Number.isInteger(next.frequency_per_day) ||
+          next.frequency_per_day < 0 ||
+          next.frequency_per_day > 2 ||
+          ![next.daily_budget_usd, next.max_session_usd].every(
+            (n) => typeof n === "number" && Number.isFinite(n) && n >= 0,
+          ) ||
+          next.web_visibility !== "participants"
+        )
+          return mockError(422);
+        const turningOn = (next.autonomy_enabled && !agent.settings?.autonomy_enabled) ||
+          (next.discord_publish && !agent.settings?.discord_publish);
+        if (turningOn && (agent.status !== "active" || !agent.approved_profile_version))
+          return mockError(409);
+        if (("daily_budget_usd" in body || "max_session_usd" in body || turningOn) &&
+            (next.max_session_usd > next.daily_budget_usd || next.daily_budget_usd > 1))
+          return mockError(422);
+        if ([next.daily_budget_usd, next.max_session_usd].some(value => Number(value.toFixed(6)) !== value))
+          return mockError(422);
+        agent = {
+          ...agent,
+          settings: { ...next, updated_at: new Date().toISOString() },
+        };
+        return Response.json(agent.settings);
+      }
+      const blockMatch = suffix.match(/^\/blocks\/([a-f\d-]{36})$/);
+      if (blockMatch && ["PUT", "DELETE"].includes(request.method)) {
+        if (blockMatch[1] !== "20000000-0000-4000-8000-000000000001")
+          return mockError(404);
+        if (request.method === "PUT") blocked.add(blockMatch[1]);
+        else blocked.delete(blockMatch[1]);
+        return new Response(null, { status: 204 });
+      }
       // Optional LLM is deliberately unavailable; the manual flow must still work.
       if (suffix === "/profile/suggest" && request.method === "POST")
         return mockError(503, "SERVICE_UNAVAILABLE");
     }
-    if (url.pathname === `/api/v1/agents/${agent?.id}/settings` && request.method === "GET")
-      return success(agent!.settings ?? {
-        autonomy_enabled: false, discord_publish: false, frequency_per_day: 0,
-        daily_budget_usd: 0, max_session_usd: 0, web_visibility: "participants",
-        updated_at: profile.created_at,
-      });
+    if (url.pathname === "/api/v1/discord/guilds" && request.method === "GET")
+      return Response.json(
+        options.activity
+          ? [
+              {
+                guild_id: "111111111111111111",
+                guild_name: "テスト交流サーバー",
+                channel_id: "222222222222222222",
+                channel_name: "ai交流",
+                guild_enabled: true,
+                consented_at: profile.created_at,
+                revoked_at: null,
+              },
+            ]
+          : [],
+      );
     const activityResponse = await activity(request);
     if (activityResponse) return activityResponse;
     return mockError(404);

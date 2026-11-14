@@ -3,7 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@alter/api-client/preview";
 
 type Loader<T> = (signal: AbortSignal) => Promise<T>;
-type State<T> = { loader: Loader<T>; data: T | null; error: unknown };
+type State<T> = {
+  loader: Loader<T>;
+  data: T | null;
+  error: unknown;
+  loaded: boolean;
+};
 // No module/global cache. Changing owner, resource ID or cursor discards old data.
 export function useResource<T>(
   loader: Loader<T>,
@@ -14,6 +19,7 @@ export function useResource<T>(
     loader,
     data: null,
     error: null,
+    loaded: false,
   });
   const operations = useRef<{
     refresh: () => void;
@@ -35,14 +41,14 @@ export function useResource<T>(
         .then((data) => {
           if (!active || id !== sequence || request.signal.aborted) return;
           latest = data;
-          setState({ loader, data, error: null });
+          setState({ loader, data, error: null, loaded: true });
         })
         .catch((error) => {
           if (!active || id !== sequence || request.signal.aborted) return;
           latest = null;
           if (error instanceof ApiError && error.status === 429)
             retryAt = Date.now() + (error.retryAfterSeconds ?? 60) * 1000;
-          setState({ loader, data: null, error });
+          setState({ loader, data: null, error, loaded: true });
         })
         .finally(() => {
           if (id === sequence) controller = null;
@@ -56,7 +62,7 @@ export function useResource<T>(
         controller = null;
         if (latest !== null) {
           latest = recipe(latest);
-          setState({ loader, data: latest, error: null });
+          setState({ loader, data: latest, error: null, loaded: true });
         }
       },
     };
@@ -84,11 +90,14 @@ export function useResource<T>(
     (recipe: (data: T) => T) => operations.current?.update(recipe),
     [],
   );
-  const current = state.loader === loader ? state : { data: null, error: null };
+  const current =
+    state.loader === loader
+      ? state
+      : { data: null, error: null, loaded: false };
   return {
     data: current.data,
     error: current.error,
-    loading: current.data === null && !current.error,
+    loading: !current.loaded,
     refresh,
     update,
   };

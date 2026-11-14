@@ -204,6 +204,26 @@ def cancel_queued_interactions(
     return len(conversation_ids)
 
 
+def cancel_pending_posts(
+    conn: Connection, agent_id: uuid.UUID, other_agent_id: uuid.UUID | None = None
+) -> int:
+    """Cancel only unsent guild posts; keep sending/sent posts and independent consents."""
+    rows = conn.execute(
+        text(
+            "update public.discord_deliveries d set status='cancelled' "
+            "where d.status='pending' and exists ("
+            "select 1 from public.conversation_participants p "
+            "where p.conversation_id=d.conversation_id and p.agent_id=:agent) "
+            "and (cast(:other as uuid) is null or exists ("
+            "select 1 from public.conversation_participants o "
+            "where o.conversation_id=d.conversation_id and o.agent_id=cast(:other as uuid))) "
+            "returning d.id"
+        ),
+        {"agent": agent_id, "other": other_agent_id},
+    ).all()
+    return len(rows)
+
+
 def update_settings(
     conn: Connection,
     owner: uuid.UUID,
@@ -263,7 +283,11 @@ def update_settings(
     cancelled = 0
     if current.autonomy_enabled and not merged["autonomy_enabled"]:
         cancelled = cancel_queued_interactions(conn, agent_id)
-    # discord_publish の OFF で止める未配信は、配信表を追加する #28 でここに接続する
+    posts_cancelled = 0
+    if (current.autonomy_enabled and not merged["autonomy_enabled"]) or (
+        current.discord_publish and not merged["discord_publish"]
+    ):
+        posts_cancelled = cancel_pending_posts(conn, agent_id)
 
     metadata: dict[str, Any] = {"changed": changed, "result": "success"}
     for field in ("autonomy_enabled", "discord_publish"):
@@ -273,6 +297,8 @@ def update_settings(
         metadata["consent_version"] = consent_version
     if cancelled:
         metadata["cancelled_conversations"] = cancelled
+    if posts_cancelled:
+        metadata["cancelled_posts"] = posts_cancelled
     _audit(conn, owner, "agent_settings.update", "agent", str(agent_id), metadata)
     return _settings(row)
 
@@ -318,9 +344,12 @@ def block_agent(
     if inserted is None:
         return False
     cancelled = cancel_queued_interactions(conn, agent_id, other_agent_id)
+    posts_cancelled = cancel_pending_posts(conn, agent_id, other_agent_id)
     metadata: dict[str, Any] = {"result": "success"}
     if cancelled:
         metadata["cancelled_conversations"] = cancelled
+    if posts_cancelled:
+        metadata["cancelled_posts"] = posts_cancelled
     # 相手の AI の ID は監査に入れない（ブロックした相手を運営記録から辿らせない）
     _audit(conn, owner, "agent.block", "agent", str(agent_id), metadata)
     return True

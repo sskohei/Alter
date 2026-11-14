@@ -11,7 +11,7 @@ async function forward(
   const pathname = path.join("/");
   // Fixed allowlist prevents using this route as an arbitrary authenticated proxy.
   if (
-    !/^(users\/me|agent-icons|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/connection|agents(?:\/me|\/[a-f\d-]{36}(?:\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?)$/.test(
+    !/^(users\/me|agent-icons|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds)|agents(?:\/me|\/[a-f\d-]{36}(?:\/blocks\/[a-f\d-]{36}|\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?)$/.test(
       pathname,
     )
   )
@@ -81,7 +81,7 @@ async function forward(
       headers,
       ...(body === undefined ? {} : { body }),
     });
-    return new Response(response.body, {
+    return new Response(response.status === 204 ? null : response.body, {
       status: response.status,
       headers: {
         "Content-Type": "application/json",
@@ -107,4 +107,4 @@ async function forward(
     );
   }
 }
-export { forward as GET, forward as POST, forward as PATCH };
+export { forward as GET, forward as POST, forward as PATCH, forward as PUT, forward as DELETE };

@@ -8,8 +8,10 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from alter_api.activity_routes import router as activity_router
-from alter_api.contracts.activity_preview import register_activity_contract
+from alter_api.discord_routes import router as discord_router
 from alter_api.errors import ErrorResponse
+from alter_api.settings_routes import AgentSettings
+from alter_api.settings_routes import router as settings_router
 from alter_api.users import Profile, router
 from alter_domain.agent_models import AgentPatch
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
@@ -47,16 +49,6 @@ class RevisionInput(AgentDraftInput):
 class ProfileRevision(PublicPersonality):
     version: int = Field(gt=0)
     approved_at: datetime | None
-
-
-class AgentSettings(BaseModel):
-    autonomy_enabled: bool
-    frequency_per_day: int
-    daily_budget_usd: float
-    max_session_usd: float
-    web_visibility: Literal["participants"]
-    discord_publish: bool
-    updated_at: datetime
 
 
 class Agent(BaseModel):
@@ -99,6 +91,8 @@ def create_contract_app() -> FastAPI:
 
     app.include_router(router, prefix="/api/v1")
     app.include_router(activity_router, prefix="/api/v1")
+    app.include_router(settings_router, prefix="/api/v1")
+    app.include_router(discord_router, prefix="/api/v1")
     preview_router = APIRouter(dependencies=[Depends(HTTPBearer())])
 
     @preview_router.get(
@@ -188,6 +182,5 @@ def create_contract_app() -> FastAPI:
     def suggest(id: UUID, body: SuggestionInput) -> PublicPersonality:
         raise HTTPException(503, "Contract only")
 
-    register_activity_contract(preview_router, ERRORS)
     app.include_router(preview_router)
     return app

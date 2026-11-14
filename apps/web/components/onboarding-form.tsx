@@ -24,6 +24,7 @@ export function OnboardingForm({ owner }: { owner: string }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [restored, setRestored] = useState(false);
+  const [ready, setReady] = useState(false);
   const {
     register,
     reset,
@@ -42,6 +43,7 @@ export function OnboardingForm({ owner }: { owner: string }) {
         reset({ ...emptyValues, ...draft });
         setRestored(true);
       }
+      setReady(true);
     }
     void load();
   }, [key, reset]);
@@ -70,46 +72,55 @@ export function OnboardingForm({ owner }: { owner: string }) {
         }}
         noValidate
       >
-        {Object.keys(errors).length > 0 && (
-          <div role="alert" className="notice">
-            入力内容を確認してください。
-          </div>
-        )}
-        {steps[step].map((field) => (
-          <div key={field} className="field">
-            <label htmlFor={field}>{labels[field]}</label>
-            {field === "name" ? (
-              <Input
-                id={field}
-                {...register(field)}
-                aria-invalid={!!errors[field]}
-                aria-describedby={errors[field] ? `${field}-error` : undefined}
-              />
-            ) : (
-              <Textarea
-                id={field}
-                {...register(field)}
-                aria-invalid={!!errors[field]}
-                aria-describedby={errors[field] ? `${field}-error` : undefined}
-              />
-            )}
-            <p id={`${field}-error`} className="field-error">
-              {errors[field]?.message}
-            </p>
-          </div>
-        ))}
-        <div className="actions">
-          {step > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setStep(step - 1)}
-            >
-              戻る
-            </Button>
+        <fieldset className="stack" disabled={!ready}>
+          <legend className="sr-only">作成ガイドの入力</legend>
+          {Object.keys(errors).length > 0 && (
+            <div role="alert" className="notice">
+              入力内容を確認してください。
+            </div>
           )}
-          <Button type="submit">{step === 2 ? "人格の確認へ" : "次へ"}</Button>
-        </div>
+          {steps[step].map((field) => (
+            <div key={field} className="field">
+              <label htmlFor={field}>{labels[field]}</label>
+              {field === "name" ? (
+                <Input
+                  id={field}
+                  {...register(field)}
+                  aria-invalid={!!errors[field]}
+                  aria-describedby={
+                    errors[field] ? `${field}-error` : undefined
+                  }
+                />
+              ) : (
+                <Textarea
+                  id={field}
+                  {...register(field)}
+                  aria-invalid={!!errors[field]}
+                  aria-describedby={
+                    errors[field] ? `${field}-error` : undefined
+                  }
+                />
+              )}
+              <p id={`${field}-error`} className="field-error">
+                {errors[field]?.message}
+              </p>
+            </div>
+          ))}
+          <div className="actions">
+            {step > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStep(step - 1)}
+              >
+                戻る
+              </Button>
+            )}
+            <Button type="submit">
+              {step === 2 ? "人格の確認へ" : "次へ"}
+            </Button>
+          </div>
+        </fieldset>
       </form>
     </div>
   );

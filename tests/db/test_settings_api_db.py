@@ -594,3 +594,186 @@ def test_queued_conversation_taken_by_worker_is_not_cancelled(
     assert _statuses(engine, taken_conv, taken_job) == ("queued", "running")
     [audit] = _audits(engine, sub)
     assert audit["metadata"]["cancelled_conversations"] == 1
+
+
+def test_generated_settings_client_against_live_api(
+    api: Api, engine: Engine, users: list[uuid.UUID], owner_agent: tuple[uuid.UUID, uuid.UUID]
+) -> None:
+    """Generated TS client, real HTTP/SQL, cancellation and consent audit in one flow."""
+    import shutil
+    import socket
+    import subprocess
+    import threading
+    import time
+    from pathlib import Path
+
+    import uvicorn
+    from fastapi import Request
+
+    sub, agent = owner_agent
+    other_sub = _new_user(engine, api, users)
+    third_sub = _new_user(engine, api, users)
+    with engine.begin() as conn:
+        other = _new_agent(conn, other_sub)
+        third = _new_agent(conn, third_sub)
+        blocked_pair = _queue_conversation(conn, agent, other)
+        stopped_pair = _queue_conversation(conn, agent, third)
+        unrelated_pair = _queue_conversation(conn, other, third)
+
+    def principal(request: Request) -> Principal:
+        token = request.headers["authorization"].removeprefix("Bearer ")
+        return Principal(uuid.UUID(token), "jwks")
+
+    api.app.dependency_overrides[get_principal] = principal
+    pnpm = shutil.which("pnpm")
+    assert pnpm, "pnpm is required for generated-client integration"
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        server = uvicorn.Server(uvicorn.Config(api.app, log_level="error"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            deadline = time.monotonic() + 10
+            while not server.started and thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert server.started
+            result = subprocess.run(
+                [
+                    pnpm,
+                    "--filter",
+                    "@alter/api-client",
+                    "exec",
+                    "tsx",
+                    "tests/interaction-live.ts",
+                    f"http://127.0.0.1:{port}",
+                    str(sub),
+                    str(other_sub),
+                    str(agent),
+                    str(other),
+                ],
+                cwd=Path(__file__).resolve().parents[2],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+        finally:
+            server.should_exit = True
+            thread.join(timeout=10)
+            assert not thread.is_alive()
+    assert _statuses(engine, *blocked_pair) == ("cancelled", "cancelled")
+    assert _statuses(engine, *stopped_pair) == ("cancelled", "cancelled")
+    assert _statuses(engine, *unrelated_pair) == ("queued", "queued")
+    audits = _audits(engine, sub)
+    assert len([a for a in audits if a["action"] == "agent.block"]) == 1
+    assert len([a for a in audits if a["action"] == "agent.unblock"]) == 1
+    assert any(a["metadata"].get("consent_version") == CONSENT for a in audits)
+    assert any(a["metadata"].get("cancelled_conversations") == 1 for a in audits)
+
+
+@pytest.mark.parametrize("operation", ["autonomy_enabled", "discord_publish", "block"])
+def test_stop_revoke_and_block_cancel_only_pending_target_posts(
+    api: Api,
+    engine: Engine,
+    users: list[uuid.UUID],
+    owner_agent: tuple[uuid.UUID, uuid.UUID],
+    operation: str,
+) -> None:
+    sub, agent = owner_agent
+    other_sub = _new_user(engine, api, users)
+    third_sub = _new_user(engine, api, users)
+    guild = str(10**17 + uuid.uuid4().int % 10**17)
+    channel = str(10**17 + uuid.uuid4().int % 10**17)
+    with engine.begin() as conn:
+        other = _new_agent(conn, other_sub)
+        third = _new_agent(conn, third_sub)
+        conn.execute(
+            text(
+                "update public.agent_settings set autonomy_enabled=true, "
+                "discord_publish=true where agent_id=:id"
+            ),
+            {"id": agent},
+        )
+        conn.execute(
+            text(
+                "insert into public.discord_guilds(id,admin_discord_user_id) "
+                "values (:g,'111111111111111111')"
+            ),
+            {"g": guild},
+        )
+        conn.execute(
+            text(
+                "insert into public.discord_channels(id,guild_id,configured_by) "
+                "values (:c,:g,'111111111111111111')"
+            ),
+            {"c": channel, "g": guild},
+        )
+        conn.execute(
+            text("insert into public.agent_discord_consents(agent_id,guild_id) values (:a,:g)"),
+            {"a": agent, "g": guild},
+        )
+        deliveries: dict[str, uuid.UUID] = {}
+        for label, pair, status in (
+            ("target", (agent, other), "pending"),
+            ("own_other", (agent, third), "pending"),
+            ("unrelated", (other, third), "pending"),
+            ("sending", (agent, other), "sending"),
+            ("sent", (agent, other), "sent"),
+        ):
+            conv, _ = _queue_conversation(conn, *pair)
+            deliveries[label] = conn.execute(
+                text(
+                    "insert into public.discord_deliveries(conversation_id,channel_id,status) "
+                    "values (:c,:ch,:s) returning id"
+                ),
+                {"c": conv, "ch": channel, "s": status},
+            ).scalar_one()
+    try:
+        client = api.as_user(sub)
+        if operation == "block":
+            response = client.put(_url(agent, f"blocks/{other}"))
+            assert response.status_code == 204, response.text
+        else:
+            response = client.patch(_url(agent), json={operation: False})
+            assert response.status_code == 200, response.text
+            # The other global consent remains independent.
+            independent = (
+                "discord_publish" if operation == "autonomy_enabled" else "autonomy_enabled"
+            )
+            assert response.json()[independent] is True
+        with engine.connect() as conn:
+            statuses = dict(
+                conn.execute(
+                    text("select id,status from public.discord_deliveries where channel_id=:ch"),
+                    {"ch": channel},
+                ).all()
+            )
+            assert (
+                conn.execute(
+                    text(
+                        "select revoked_at from public.agent_discord_consents "
+                        "where agent_id=:a and guild_id=:g"
+                    ),
+                    {"a": agent, "g": guild},
+                ).scalar_one()
+                is None
+            )
+        assert statuses[deliveries["target"]] == "cancelled"
+        assert statuses[deliveries["own_other"]] == (
+            "pending" if operation == "block" else "cancelled"
+        )
+        assert statuses[deliveries["unrelated"]] == "pending"
+        assert statuses[deliveries["sending"]] == "sending"
+        assert statuses[deliveries["sent"]] == "sent"
+        [audit] = _audits(engine, sub)
+        assert audit["metadata"]["cancelled_posts"] == (1 if operation == "block" else 2)
+        assert str(other) not in json.dumps(audit["metadata"])
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                text("delete from public.discord_deliveries where channel_id=:ch"), {"ch": channel}
+            )
+            conn.execute(text("delete from public.discord_channels where id=:ch"), {"ch": channel})
+            conn.execute(text("delete from public.discord_guilds where id=:g"), {"g": guild})
