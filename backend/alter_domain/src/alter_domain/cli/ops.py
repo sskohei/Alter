@@ -1,4 +1,4 @@
-"""運営専用 CLI: 状態の確認と、Discord 配送の要確認の照合（#36、docs/27）。
+tugi"""運営専用 CLI: 状態の確認と、Discord 配送の要確認の照合（#36、docs/27）。
 
 使い方（リポジトリ root で実行）::
 
@@ -10,6 +10,10 @@
     uv run alter-ops --env local --operator sskohei resolve-post <配信ID> cancelled
     uv run alter-ops --env local --operator sskohei resolve-dm <配信ID> sent --message-id <ID>
     uv run alter-ops --env local --operator sskohei choose-target <会話ID> <チャンネルID>
+    uv run alter-ops --env local --operator sskohei llm-list
+    uv run alter-ops --env local --operator sskohei llm-settle <実行ID> charged \\
+        --input-tokens <入力> --output-tokens <出力>
+    uv run alter-ops --env local --operator sskohei llm-settle <実行ID> not_charged
 
 * ``status`` は件数だけを表示し、しきい値を超えたものがあれば終了コード 3 を返す
   （手元 PC の OS の定期実行や監視から呼ぶ）。本番でも確認の入力は求めない（読み取りのみ）
@@ -29,7 +33,7 @@ from typing import TextIO
 from sqlalchemy import Engine
 from sqlalchemy.engine import make_url
 
-from alter_domain import ops
+from alter_domain import llm_reconcile, ops
 from alter_domain.db import create_db_engine
 from alter_domain.invitations import InvalidOperator, validate_operator
 from alter_domain.settings import Settings
@@ -41,7 +45,7 @@ EXIT_FAILED = 1
 EXIT_USAGE = 2
 EXIT_ALERT = 3
 
-_WRITE_COMMANDS = frozenset({"resolve-post", "resolve-dm", "choose-target"})
+_WRITE_COMMANDS = frozenset({"resolve-post", "resolve-dm", "choose-target", "llm-settle"})
 
 
 @dataclass
@@ -81,6 +85,13 @@ def _parser() -> argparse.ArgumentParser:
     choose = commands.add_parser("choose-target", help="投稿先が複数で保留した会話の投稿先を選ぶ")
     choose.add_argument("conversation_id", type=uuid.UUID)
     choose.add_argument("channel_id")
+
+    commands.add_parser("llm-list", help="LLM 呼び出しの未確定の一覧")
+    settle = commands.add_parser("llm-settle", help="結果不明の LLM 呼び出しを確定する")
+    settle.add_argument("run_id", type=uuid.UUID)
+    settle.add_argument("outcome", choices=["charged", "not_charged"])
+    settle.add_argument("--input-tokens", type=int, default=0)
+    settle.add_argument("--output-tokens", type=int, default=0)
     return parser
 
 
@@ -101,6 +112,8 @@ def main(argv: Sequence[str] | None = None, *, deps: Deps | None = None) -> int:
             return _status(args, deps)
         if args.command == "review-list":
             _review_list(deps)
+        elif args.command == "llm-list":
+            _llm_list(deps)
         else:
             _resolve(args, deps)
             print("記録しました", file=out)
@@ -113,6 +126,12 @@ def main(argv: Sequence[str] | None = None, *, deps: Deps | None = None) -> int:
         return EXIT_FAILED
     except ops.InvalidResolution as exc:
         print(f"失敗しました [invalid]: {exc}", file=out)
+        return EXIT_FAILED
+    except llm_reconcile.RunNotFound:
+        print("失敗しました [not_found]: 対象が見つからないか、未確定ではありません", file=out)
+        return EXIT_FAILED
+    except llm_reconcile.CannotSettle as exc:
+        print(f"失敗しました [{exc.code}]: 今は確定できません（docs/27 §4）", file=out)
         return EXIT_FAILED
 
 
@@ -147,7 +166,12 @@ def _status(args: argparse.Namespace, deps: Deps) -> int:
                 file=out,
             )
         llm = snap["llm_unsettled"]
-        print("LLM 未確定: " + ", ".join(f"{k} {v}" for k, v in llm.items()), file=out)
+        print(
+            "LLM 未確定: "
+            + ", ".join(f"{k} {v}" for k, v in llm.items())
+            + f"（止まっているもの {snap['llm_stale']}）",
+            file=out,
+        )
         cost = snap["cost"]
         print(
             f"費用（UTC 今日）: 確定 ${cost['charged_today_usd']} / 見込み ${cost['exposure_usd']}"
@@ -183,9 +207,34 @@ def _review_list(deps: Deps) -> None:
         )
 
 
+def _llm_list(deps: Deps) -> None:
+    with deps.engine.connect() as conn:
+        runs = llm_reconcile.list_unsettled(conn, deps.now)
+    if not runs:
+        print("未確定の LLM 呼び出しはありません", file=deps.stdout)
+    for run in runs:
+        print(
+            f"{run.id}\t{run.purpose}\t{run.status}\t段階 {run.phase or '-'}\t"
+            f"会話 {run.conversation_id or '-'}（{run.conversation_status or '-'}）\t"
+            f"予約 ${run.reserved_usd}\t{'確定可' if run.stale else '進行中の可能性'}\t"
+            f"{run.updated_at.isoformat()}",
+            file=deps.stdout,
+        )
+
+
 def _resolve(args: argparse.Namespace, deps: Deps) -> None:
     with deps.engine.begin() as conn:
-        if args.command == "resolve-post":
+        if args.command == "llm-settle":
+            llm_reconcile.settle(
+                conn,
+                args.run_id,
+                args.outcome,
+                operator=args.operator,
+                now=deps.now,
+                input_tokens=args.input_tokens,
+                output_tokens=args.output_tokens,
+            )
+        elif args.command == "resolve-post":
             ops.resolve_post(
                 conn,
                 args.delivery_id,
