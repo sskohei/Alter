@@ -1439,13 +1439,14 @@
         "additionalProperties": false,
         "properties": {
           "answers": {
-            "items": {
+            "additionalProperties": {
+              "maxLength": 2000,
               "type": "string"
             },
-            "maxItems": 20,
-            "minItems": 1,
+            "maxProperties": 11,
+            "minProperties": 1,
             "title": "Answers",
-            "type": "array"
+            "type": "object"
           }
         },
         "required": [

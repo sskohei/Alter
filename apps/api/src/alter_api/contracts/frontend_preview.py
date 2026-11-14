@@ -13,7 +13,7 @@ from alter_api.errors import ErrorResponse
 from alter_api.settings_routes import AgentSettings
 from alter_api.settings_routes import router as settings_router
 from alter_api.users import Profile, router
-from alter_domain.agent_models import AgentPatch
+from alter_domain.agent_models import AgentPatch, ProfileInput, SuggestionInput
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,17 +22,8 @@ Text = Annotated[str, Field(max_length=2000)]
 Items = Annotated[list[Text], Field(max_length=20)]
 
 
-class PublicPersonality(BaseModel):
-    personality: Text
-    values_text: Text
-    interests: Items
-    speaking_style: Text
-    interaction_policy: Text
-    shareable_info: Text
-    restrictions: Text
-    hobbies: Items = Field(default_factory=list)
-    strengths: Items = Field(default_factory=list)
-    weaknesses: Items = Field(default_factory=list)
+class PublicPersonality(ProfileInput):
+    pass
 
 
 class AgentDraftInput(PublicPersonality):
@@ -67,10 +58,6 @@ class PrivateInfo(BaseModel):
 
 class Approval(BaseModel):
     version: int = Field(gt=0)
-
-
-class SuggestionInput(BaseModel):
-    answers: dict[str, Text]
 
 
 ERRORS: dict[int | str, dict[str, Any]] = {

@@ -198,3 +198,19 @@ LLM開示・API同意版の空欄を補完せず、docs/14の運用と#37の公�
 トランザクションで取り消す。送信中/送信済みは変更せず、ギルド別同意の撤回とは独立する。
 監査に取消件数だけを追加し、相手IDは記録しない。
 #12のデザイン仕上げ、#20/#28のWorker/配送直前の停止判定、#59の予約費用精算は各Issueで追跡する。
+
+
+## #18 費用付き生成と独立安全判定（2026-11-14、PR #59）
+
+採用済みSonnet 5.5を直接HTTPで実装し、生成に加えて独立したSonnet判定を必須にする。
+生成3072/512は維持し、判定512/16を追加して1体4発言分を$0.049792に収める。
+判定はeffort low/between_tools（Sonnet 5.5はdisabledを拒否）。根拠は
+[公式thinking仕様](https://platform.claude.com/docs/en/build-with-claude/thinking)と
+[構造化出力](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)。
+同じモデルの別system境界による判定であり完全な安全保証ではない。実受け入れは#37。
+未知の課金を再試行しないため、llm_runsの永続状態と既存の予約台帳を併用する。
+DB接続は外部I/O前に閉じ、実費が既知なら安全性検査/失効後でも記録する。
+提案の公開answers辞書をPydantic正本に統一し、非公開/未知キーを拒否する。
+1体UTC日次3回はDBで直列化し、未完/結果不明時の追加実行を拒否する。
+有料通信は既定無効のLLM_ENABLEDで明示設定し、実キーを用いた受け入れは#37へ残す。
+#19/#20はsession_reservation/conversation_turnを使用し、Workerのclaim/保存自体は本Issueに含めない。

@@ -23,6 +23,10 @@ class LedgerConflict(Exception):
     pass
 
 
+class UnsettledBudget(LedgerConflict):
+    """Reconcile external invocations before releasing their reservations."""
+
+
 def lock_budget(conn: Connection) -> None:
     conn.execute(text("select pg_advisory_xact_lock(:key)"), {"key": BUDGET_LOCK})
 
@@ -181,6 +185,21 @@ def session_exposure(conn: Connection, agent: UUID, conversation: UUID) -> Decim
     )
 
 
+def require_settled(
+    conn: Connection, agent: UUID | None = None, conversation: UUID | None = None
+) -> None:
+    if conn.execute(
+        text(
+            "select 1 from public.llm_runs where "
+            "(cast(:agent as uuid) is null or agent_id=:agent) "
+            "and (cast(:conv as uuid) is null or conversation_id=:conv) "
+            "and status in ('reserved','generating','generated','moderating','unknown')"
+        ),
+        {"agent": agent, "conv": conversation},
+    ).first():
+        raise UnsettledBudget()
+
+
 def release_for_deletion(
     conn: Connection, *, agent: UUID | None = None, conversation: UUID | None = None
 ) -> None:
@@ -194,6 +213,7 @@ def release_for_deletion(
     if agent is None and conversation is None:
         raise ValueError("A deletion target is required")
     lock_budget(conn)
+    require_settled(conn, agent, conversation)
     rows = conn.execute(
         text(
             "select agent_id,conversation_id,provider,model, "
@@ -272,6 +292,7 @@ def consume(
 
 def release_session(conn: Connection, agent: UUID, conversation: UUID, price: ModelPrice) -> None:
     lock_budget(conn)
+    require_settled(conn, agent, conversation)
     remaining = held(conn, agent, conversation)
     if remaining > 0:
         record(

@@ -48,21 +48,49 @@ API version `2026-10-21`、adaptive thinking / effort low、入力3072 / 出力5
 最大token数の各呼出は既存の会話費用枠に必ず収まるわけではなく、残枠不足なら停止する。
 [選定根拠](26-llm-candidate-review.md)・[費用見積](20-cost-estimation.md)を参照。
 
-## #18 実装とliveゲート
+## #18 LLM境界・費用付き実行
 
-`llm.LLMClient`/`FakeLLM`/`checked_generate`と`budget`を追加。
-人格は`ProfileInput`の明示投影、発言/記憶はuser内の引用JSONで、systemへ連結しない。
-schemaはextra禁止/厳密bool、PIIと既知秘密の出力検査を行う。
-BaselineModeratorはメール/電話の最低限の検査であり、供給元の安全性審査・moderationの代替ではない。
-モデル選定は#14で完了済み。本番adapterの接続まではLLM外部呼出なし。
-任意提案APIは所有権検証後に503を返し、手動作成を継続できる契約のみ提供する。
-提案の利用回数制限・費用記録・人格提案生成は供給元接続時の残件。
+`llm.LLMClient`/`StructuredLLMClient`/`FakeLLM`が交換可能な境界で、
+`sonnet.SonnetClient`が採用済みSonnet 5.5の直接APIを実装する。
+生成はadaptive thinking/effort low、入力3072/出力512（thinking込み）。
+count_tokens＋余裕1024が収まるまで古い引用記憶・履歴だけを削り、人格/system/schemaは維持する。
+収まらなければ生成せず422。型・出力制約・モデルID・usage・cache未使用を検証する。
 
-台帳は全writerが固定advisory transaction lockを取得後にagent_settingsをロックする。
-残予約は全期間のreserve-release、日次実費はUTC当日のchargeを合計する。
-consumeでは実費chargeと同額releaseを同時追加し、終了時に残予約をreleaseする。
-結果不明の呼出は予約を保持し、自動再試行/自動解放を行わない。運用照合は#36。
-DBトランザクションを閉じてからLLMを呼び、生成結果と台帳の確定は短いトランザクションで行う。
+`llm_execution.LLMExecution`が会話/人格提案に共通の予約・生成・独立安全性判定・課金を担う。
+入力と出力をNFKC正規化したローカルルールでPII/トークン/既知秘密/代表的な注入指示を検査する。
+生成後は別のsystem境界でSonnetによる`allowed:bool`の独立判定を必須にする。
+判定はinput512/output16、余裕128、effort low / `between_tools`（Sonnet 5.5はdisabledを拒否）。
+判定が枠に収まらない・不正schema・拒否なら返却しない。ローカルルールだけで公開しない。
+安全判定は完全な保証ではなく、実品質/誤検知の受け入れは#37で行う。
+
+1回の生成＋判定の最大予約は$0.012448。1体4発言分は
+`llm_selection.session_reservation()`の$0.049792で、既定$0.05に収まる。
+#19はこの全額を両AIへ会話単位で予約する。#20は`conversation_turn`で承認済み公開人格を読み、
+同じ予約をconsumeして新たな予約を積まない。両者のON/承認/有効招待/削除/ブロックを
+開始前・各外部処理前・結果返却前に確認し、1体4回で停止する。
+発言/記憶はuserの引用JSONで、private_info/暗号文/本人IDは選択しない。
+Workerのjob claim・発言保存・再実行制御は#20、引用元の参加者検証は#20/#22が担当する。
+
+`llm_runs`へ本文を含まない実行状態を記録し、DB接続を閉じてから外部APIを呼ぶ。
+予約は先にcommitし、生成/判定の各呼出直前も状態をcommitする。
+既知の実費は、安全性/schema検査失敗や途中失効でもchargeと同額releaseを同時追加する。
+提案終了時は未使用分をrelease。会話の残予約は#20が終了時にrelease_sessionする。
+日次はUTC当日charge＋全期間reserve-release、会話は全期間実費＋残予約で検査する。
+
+タイムアウト/通信途中断/5xx/不正usage/モデル不一致は結果不明として予約を保持し、
+同じAIの新規LLM実行を拒否する。
+`release_session`/`release_for_deletion`も未完/結果不明の状態では解放を拒否する。プロセス停止時の未完状態も同様。自動解放・自動再試行しない。
+429/接続確立前の失敗/明示的な4xx拒否だけ未課金として残額を解放し、Retry-Afterを返す。
+自動再試行は0回（最大3回の上限以内）。利用者による再送も日次回数/予算へ含める。
+1提案の未確定損失は最大予約$0.012448以内の想定で保持し、実際の異常usageは#36で照合する。
+予約見積とAPI上限は供給元が上限を守る前提で、token計数は推定である。
+
+`POST /agents/{id}/profile/suggest`は公開項目のanswers辞書だけを受け付ける。
+辞書キーはname/公開人格項目、値2000文字以下/合計8000文字以下、非公開/未知キーと空回答は422。
+UTC日次3回をDBの固定費用ロック下で検査し、成功/失敗/結果不明の全実行を数える。
+上限後はcount_tokensも生成も呼ばず429。予算不足・未解放の結果不明は503。
+成功応答は公開人格だけで、人格版/承認/交流ONを変更しない。失敗後も手動作成を継続できる。
+Webのpreview入力も同じPydanticを使い、生成クライアントを同期する。
 
 ### 費用台帳の削除・会話上限（PR #59レビュー対応、2026-11-14）
 

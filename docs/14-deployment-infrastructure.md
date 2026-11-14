@@ -92,10 +92,19 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 
 ### Claude Sonnetの採用設定（#14、PR #57レビュー対応）
 
-Workerと明示的な評価CLIの秘密キー名は`ANTHROPIC_API_KEY`。
+API・Workerと明示的な評価CLIの秘密キー名は`ANTHROPIC_API_KEY`。
 旧名`LLM_API_KEY`は使用しない。`LLM_MODEL=claude-sonnet-5-5`を指定し、
 キーをWeb/Vercel/`NEXT_PUBLIC_*`へ渡さない。
-Workerの実接続は#18のadapter・moderation・費用予約の接続後に有効化する。
+#18のadapter・独立moderation・費用付き共通実行と提案APIは実装済み。
+APIで提案を有効化するときだけ、サーバー側へ`ALTER_MODE=live`、`LLM_ENABLED=true`、
+`ANTHROPIC_API_KEY`、`MAX_DAILY_COST_USD`（既定1.00）を設定する。
+`LLM_ENABLED`は既定falseで、鍵だけでは有料通信を行わない。Webへ鍵/有効化変数を渡さない。
+`LLM_MODEL`は表示用の固定採用値で、任意モデルへの切替スイッチではない。
+Worker本体のclaim/保存への接続は#20、実品質の受け入れは#37で行う。
+呼出は30秒/connect5秒で、HTTP/SDK内部の自動再試行はしない。
+429/未課金一時障害はRetry-Afterを返し、課金不明ならllm_runsと残予約を保持する。
+復旧時は#36で状態・usage_records・供給元利用量を照合し、確認せず再実行/解放しない。
+1提案の最大予約は$0.012448で、1体の未完実行は1件まで。
 
 Webの`ALTER_LLM_NAME`には`Claude Sonnet 5.5（Anthropic直接API）`を表示名として使う。
 `ALTER_LLM_DATA_POLICY_URL`には確認済みの商用API向け保持説明

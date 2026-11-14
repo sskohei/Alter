@@ -9,7 +9,7 @@ SUPPORTED_JWKS_ALGORITHMS = frozenset({"ES256", "RS256"})
 
 
 class Settings(BaseSettings):
-    """Shared local configuration. External actions are disabled in this scaffold."""
+    """Shared configuration. Paid LLM calls require live mode and explicit enablement."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     alter_mode: Literal["mock", "live"] = "mock"
@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # 自律交流 ON の同意文面の版（docs/23）。未設定なら ON にできない（送信先 LLM 未決定を含む）
     alter_consent_version: str = ""
 
+    # API/Worker only. A key alone never enables paid calls.
+    llm_enabled: bool = False
+    anthropic_api_key: SecretStr = SecretStr("")
+    max_daily_cost_usd: Decimal = Decimal("1.00")
+
     # Discord 本人連携（#26）。シークレットは API だけに置く（docs/14）。未設定なら連携 API は 503
     discord_client_id: str = ""
     discord_client_secret: str = ""
@@ -52,11 +57,11 @@ class Settings(BaseSettings):
             raise ValueError("CORS_ORIGINS must list explicit origins; '*' is not allowed")
         return value
 
-    @field_validator("agent_daily_budget_max_usd")
+    @field_validator("agent_daily_budget_max_usd", "max_daily_cost_usd")
     @classmethod
     def _check_budget_max(cls, value: Decimal) -> Decimal:
         if not value.is_finite() or value < 0 or value != value.quantize(Decimal("0.000001")):
-            raise ValueError("AGENT_DAILY_BUDGET_MAX_USD must be >= 0 with at most 6 decimals")
+            raise ValueError("Budget limits must be >= 0 with at most 6 decimals")
         return value
 
     @field_validator("supabase_jwt_algorithms")

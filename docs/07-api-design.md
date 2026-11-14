@@ -196,9 +196,17 @@ icon_pathの省略は維持、nullは解除、非nullは検証済みの本人画
 
 ## #18 任意人格提案の契約
 
-`POST /agents/{id}/profile/suggest`は本人所有権を検証後、未接続の間は503を返す。
-成功時の契約は保存しない`PublicPersonality`で、本人が採用後に保存・承認する。
-Sonnetは選定済みだがlive adapter/提案生成/回数制限/費用記録は#18の残件。
+`POST /agents/{id}/profile/suggest`は本人所有権/有効招待を検証し、公開項目だけの
+`answers: {personality?: string, ...}`を受け付ける（正本は`agent_models.SuggestionInput`）。
+未知/非公開キー、値2000文字超、合計8000文字超、空回答は422。
+`ALTER_MODE=live`＋`LLM_ENABLED=true`＋API専用`ANTHROPIC_API_KEY`が必要。
+成功応答は保存しない`ProfileInput`（previewのPublicPersonalityと同じ公開項目）。
+本人が採用後に保存・承認するまで人格版や承認状態は変わらない。
+UTC日次3回（失敗含む）/同時1実行をDBで検査し、上限は429＋Retry-After。
+供給元429も429、未課金一時障害は503＋Retry-After、予算/結果不明/無効設定は503、
+安全性/schema/入力枠の拒否は422。内部/供給元本文や秘密を応答しない。
+生成と独立判定の費用はusage_recordsへ記録し、課金結果不明なら予約を保持して停止する。
+処理と費用の契約は[AI処理](08-ai-agent-architecture.md)を参照。
 
 
 ## #24 Web設定画面の接続

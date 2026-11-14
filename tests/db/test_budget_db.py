@@ -201,3 +201,188 @@ def test_deletion_release_requires_target(engine):
 
     with engine.begin() as conn, pytest.raises(ValueError):
         release_for_deletion(conn)
+
+
+@pytest.mark.parametrize("stop_during_generation", [False, True])
+def test_shared_conversation_execution_uses_only_approved_profile_and_session_reservation(
+    engine, ai_pair, stop_during_generation
+):
+    import json
+
+    import httpx
+    from alter_domain.agent_models import AgentDraftInput
+    from alter_domain.agents import save_revision
+    from alter_domain.budget import held, release_session
+    from alter_domain.llm_execution import LLMExecution
+    from alter_domain.llm_selection import MODEL, model_price, session_reservation
+    from alter_domain.profile_crypto import ProfileCipher
+    from alter_domain.settings import Settings
+    from alter_domain.sonnet import SonnetClient
+
+    with engine.begin() as conn:
+        conv = new_conversation(conn)
+        for slot, agent in enumerate(ai_pair, 1):
+            conn.execute(
+                text(
+                    "insert into public.conversation_participants "
+                    "(conversation_id,agent_id,ordinal,discord_consent,web_consent) "
+                    "values (:c,:a,:s,false,true)"
+                ),
+                {"c": conv, "a": agent, "s": slot},
+            )
+            conn.execute(
+                text("update public.agent_settings set autonomy_enabled=true where agent_id=:a"),
+                {"a": agent},
+            )
+        draft = AgentDraftInput(
+            name="AI",
+            personality="UNAPPROVED_SENTINEL",
+            values_text="対話",
+            interests=["本"],
+            speaking_style="丁寧",
+            interaction_policy="尊重",
+            shareable_info="公開",
+            restrictions="推測禁止",
+            private_info="PRIVATE_SENTINEL",
+        )
+        save_revision(
+            conn,
+            ai_pair[0],
+            2,
+            draft,
+            ProfileCipher("eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg="),
+        )
+        reserve(
+            conn,
+            ai_pair[0],
+            conv,
+            model_price(),
+            "session-safe",
+            session_reservation(),
+            Decimal("10"),
+        )
+    requests = []
+    counted = []
+
+    def handler(req):
+        assert engine.pool.checkedout() == 0
+        body = json.loads(req.content)
+        assert "PRIVATE_SENTINEL" not in req.content.decode()
+        assert "UNAPPROVED_SENTINEL" not in req.content.decode()
+        if req.url.path.endswith("count_tokens"):
+            counted.append(body)
+            return httpx.Response(200, json={"input_tokens": 100})
+        requests.append(body)
+        if stop_during_generation:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "update public.agent_settings set autonomy_enabled=false where agent_id=:a"
+                    ),
+                    {"a": ai_pair[1]},
+                )
+        verdict = "allowed" in body["output_config"]["format"]["schema"]["properties"]
+        value = (
+            {"allowed": True}
+            if verdict
+            else {"utterance": "本について話しましょう", "should_end": False}
+        )
+        return httpx.Response(
+            200,
+            json={
+                "model": MODEL,
+                "usage": {"input_tokens": 100, "output_tokens": 10},
+                "stop_reason": "end_turn",
+                "content": [{"type": "text", "text": json.dumps(value)}],
+            },
+        )
+
+    settings = Settings(
+        _env_file=None, alter_mode="live", llm_enabled=True, anthropic_api_key="synthetic-key"
+    )
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        service = LLMExecution(engine, SonnetClient(settings, http), engine.begin, Decimal("10"))
+        if stop_during_generation:
+            from alter_domain.llm import UnsafeOutput
+
+            with pytest.raises(UnsafeOutput):
+                service.conversation_turn(ai_pair[0], conv, [])
+            assert len(requests) == len(counted) == 1
+            with engine.begin() as conn:
+                release_session(conn, ai_pair[0], conv, model_price())
+            return
+        for _ in range(4):
+            result = service.conversation_turn(ai_pair[0], conv, ["最近の本"], ["本の話題"])
+            assert result.utterance == "本について話しましょう"
+        before = len(requests)
+        with pytest.raises(BudgetExceeded):
+            service.conversation_turn(ai_pair[0], conv, [])
+        assert len(requests) == before == 8
+    with engine.begin() as conn:
+        assert held(conn, ai_pair[0], conv) == session_reservation() - 8 * model_price().cost(
+            100, 10
+        )
+        assert (
+            conn.execute(
+                text(
+                    "select count(*) from public.usage_records where agent_id=:a "
+                    "and conversation_id=:c and kind='reserve'"
+                ),
+                {"a": ai_pair[0], "c": conv},
+            ).scalar_one()
+            == 1
+        )
+        from alter_domain.budget import UnsettledBudget
+
+        # Simulate unresolved bookkeeping: finally must not discard its session hold.
+        conn.execute(
+            text(
+                "update public.llm_runs set status='unknown' where id=("
+                "select id from public.llm_runs where agent_id=:a limit 1)"
+            ),
+            {"a": ai_pair[0]},
+        )
+        with pytest.raises(UnsettledBudget):
+            release_session(conn, ai_pair[0], conv, model_price())
+        conn.execute(
+            text("update public.llm_runs set status='succeeded' where agent_id=:a"),
+            {"a": ai_pair[0]},
+        )
+        release_session(conn, ai_pair[0], conv, model_price())
+
+
+def test_crashed_execution_is_durable_and_never_automatically_retried(engine, ai_pair):
+    from alter_domain.agent_models import ProfileInput
+    from alter_domain.llm import FakeLLM
+    from alter_domain.llm_execution import LLMExecution, UnsettledLLMCall, suggestion_prompt
+    from alter_domain.llm_selection import call_reservation
+
+    class Crash(BaseException):
+        pass
+
+    class CrashingLLM(FakeLLM):
+        calls = 0
+
+        def complete(self, call):
+            self.calls += 1
+            raise Crash()
+
+    llm = CrashingLLM()
+    service = LLMExecution(engine, llm, engine.begin, Decimal("10"))
+    with pytest.raises(Crash):
+        service.execute(ai_pair[0], suggestion_prompt({"personality": "穏やか"}), ProfileInput)
+    with engine.begin() as conn:
+        assert exposure(conn, agent=ai_pair[0]) == call_reservation()
+        assert (
+            conn.execute(
+                text("select status from public.llm_runs where agent_id=:a"), {"a": ai_pair[0]}
+            ).scalar_one()
+            == "generating"
+        )
+    with pytest.raises(UnsettledLLMCall):
+        service.execute(ai_pair[0], suggestion_prompt({"personality": "穏やか"}), ProfileInput)
+    assert llm.calls == 1
+    from alter_domain.budget import UnsettledBudget, release_for_deletion
+
+    with engine.begin() as conn, pytest.raises(UnsettledBudget):
+        release_for_deletion(conn, agent=ai_pair[0])

@@ -893,7 +893,9 @@ export interface components {
         /** SuggestionInput */
         SuggestionInput: {
             /** Answers */
-            answers: string[];
+            answers: {
+                [key: string]: string;
+            };
         };
     };
     responses: never;
