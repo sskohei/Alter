@@ -38,7 +38,7 @@ def check(database_url: str, project_ref: str) -> None:
         with engine.connect() as conn:
             conn.execute(text("SET TRANSACTION READ ONLY"))
             conn.execute(text("SET LOCAL statement_timeout = '10s'"))
-            if not conn.scalar(text("SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()")):
+            if not conn.connection.driver_connection.pgconn.ssl_in_use:
                 raise ValueError("TLS required")
             applied = set(
                 conn.scalars(text("SELECT version FROM supabase_migrations.schema_migrations"))

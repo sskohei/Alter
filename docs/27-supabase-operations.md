@@ -96,3 +96,14 @@ Storageはprivate bucketごとの本体と対応metadataを暗号化して別保
 根拠（2026-11-14確認）：[接続方式](https://supabase.com/docs/guides/database/connecting-to-postgres)、
 [バックアップ範囲](https://supabase.com/docs/guides/platform/backups)、
 [署名鍵](https://supabase.com/docs/guides/auth/signing-keys)。プラン条件は公開直前に再確認する。
+
+
+## 発表用1環境の先行接続（2026-11-14）
+
+ユーザーの発表用途指定により、発表用Supabaseへ13本のmigrationをdry-run後に適用した。
+CA/hostname検証付きsession poolerと、transaction poolerのアプリ接続を確認した。
+Supavisor経由のpg_stat_sslはpooler→DB側であり、PC→poolerのTLS確認には使わず、
+psycopgの実接続ssl_in_useを検査する。非対称JWKSはEC。Google/GitHub providerは未設定。
+適用前のpublic/Auth/Storage DB dumpは暗号化/復号一致確認済み。
+暗号文と鍵の保存先は分けたが同じPC上のため、別媒体保管・保持/削除・復元演習は未完了。
+2環境の正式受け入れとは区別し、#33はopenを維持する。詳細は#34の発表用手順へ引き渡す。
