@@ -5,45 +5,47 @@ from uuid import UUID
 
 from sqlalchemy import Connection, RowMapping, text
 
-from alter_domain.budget import lock_budget
+from alter_domain.budget import BUDGET_LOCK
 
 
 def lock_interactions(conn: Connection) -> None:
-    # MVP <=10 owners: coarse, stable lock order also serializes with invitation revocation.
-    for table, key in (
-        ("invitations", "id"),
-        ("profiles", "id"),
-        ("agents", "id"),
-        ("agent_settings", "agent_id"),
-    ):
-        conn.execute(text(f"select {key} from public.{table} order by {key} for update")).all()
-    # API authorization locks invitations/profiles before entering the budget boundary.
-    lock_budget(conn)
+    # Execute the stable lock sequence on the server in one round trip.
+    # Keep row locks before the budget lock, including when another API holds a row.
+    conn.execute(
+        text(f"""
+        DO $locks$ BEGIN
+          PERFORM id FROM public.invitations ORDER BY id FOR UPDATE;
+          PERFORM id FROM public.profiles ORDER BY id FOR UPDATE;
+          PERFORM id FROM public.agents ORDER BY id FOR UPDATE;
+          PERFORM agent_id FROM public.agent_settings ORDER BY agent_id FOR UPDATE;
+          PERFORM pg_advisory_xact_lock({BUDGET_LOCK});
+        END $locks$;
+    """)
+    )
+
+
+ELIGIBLE_AGENTS_SQL = (
+    "select "
+    "a.id,a.owner_id,a.approved_profile_version,s.frequency_per_day,"
+    "s.daily_budget_usd,s.max_session_usd,s.discord_publish,p.interests "
+    "from public.agents a join public.profiles u on u.id=a.owner_id join "
+    "public.invitations i on i.auth_user_id=u.id and i.status='active' join "
+    "public.agent_settings s on s.agent_id=a.id join public.agent_profiles p on "
+    "p.agent_id=a.id and p.version=a.approved_profile_version where a.status='active' and "
+    "u.deleted_at is null and s.autonomy_enabled and s.frequency_per_day>0 and "
+    "p.approved_at is not null and exists(select 1 from public.invitation_identities ii "
+    "where ii.invitation_id=i.id) and not exists(select 1 from public.deletion_requests d "
+    "where d.profile_id=u.id) and not exists(select 1 from public.llm_runs r where "
+    "r.agent_id=a.id and r.status in "
+    "('reserved','generating','generated','moderating','unknown') and (cast(:run as uuid) "
+    "is null or r.id<>:run)) "
+)
 
 
 def eligible_agents(conn: Connection, *, active_run: UUID | None = None) -> list[RowMapping]:
     return list(
         conn.execute(
-            text(
-                "select a.id,a.owner_id,a.approved_profile_version,s.frequency_per_day,"
-                "s.daily_budget_usd,"
-                "s.max_session_usd,s.discord_publish,p.interests from public.agents a "
-                "join public.profiles u on u.id=a.owner_id "
-                "join public.invitations i on i.auth_user_id=u.id and i.status='active' "
-                "join public.agent_settings s on s.agent_id=a.id "
-                "join public.agent_profiles p on p.agent_id=a.id "
-                "and p.version=a.approved_profile_version "
-                "where a.status='active' and u.deleted_at is null and s.autonomy_enabled "
-                "and s.frequency_per_day>0 and p.approved_at is not null "
-                "and exists(select 1 from public.invitation_identities ii "
-                "where ii.invitation_id=i.id) "
-                "and not exists(select 1 from public.deletion_requests d "
-                "where d.profile_id=u.id) "
-                "and not exists(select 1 from public.llm_runs r where r.agent_id=a.id "
-                "and r.status in ('reserved','generating','generated','moderating','unknown') "
-                "and (cast(:run as uuid) is null or r.id<>:run)) "
-                "order by a.id"
-            ),
+            text(ELIGIBLE_AGENTS_SQL + "order by a.id"),
             {"run": active_run},
         ).mappings()
     )
