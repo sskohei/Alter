@@ -247,3 +247,28 @@ previewは正式routerを再利用し、独立した記憶/関係性モデルは
 正式TSクライアント→実HTTP FastAPI→PostgreSQLの接続も確認する。外部Authだけテスト内で差し替える。
 PlaywrightはPC/375px/320px、削除失敗/復元/永続化、出典の404、ページング、認証切替を検査する。
 #11のコード上のデザイン仕上げ（ADR-015）、#37の実環境公開受け入れは各Issueで継続する。
+
+## #31 アカウント設定・削除状況
+
+`/settings/account`は正式生成クライアントで表示名・通知設定を保存する。
+Web通知は初期ON、任意Discord DMは初期OFF。保存失敗では保存済み値を変更しない。
+削除には同一subのGoogle/GitHub再認証、5分以内のOAuth amr、未チェックの明示確認が必要。
+HttpOnlyの短命challengeと現在のtokenに結び付けたUI receiptをBFFで確認し、
+FastAPIも独立して再認証・招待・本人を検証する。UI receiptをAPI認可の代わりにしない。
+429ではRetry-After（未提供時60秒）だけ送信を止め、409は再試行、再認証期限切れは
+キャンセルして本人確認からやり直せる。削除キャンセルでは要求を送らない。
+
+202受付後は下書きを消してフルナビゲーションし、以前の画面状態を破棄する。
+通常画面の認可と分離した`/deletion-status`で本人のID・状態・日時だけを取得する。
+pending/runningは30秒ごとに確認し、failed/completedは手動で再確認できる。
+通常業務への入場を許可せず、`next=/deletion-status`のOAuth完了時だけ専用GETを呼ぶ。
+Auth削除後や認証失効で状況を取得できない場合は、招待時の私的窓口で本人確認して結果を伝える。
+再ログインでAuthや招待を再作成したり、本人確認なしの進捗トークンを発行したりしない。
+ログアウトでは下書きと再認証Cookieを消し、セッションCookie変更でRouter cacheを無効化する。
+
+`account.spec.ts`はPC/375px/320px、保存失敗、キャンセル、異なる本人、409/429、再認証期限切れ、
+進捗失敗/Auth失効、キーボード操作、ログアウト後の状態消去を検証する。
+`test_generated_account_client_with_real_http`は正式TS→HTTP FastAPI→PostgreSQLで通知の既定値・保存、
+表示名、再認証拒否、202/再送、即時停止/招待失効、相手の共有会話404、本人限定の進捗を検証する。
+外部Authはテスト内だけで差し替える。実パージ・Auth/Storage/Discordの削除処理は#30、
+実OAuthと法務確認・本番公開受け入れは#37で追跡し、UIの状態表示だけで削除完了と扱わない。
