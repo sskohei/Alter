@@ -137,6 +137,28 @@ async def send_dm(bot: DeliveryBot, job: dd.DmJob) -> None:
         )
 
 
+async def delete_thread(bot: DeliveryBot, job: dd.CleanupJob) -> None:
+    """アカウント削除で消えた会話のスレッドを削除する（#30）。
+
+    スレッドの削除には「スレッドの管理」権限が要る。Bot に付いていなければ ``forbidden`` と
+    記録して終える（運営が結果を確認し、必要なら管理者に手動削除を頼む）。
+    """
+    result: dd.CleanupResult
+    code = ""
+    try:
+        thread = bot.get_channel(int(job.thread_id)) or await bot.fetch_channel(int(job.thread_id))
+        await thread.delete()
+        result = "deleted"
+    except discord.Forbidden as exc:
+        result, code = "forbidden", _code(exc)
+    except discord.NotFound as exc:
+        result, code = "not_found", _code(exc)
+    except Exception as exc:  # noqa: BLE001 - 削除は重複しないので、分からない失敗は再試行
+        result, code = "retry", _code(exc)
+    logger.info("thread cleanup %s: %s", job.task_id, result)
+    await _guard(bot.in_transaction(lambda c: dd.mark_cleanup(c, job.task_id, result, code)))
+
+
 async def _post_failed(bot: DeliveryBot, job: dd.PostJob, outcome: dd.Outcome, code: str) -> None:
     await _guard(
         bot.in_transaction(lambda c: dd.mark_post_failed(c, job.delivery_id, outcome, code))
@@ -152,7 +174,7 @@ async def _guard(work: Awaitable[None]) -> None:
 
 
 async def process_once(bot: DeliveryBot, *, batch: int = BATCH_PER_CYCLE) -> int:
-    """止まった送信中を回収し、投稿と DM をそれぞれ最大 ``batch`` 件送る。送った件数を返す。"""
+    """止まった送信中を回収し、投稿・DM・スレッド削除をそれぞれ最大 ``batch`` 件処理する。"""
     await bot.in_transaction(dd.recover_stale_sending)
     handled = 0
     for _ in range(batch):
@@ -166,6 +188,12 @@ async def process_once(bot: DeliveryBot, *, batch: int = BATCH_PER_CYCLE) -> int
         if dm is None:
             break
         await send_dm(bot, dm)
+        handled += 1
+    for _ in range(batch):
+        cleanup = await bot.in_transaction(dd.claim_next_cleanup)
+        if cleanup is None:
+            break
+        await delete_thread(bot, cleanup)
         handled += 1
     return handled
 

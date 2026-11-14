@@ -288,3 +288,11 @@ Webの環境検査は反対環境のAPI URLも照合し、Preview/Productionの�
 Google/GitHub両方を検証する。1人分の総合passで未実施操作を覆い隠さない。
 人数だけを変更し、Doneの8条件、法務・保持確認、実OAuth/Discord、性能、安全性、限定本番スモークは維持する。
 配置はADR-015に従う手元PCの独立プロセスとし、PC停止/回線断・復旧と利用時間の説明を受け入れる。
+
+## #30 アカウント削除のパージ実行主体（2026-11-14）
+
+| ID | 決定 | 理由 / 再検討条件 |
+|---|---|---|
+| ADR-016 | アカウント削除のパージは、API パッケージの運営 CLI `alter-api-purge` を手元 PC の OS の定期実行（1 時間ごと、ADR-015）で 1 回ずつ起動して行う。Auth・Storage の管理鍵（`SUPABASE_SECRET_KEY`・`SUPABASE_STORAGE_SECRET_KEY`）はこの CLI と API の環境ファイルにだけ置き、Scheduler・Worker・Bot の環境ファイルには入れない。Discord のスレッド削除は Bot が `discord_cleanup_tasks` から試行して結果を記録する | 管理鍵を持つ処理を API コードの 1 か所に閉じ、常時動く Worker/Bot から鍵を外す。ジョブは DB の `background_jobs` と `deletion_requests` で追跡し、途中失敗は再試行・8 回で `failed`（sskohei が確認して利用者へ連絡）。件数や頻度が増えたら API 内の管理ジョブ化を再検討 |
+
+結果の通知経路: 利用者は `/deletion-status`（#31）で状態を確認し、Auth 削除後は招待時の私的窓口で sskohei が伝える。`failed` と Discord の `forbidden`・`failed` は sskohei が 30 日以内に確認する。PC の停止中はパージも止まるが、削除の期限（30 日）は延ばさない（ADR-015）。

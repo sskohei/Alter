@@ -66,3 +66,4 @@ Web本人連携はDiscord OAuth2 `identify`で行い、Bot導入OAuthとは別�
 - 取り消し: DM通知のOFFで本人あての未送信DMを同じトランザクションで取り消す。AIの全体設定（`discord_publish`）・自律交流のOFFとブロックでの未投稿の取り消しは、#24（PR #48）の`interaction_settings.cancel_pending_posts`がそのまま担う。連携解除・停止・削除要求・ギルド別同意のOFF・投稿先変更・ギルド離脱は#26/#27の処理で取り消す。
 - 送信ループ: Botの接続後に5秒ごと、止まった送信中の回収のあと投稿とDMをそれぞれ最大5件送る。`--sync-commands`のときは動かさない。
 - `needs_review`の照合: 管理者が`discord_thread_id`（保存済みなら）でスレッドを確認する。再送や取消の運営CLIは#36で検討する。
+- アカウント削除（#30）: パージが会話を消す前に、投稿済みスレッドのIDだけを`discord_cleanup_tasks`へ退避する。Botが送信中（`sending`）の投稿があればパージは待つ（`discord_sending`で再試行。作成したスレッドのIDを保存する前に配信行が消えると取りこぼすため）。Botは送信ループでスレッドの削除を試し、結果を`deleted`・`forbidden`（「スレッドの管理」権限がない）・`not_found`・`failed`（再試行の打ち切り）で記録する。削除は重複しないので、結果が分からない失敗は再試行する。MVPのBotは「スレッドの管理」権限を求めないため、多くは`forbidden`になる。sskoheiが結果を確認し、必要ならギルド管理者に削除を依頼する（Discord投稿の完全な回収は保証しない）。

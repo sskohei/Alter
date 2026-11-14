@@ -6,6 +6,7 @@ dependencies = ["alter-domain", "fastapi>=0.120", "uvicorn[standard]>=0.38", "py
 
 [project.scripts]
 alter-api = "alter_api.main:main"
+alter-api-purge = "alter_api.purge:main"
 
 [build-system]
 requires = ["hatchling"]
