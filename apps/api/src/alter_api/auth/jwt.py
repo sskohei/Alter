@@ -46,10 +46,34 @@ def authorization_unavailable() -> ApiError:
 
 @dataclass(frozen=True)
 class Principal:
-    """検証済みの本人。``sub`` は Supabase Auth のユーザー ID（= profiles.id）。"""
+    """検証済みの本人。``sub`` は Supabase Auth のユーザー ID（= profiles.id）。
+
+    ``auth_methods`` は JWT の ``amr``（認証方法と時刻）。削除要求の再認証確認（#30）に使う。
+    """
 
     sub: uuid.UUID
     verified_by: Literal["jwks", "auth_server"]
+    auth_methods: tuple[tuple[str, int], ...] = ()
+
+
+def _auth_methods(claims: dict[str, Any]) -> tuple[tuple[str, int], ...]:
+    """``amr`` のうち形式の正しいものだけを (method, timestamp) で返す。"""
+    amr = claims.get("amr")
+    if not isinstance(amr, list):
+        return ()
+    methods: list[tuple[str, int]] = []
+    for item in amr[:16]:
+        if not isinstance(item, dict):
+            continue
+        method = item.get("method")
+        timestamp = item.get("timestamp")
+        if (
+            isinstance(method, str)
+            and isinstance(timestamp, int)
+            and not isinstance(timestamp, bool)
+        ):
+            methods.append((method, timestamp))
+    return tuple(methods)
 
 
 class JwksCache:
@@ -184,7 +208,11 @@ class JwtVerifier:
             )
         except jwt.InvalidTokenError as exc:
             raise unauthenticated("Invalid access token") from exc
-        return Principal(sub=self._check_subject(claims), verified_by="jwks")
+        return Principal(
+            sub=self._check_subject(claims),
+            verified_by="jwks",
+            auth_methods=_auth_methods(claims),
+        )
 
     # -- 共有鍵 HS256（Auth サーバー照会） ------------------------------------
 
@@ -239,7 +267,9 @@ class JwtVerifier:
             or user.get("role") != "authenticated"
         ):
             raise unauthenticated("Invalid access token")
-        return Principal(sub=expected_sub, verified_by="auth_server")
+        return Principal(
+            sub=expected_sub, verified_by="auth_server", auth_methods=_auth_methods(claims)
+        )
 
     # -- 共通 -----------------------------------------------------------------
 

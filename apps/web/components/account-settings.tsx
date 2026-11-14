@@ -1,8 +1,10 @@
 "use client";
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { unwrap, type components } from "@alter/api-client/preview";
-import { browserApi } from "../lib/api-browser";
+import { ApiError, unwrap, type components } from "@alter/api-client";
+import { activityApi as browserApi } from "../lib/api-browser";
+import { useRetryAfter } from "../lib/use-retry-after";
+import { LogoutButton } from "./logout-button";
 import { useResource } from "../lib/use-resource";
 import { DataState, dataErrorMessage } from "./data-state";
 import { Button } from "./ui/button";
@@ -35,6 +37,17 @@ export function AccountSettings({
   const [message, setMessage] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [dialog, setDialog] = useState(false);
+  const [needsReauth, setNeedsReauth] = useState(false);
+  const retry = useRetryAfter();
+  const disabled = busy || retry.seconds > 0;
+  function failed(cause: unknown) {
+    retry.defer(cause);
+    setError(cause);
+    if (cause instanceof ApiError && cause.detail.code === "REAUTHENTICATION_REQUIRED") {
+      setNeedsReauth(true);
+      setConfirmed(false);
+    }
+  }
   const deletionKey = useRef<string | null>(null);
   const load = useCallback(
     (signal: AbortSignal) =>
@@ -61,7 +74,7 @@ export function AccountSettings({
       router.refresh();
     } catch (cause) {
       setMessage("");
-      setError(cause);
+      failed(cause);
     } finally {
       setBusy(false);
     }
@@ -83,13 +96,13 @@ export function AccountSettings({
       setMessage("通知設定を保存しました。");
     } catch (cause) {
       setMessage("");
-      setError(cause);
+      failed(cause);
     } finally {
       setBusy(false);
     }
   }
   async function deleteAccount() {
-    if (!reauthenticated || !confirmed) return;
+    if (!reauthenticated || needsReauth || !confirmed || disabled) return;
     setBusy(true);
     setError(null);
     try {
@@ -104,10 +117,10 @@ export function AccountSettings({
         for (const key of Object.keys(sessionStorage))
           if (key.startsWith("alter:draft:")) sessionStorage.removeItem(key);
       } catch {}
-      router.push("/deletion-status");
-      router.refresh();
+      // Destroy prior pages and in-memory state after deletion is accepted.
+      window.location.replace("/deletion-status");
     } catch (cause) {
-      setError(cause);
+      failed(cause);
       setBusy(false);
     }
   }
@@ -126,6 +139,7 @@ export function AccountSettings({
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      {retry.seconds > 0 && <p role="status">あと{retry.seconds}秒後に再試行できます。</p>}
       <section className="card">
         <h2>表示名</h2>
         <p>保存済み: {savedName}</p>
@@ -143,9 +157,9 @@ export function AccountSettings({
             maxLength={80}
             required
             onChange={(event) => setName(event.target.value)}
-            disabled={busy}
+            disabled={disabled}
           />
-          <Button disabled={busy}>表示名を保存</Button>
+          <Button disabled={disabled}>表示名を保存</Button>
         </form>
       </section>
       <section className="card">
@@ -157,7 +171,7 @@ export function AccountSettings({
               <input
                 type="checkbox"
                 checked={preferences.data.web_notifications}
-                disabled={busy}
+                disabled={disabled}
                 onChange={(event) =>
                   void changePreference(
                     "web_notifications",
@@ -171,7 +185,7 @@ export function AccountSettings({
               <input
                 type="checkbox"
                 checked={preferences.data.discord_dm_notifications}
-                disabled={busy}
+                disabled={disabled}
                 onChange={(event) =>
                   void changePreference(
                     "discord_dm_notifications",
@@ -189,23 +203,27 @@ export function AccountSettings({
         )}
       </section>
       <section className="card">
+        <h2>ログアウト</h2>
+        <LogoutButton />
+      </section>
+      <section className="card">
         <h2>アカウント削除</h2>
         <p>
           AIを直ちに停止し、関連する共有会話を相手の画面からも非表示にします。関連記憶・通知も削除し、アプリの個人データは原則30日以内に削除します。
         </p>
         <p>
-          本文を含まない使用量等の扱いはプライバシー説明に記載します。
+          本文を含まない使用量は本人との紐付けを除いて12か月、匿名化した監査は180日保持します。
         </p>
         <p>
-          Discord投稿や他人が保存したコピーは完全には回収できません。招待時の私的な連絡先で、削除後の確認や問い合わせを受け付けます。
+          発行済みの画像URLは最大5分利用できます。Discord投稿や他人が保存したコピーは完全には回収できません。招待時の私的な連絡先で、削除後の確認や問い合わせを受け付けます。
         </p>
         <form action={reauthenticate}>
-          <Button variant="outline" disabled={busy}>
+          <Button variant="outline" disabled={disabled}>
             同じアカウントで本人確認をやり直す
           </Button>
         </form>
         <p className="help">
-          {reauthenticated
+          {reauthenticated && !needsReauth
             ? "本人確認が完了しました。5分以内に削除を確認してください。"
             : "削除する前に、Google/GitHubで同じ本人の確認が必要です。"}
         </p>
@@ -220,7 +238,7 @@ export function AccountSettings({
           }}
         >
           <AlertDialogTrigger asChild>
-            <Button variant="outline" disabled={!reauthenticated || busy}>
+            <Button variant="outline" disabled={!reauthenticated || needsReauth || disabled}>
               アカウントを削除する
             </Button>
           </AlertDialogTrigger>
@@ -231,13 +249,13 @@ export function AccountSettings({
             <AlertDialogDescription>
               AIを停止し、共有会話を相手からも非表示にします。関連記憶・通知も削除し、原則30日以内にパージします。外部の投稿・コピーは完全回収できません。
             </AlertDialogDescription>
-            <p>本文を含まない使用量等の扱いはプライバシー説明に記載します。</p>
+            <p>本文を含まない使用量は本人との紐付けを除いて12か月、匿名化した監査は180日保持します。</p>
             <label className="check">
               <input
                 type="checkbox"
                 checked={confirmed}
                 onChange={(event) => setConfirmed(event.target.checked)}
-                disabled={busy}
+                disabled={disabled}
               />
               相手への影響と削除の説明を確認し、アカウント削除を要求します。
             </label>
@@ -249,13 +267,13 @@ export function AccountSettings({
             )}
             <div className="actions">
               <AlertDialogCancel asChild>
-                <Button variant="outline" disabled={busy}>
+                <Button variant="outline" disabled={disabled}>
                   キャンセル
                 </Button>
               </AlertDialogCancel>
               <AlertDialogAction asChild>
                 <Button
-                  disabled={!confirmed || busy}
+                  disabled={!confirmed || needsReauth || disabled}
                   onClick={(event) => {
                     event.preventDefault();
                     void deleteAccount();

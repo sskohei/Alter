@@ -1,4 +1,4 @@
-import type { components } from "./preview-schema";
+import type { components } from "./schema";
 type Profile = components["schemas"]["Profile"];
 export function createAccountMock(
   getProfile: () => Profile,

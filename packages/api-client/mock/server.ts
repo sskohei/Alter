@@ -12,7 +12,7 @@ createServer(async (req, res) => {
     const headers = new Headers();
     for (const [name, value] of Object.entries(req.headers)) if (value) headers.set(name, Array.isArray(value) ? value.join(",") : value);
     const response = method === "OPTIONS" ? new Response(null, { status: 204 }) : await mock(new Request(`http://127.0.0.1:8001${req.url}`, { method, headers, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) }));
-    res.writeHead(response.status, { ...Object.fromEntries(response.headers), "access-control-allow-origin": "http://127.0.0.1:3000", "access-control-allow-headers": "Authorization, Content-Type, X-Request-ID", "access-control-allow-methods": "GET, PATCH, POST, OPTIONS", "cache-control": "no-store" });
+    res.writeHead(response.status, { ...Object.fromEntries(response.headers), "access-control-allow-origin": "http://127.0.0.1:3000", "access-control-allow-headers": "Authorization, Content-Type, Idempotency-Key", "access-control-expose-headers": "X-Request-ID, Retry-After", "access-control-allow-methods": "GET, PATCH, POST, OPTIONS", "cache-control": "no-store" });
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch {
     res.writeHead(500); res.end();
