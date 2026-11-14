@@ -1,0 +1,15 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(10);
+select ok(not has_table_privilege('anon','public.memory_tombstones','SELECT,INSERT,UPDATE,DELETE'), 'anon cannot access tombstones');
+select ok(not has_table_privilege('authenticated','public.memory_tombstones','SELECT,INSERT,UPDATE,DELETE'), 'authenticated cannot access tombstones');
+select ok(not has_table_privilege('anon','public.memory_source_suppressions','SELECT,INSERT,UPDATE,DELETE'), 'anon cannot access sources');
+select ok(not has_table_privilege('authenticated','public.memory_source_suppressions','SELECT,INSERT,UPDATE,DELETE'), 'authenticated cannot access sources');
+select ok(not has_table_privilege('anon','public.memory_completions','SELECT,INSERT,UPDATE,DELETE'), 'anon cannot access completions');
+select ok(not has_table_privilege('authenticated','public.memory_completions','SELECT,INSERT,UPDATE,DELETE'), 'authenticated cannot access completions');
+select ok((select relrowsecurity from pg_class where oid='public.memory_tombstones'::regclass), 'tombstone RLS');
+select ok((select relrowsecurity from pg_class where oid='public.memory_source_suppressions'::regclass), 'source RLS');
+select ok((select relrowsecurity from pg_class where oid='public.memory_completions'::regclass), 'completion RLS');
+select has_trigger('public','memories','memories_guard_candidate','candidate insertion guard');
+select * from finish();
+rollback;

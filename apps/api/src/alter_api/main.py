@@ -28,6 +28,7 @@ from alter_api.errors import (
     install_error_handlers,
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
+from alter_api.memory_routes import router as memory_router
 from alter_api.settings_routes import router as settings_router
 from alter_api.suggestion_routes import router as suggestion_router
 from alter_api.users import router as users_router
@@ -51,6 +52,7 @@ def create_api_v1_router() -> APIRouter:
     router.include_router(activity_router)
     router.include_router(deletion_router)
     router.include_router(discord_router)
+    router.include_router(memory_router)
     return router
 
 
