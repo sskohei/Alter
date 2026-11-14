@@ -69,7 +69,7 @@ Scheduler/Workerが使う索引とトランザクション境界:
 | 取得（Worker） | `status IN (queued,retry_wait) AND run_at<=now()`を`FOR UPDATE SKIP LOCKED LIMIT 1`→同一トランザクションで`running`・`lease_until=now()+90s`・`attempts+1` | 部分索引`background_jobs(run_at) WHERE status IN (queued,retry_wait)` |
 | lease切れ再取得 | `status='running' AND lease_until<now()`を同様に条件付きUPDATE | 部分索引`background_jobs(lease_until) WHERE status='running'` |
 | 発言保存 | `(conversation_id,turn_no)`を冪等キーに発言と`usage_records`を同一トランザクションで保存 | `messages(conversation_id,turn_no)` UNIQUE |
-| 完了 | 会話`completed`・要約・通知・関係回数・配信outboxを同時確定。通知は`(profile_id,dedupe_key)`で重複しない | `notifications(profile_id,created_at DESC)` |
+| 完了 | 会話`completed`・通知・配信outboxを同時確定。記憶/関係回数と要約は完了後に処理する。通知は`(profile_id,dedupe_key)`で重複しない | `notifications(profile_id,created_at DESC)` |
 
 同じペアの並行セッション禁止はDB制約では表さず、予約時の行ロックと`dedupe_key`で防ぐ（#19で受け入れ）。
 
@@ -88,7 +88,7 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 - 招待登録: 共通ロックの下で有効人数と本人/identityを確認し、招待・identity・監査を同時確定する。失効はAI停止・未配信取消・監査と同時確定し、Auth削除はコミット後に行う。
 - 予約: 対象AIを行ロックし、双方の当日利用量と同時実行を確認して`background_jobs`と`conversations`を同じトランザクションで作る。
 - 発言: `(conversation_id,turn_no)`を冪等キーとして保存。使用量は同一トランザクションに追加。
-- 完了: `status=completed`、要約、通知、許可された配信outboxを同時確定する。
+- 完了: `status=completed`、通知、許可された配信outboxを同時確定する。要約は独立生成後に保存する。
 - 削除: まず新規交流と配信を停止し、対象会話→記憶→通知→AI→プロフィール→Authユーザーの順で削除する。外部Discord投稿の削除試行は別ジョブで記録する。会話CASCADE前に配送IDを本文なしで削除ジョブへ引き渡す。要求時から関連会話・派生記憶/通知を双方の参照対象外とし、招待失効後にAuthを削除する。保持期限と30日以内パージ・匿名化・復元時の扱いは[運用契約](23-invitation-consent-operations.md)に従う。
 
 [ER図](diagrams/er-diagram.md)・[認可設計](06-authentication-authorization.md)を参照。
@@ -178,3 +178,12 @@ API一覧の可視性判定と、完了consumerによる冪等再集計は維持
 巻戻しはWorker停止後にtrigger `conversations_recompute_relationship_before_delete`、
 function `public.recompute_relationship_on_conversation_delete()`の順でDROPする。
 削除抑止表・挿入ガードは残し、#25の削除保証を維持する。再開前に残存会話からキャッシュを再集計する。
+
+
+### 要約実行の識別（#95）
+
+`20261115010000_conversation_summaries.sql`でllm_runs.purposeへsummaryを追加し、
+summaryのconversation_idにpartial UNIQUEを置く。同じ会話の並行生成/再生成を防ぐ。
+実行記録は他のLLM処理と同様に本文なし。本文の正本はmessages、成功した要約はconversations.summary。
+生成/判定の予約・確定費用・未使用予約解放は既存usage_recordsへ記録する。
+会話予約の解放キーと衝突しないllm実行専用の解放キーを使う。

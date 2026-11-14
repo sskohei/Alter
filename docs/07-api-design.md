@@ -272,3 +272,11 @@ previewも正式settings routerを再利用し、Patchの厳密型・null/未知
   課金不明・同時1会話・AI/全体の費用制限は除外しない。設定値や同意を自動変更しない。
 - APIは認可対象をロックする前にScheduler/Workerと同じ招待→profiles→agents→settings→予算の
   順序でロックし、異なる本人からの同時開始や招待失効と整合させる。
+
+
+## 会話要約の非同期生成（#95）
+
+既存のConversationSummary/ConversationDetailのsummaryフィールドは引き続きstring|null。
+completedでも生成/安全判定待ちや残予算不足ではnullとなる。発言の列挙を要約の代わりに返さない。
+成功した要約だけを同じフィールドへ保存し、Webは直近の完了会話を一定期間再読込して反映する。
+新しいAPI経路や入力/応答schemaの変更はない。

@@ -22,6 +22,7 @@ from alter_domain.llm_selection import (
     MODEL,
     call_reservation,
     session_reservation,
+    summary_reservation,
 )
 from alter_domain.settings import Settings
 from alter_domain.sonnet import LLMUnavailable, SonnetClient, wire_schema
@@ -272,3 +273,22 @@ def test_independent_moderation_uses_supported_sonnet_thinking_and_small_bounds(
     assert call.body["output_config"]["effort"] == "low"
     assert call.input_bound == 228 and call.output_bound == 16
     assert call.body["max_tokens"] == 16
+
+
+def test_summary_review_has_its_own_reserved_bound_without_changing_conversation_limits():
+    from alter_domain.llm_execution import SafetyVerdict
+    from alter_domain.llm_selection import model_price
+
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"input_tokens": 500}))
+    ) as http:
+        regular = SonnetClient(configured(), http)
+        with pytest.raises(UnsafeOutput):
+            regular.prepare(
+                [PromptMessage(role="user", content="要約")], SafetyVerdict, moderation=True
+            )
+        reviewed = regular.for_summary().prepare(
+            [PromptMessage(role="user", content="要約")], SafetyVerdict, moderation=True
+        )
+    assert reviewed.input_bound == 628 and reviewed.output_bound == 16
+    assert summary_reservation() == model_price().cost(3072, 512) + model_price().cost(768, 16)

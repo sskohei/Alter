@@ -27,7 +27,7 @@ from alter_domain.llm import (
     build_prompt,
 )
 from alter_domain.llm_contract import Utterance
-from alter_domain.llm_selection import GENERATIONS_PER_AGENT, call_reservation
+from alter_domain.llm_selection import GENERATIONS_PER_AGENT, call_reservation, summary_reservation
 from alter_domain.sonnet import LLMUnavailable, RequestNotSent
 
 Transaction = Callable[[], AbstractContextManager[Connection]]
@@ -38,6 +38,10 @@ class SuggestionLimit(Exception):
 
 
 class UnsettledLLMCall(Exception):
+    pass
+
+
+class SummaryAlreadyStarted(Exception):
     pass
 
 
@@ -101,6 +105,7 @@ class LLMExecution:
         *,
         forbidden: tuple[str, ...] = (),
         guard_before_dispatch: bool = False,
+        summary_mode: bool = False,
     ) -> None:
         self.engine = engine
         self.client = client
@@ -108,6 +113,7 @@ class LLMExecution:
         self.global_limit = global_limit
         self.forbidden = forbidden
         self.guard_before_dispatch = guard_before_dispatch
+        self.summary_mode = summary_mode
         self.pending_phase: tuple[UUID, str] | None = None
         self.run_id: UUID | None = None
         self.memory_snapshot: tuple[UUID, UUID, list[str], str | None] | None = None
@@ -133,7 +139,27 @@ class LLMExecution:
                 {"agent": agent},
             ).first():
                 raise UnsettledLLMCall()
-            if conversation is None:
+            if self.summary_mode:
+                if conversation is None:
+                    raise ValueError("A summary requires a conversation")
+                if conn.execute(
+                    text(
+                        "select 1 from public.llm_runs where conversation_id=:conv "
+                        "and purpose='summary'"
+                    ),
+                    {"conv": conversation},
+                ).first():
+                    raise SummaryAlreadyStarted()
+                budget.reserve(
+                    conn,
+                    agent,
+                    conversation,
+                    self.client.price,
+                    f"llm:{run}:reserve",
+                    summary_reservation(),
+                    self.global_limit,
+                )
+            elif conversation is None:
                 count = conn.execute(
                     text(
                         "select count(*) from public.llm_runs where agent_id=:agent "
@@ -178,7 +204,9 @@ class LLMExecution:
                     "id": run,
                     "agent": agent,
                     "conv": conversation,
-                    "purpose": "suggestion" if conversation is None else "conversation",
+                    "purpose": "summary"
+                    if self.summary_mode
+                    else ("suggestion" if conversation is None else "conversation"),
                     "usd": call_reservation(),
                 },
             )
@@ -193,7 +221,7 @@ class LLMExecution:
         with self.transaction() as conn:
             self.validate_memory_context(conn)
             budget.lock_budget(conn)
-            if conversation is not None:
+            if conversation is not None and not self.summary_mode:
                 _conversation_allowed(conn, agent, conversation)
             limits = conn.execute(
                 text(
@@ -360,7 +388,11 @@ class LLMExecution:
             with self.transaction() as conn:
                 if not self.guard_before_dispatch:
                     self.validate_memory_context(conn)
-                if conversation is not None and not self.guard_before_dispatch:
+                if (
+                    conversation is not None
+                    and not self.guard_before_dispatch
+                    and not self.summary_mode
+                ):
                     _conversation_allowed(conn, agent, conversation)
             self._finish(run, agent, conversation, "succeeded")
             return value
