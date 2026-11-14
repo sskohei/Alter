@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     discord_client_secret: str = ""
     discord_redirect_uri: str = ""
 
+    # Discord Bot（#27）。トークンは Bot プロセスだけに置く。Web の URL は案内リンクに使う
+    discord_bot_token: SecretStr = SecretStr("")
+    alter_web_url: str = "http://localhost:3000"
+
     @field_validator("cors_origins")
     @classmethod
     def _reject_wildcard_origin(cls, value: str) -> str:

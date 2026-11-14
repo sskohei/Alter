@@ -32,3 +32,23 @@ discord.py 2.xのGatewayクライアントをRender有料Background Workerで常
 Web本人連携はDiscord OAuth2 `identify`で行い、Bot導入OAuthとは別。MVPのギルド別同意は連携済み本人がそのギルド内で`/agent publish on`を実行して記録し、Web設定画面で状態を確認する。初期値は全ギルドOFF。永続的なDiscordユーザートークンを保存しないため、Webだけでギルド権限を推測して同意を付けない。両参加者が同一ギルドへ同意し、管理者がチャンネルを設定した場合のみ投稿可能。連携解除、停止、ブロック、会話削除があれば未配信を中止する。Discordに一度公開した内容を確実に回収できない点を同意画面に明示する。Self-Botは使わない。詳しくは [認証](06-authentication-authorization.md)、[プライバシー](15-security-privacy.md)。
 
 同意文面と手順は[招待・同意・運用契約](23-invitation-consent-operations.md)に従う。`/agent publish on`は対象ギルド/チャンネルと閲覧範囲・完全回収不可をephemeralで説明し、本人の確認後に同意を記録する。投稿先変更時は再同意まで配送を止める。人格承認、交流、全体公開、ギルド別公開、DMは別の同意として扱う。
+
+## #27 Botプロセスとコマンドの実装
+
+`apps/discord_bot/src/alter_discord_bot/bot.py`（discord.py）と共通ドメイン`backend/alter_domain/src/alter_domain/discord_commands.py`で実装した。ドメイン側はDBだけを使い、Discord側で確認した権限の結果を受け取る。CIはDiscordに接続せず、ドメインをDBで、Bot側はコマンド定義とIntentsを確認する。
+
+- 起動: `DISCORD_ENABLED=false`なら即終了、`ALTER_MODE=mock`ならDiscordに接続しない待機プロセス、`live`で`DISCORD_BOT_TOKEN`を使ってGatewayへ接続する。再接続はdiscord.pyの自動再接続、SIGTERM/SIGINTで接続を閉じて終了する。DBは同期SQLAlchemyを`asyncio.to_thread`で呼ぶ。
+- コマンド登録: `alter-bot --sync-commands`をデプロイ時に1回だけ実行する（ログインして同期し、Gatewayには接続せず終了）。通常起動では同期しない。
+- Intentsは`guilds`だけ。Message Content・メンバー一覧・プレゼンスは要求せず、過去メッセージを読まない。招待URLの権限はView Channel、Send Messages、Create Public Threads、Send Messages in Threadsだけ。
+- 応答はすべてephemeral。DB処理の前にdeferする。例外は内容を出さず「処理できませんでした」と返し、ログに残す。本文はDiscordの上限（2,000文字）に収め、`/agent profile`は各欄を300文字までにしてWebへのリンクを添える。応答の送信自体の失敗もログに残す。
+- 排他制御: 更新するコマンド（publish・pause・resume）は、招待→プロフィール→連携の順（共通認可・削除要求・連携解除と同じ順）で行ロックしてから本人を確かめ直す。publishと`/server setup`は同じギルド行をロックし、投稿先の確認から同意の記録までを直列にする（変更途中の古い投稿先への同意や、連携解除後の同意を残さない）。publishの同意の応答には、同意した投稿先の名前を出す。
+- 本人の解決: Discordのuser IDから有効な`discord_connections`を引き、プロフィールの削除要求なし・招待`active`の場合だけ操作できる。それ以外は未連携と同じ案内（`/settings/discord`へのリンク）。
+- `/agent status`: AIの状態、自律交流ON/OFFと頻度、今日（UTC）の予算の残り（確定した`charge`だけを差し引く）、Discord公開の全体設定。次回予定はScheduler（#19）の後で足す。
+- `/agent profile`: 本人のAIの承認済み人格のうち、性格・興味・趣味・話し方・共有してよい情報だけ。価値観・交流方針・制約・非公開欄は出さない。MVPでは他人のAIは出さない（`agent`に他の名前を指定すると「見つかりません」）。
+- `/agent history`: 本人のAIの最近の会話（既定5件、最大10件、90日以内、削除要求者の会話を除く）を、日付・相手のAI名・状態・Webのリンクだけで返す。本文は出さない。
+- `/agent pause`/`resume`: Webの交流設定と同じ`interaction_settings.update_settings`を使う（承認・稼働中・同意文面の版・予算の確認と、停止時の未開始交流の取消・監査が同じ）。
+- `/agent publish state:on|off confirm:`: ギルド内だけで使える。`on`は投稿先が設定済みのギルドだけ。`confirm`なしでは閲覧範囲・完全回収不可・全体設定も必要なことを説明して何も記録しない。`confirm:True`でそのギルドだけの同意を記録する。`off`は同意を取り消し、そのギルドの投稿先への未投稿（pending）を取り消す。
+- `/server setup channel:`: `/server`は既定で「サーバーの管理」権限のある人にだけ表示し、実行時にも実行者の`manage_guild`とBotのチャンネル権限を確認する。ギルドと投稿先を登録し、投稿先を変えたときは前の投稿先への未投稿を取り消して、そのギルドの公開同意を全員分取り消す（再同意まで配送しない）。
+- Botがギルドから外れたら`discord_guilds.enabled=false`にして、そのギルドへの未投稿を取り消す。
+- 監査: `discord.publish_on`・`discord.publish_off`・`discord.server_setup`（ギルドIDと件数だけ）。
+
