@@ -233,3 +233,16 @@ previewも正式settings routerを再利用し、Patchの厳密型・null/未知
 本人AIが参加する会話の`discord_deliveries.status=pending`をcancelledにし、ブロックでは
 対象ペアのpending投稿だけを取り消す。送信中/送信済み・無関係な会話・ギルド別同意を変更しない。
 同じトランザクションの設定/ブロック監査に`cancelled_posts`件数を記録し、相手IDは残さない。
+
+
+## #25 記憶・関係性の閲覧/削除API
+
+`memory_routes.py`を正式/previewに登録。`GET /memories?agent_id=...`、`DELETE /memories/{id}`、
+`GET /relationships`は正式Pydanticと生成クライアントを正本とする。共通認可とno-storeを適用する。
+一覧はlimit 1〜50、不透明cursor。記憶はcreated_at/IDの降順、関係性は相手ID順。
+他人のAI/候補は404。削除済み候補への本人の再送は自身の成功監査を確認して204、未知IDは404。
+
+削除は同じ出典の本人候補も削除し、抑止キーだけを保存する（元会話・相手候補は保持）。
+`source_conversation_id`はDBに合わせnullable。`blocked`は本人からのブロックを表す。
+回数は残存する可視completed会話から再計算し、共通興味は双方の承認済み公開人格を使う。
+生成/抽出/Worker consumerは#22の後続実装で、#25の閲覧・削除完了と区別する。

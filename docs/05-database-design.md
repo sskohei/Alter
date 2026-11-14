@@ -124,6 +124,20 @@ SQL削除だけでblobを消したと扱わない。置換後の旧objectも同�
 rollbackはAPI停止→agents_icon_upload_fk解除→registryをDROP、Storage APIでobjectを消してから
 空bucketを削除。既存アイコンの参照/署名URLが失われるので、通常は前方修正を選ぶ。
 
+## #25 記憶の削除抑止と挿入ガード
+
+`20261111110000_memory_suppression.sql`は#22/PR #62と同じ3表（memory_tombstones、
+memory_source_suppressions、memory_completions）を先行導入する。本文は保持せず、本人AI/出典/キーだけ。
+全表RLS/default deny、anon/authenticatedの直接CRUD不可、AI/出典削除でCASCADE。
+`20261114051000_memory_insertion_guard.sql`は本人AI行のロックで候補挿入と削除を直列化し、
+抑止済み候補のINSERTを破棄する。UPDATEは所属/本文/出典/キー/作成日の変更を拒否する。
+状態/重要度の更新では行→AIの逆順ロックを取らず、削除とのデッドロックを避ける。
+
+巻戻しはアプリを前版へ戻し、抑止表/ガードは残すのを基本とする。完全なDDL巻戻しが必要なら
+API/Workerを停止し、抑止キーを保持・照合して削除済み候補の再抽出を禁止してから、
+memories_guard_candidateとguard_memory_candidate()、追加3表の順で除去する。
+抑止記録を破棄した状態で旧Workerを再開しない。出典のCASCADE削除は既存memories FKを使う。
+
 ### 費用予約と削除の追加制約（#18、2026-11-14）
 
 `20261114050000_budget_deletion_guard.sql`により、残予約のある会話/AIは物理削除を拒否する。

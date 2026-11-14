@@ -51,4 +51,3 @@ Web本人連携はDiscord OAuth2 `identify`で行い、Bot導入OAuthとは別�
 - `/server setup channel:`: `/server`は既定で「サーバーの管理」権限のある人にだけ表示し、実行時にも実行者の`manage_guild`とBotのチャンネル権限を確認する。ギルドと投稿先を登録し、投稿先を変えたときは前の投稿先への未投稿を取り消して、そのギルドの公開同意を全員分取り消す（再同意まで配送しない）。
 - Botがギルドから外れたら`discord_guilds.enabled=false`にして、そのギルドへの未投稿を取り消す。
 - 監査: `discord.publish_on`・`discord.publish_off`・`discord.server_setup`（ギルドIDと件数だけ）。
-

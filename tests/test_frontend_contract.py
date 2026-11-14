@@ -42,3 +42,12 @@ def test_activity_preview_reuses_the_live_contract() -> None:
         "Page_Notification_",
     ):
         assert preview["components"]["schemas"][name] == live["components"]["schemas"][name]
+
+
+def test_memory_preview_reuses_formal_contract() -> None:
+    preview = create_contract_app().openapi()
+    live = create_app().openapi()
+    for path in ("/api/v1/memories", "/api/v1/memories/{id}", "/api/v1/relationships"):
+        assert preview["paths"][path] == live["paths"][path]
+    for name in ("Memory", "Relationship", "Page_Memory_", "Page_Relationship_"):
+        assert preview["components"]["schemas"][name] == live["components"]["schemas"][name]
