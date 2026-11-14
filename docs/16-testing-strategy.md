@@ -5,7 +5,7 @@
 | 層 | 自動テスト | 主なケース |
 |---|---|---|
 | Frontend | Vitest + Testing Library、Mock API、Playwright | ログイン復帰、作成/承認、OFF、履歴閲覧、404/429、モバイル375px |
-| API | pytest + FastAPI TestClient + PostgreSQL統合 | JWTの署名/iss/aud/exp、所有権、RLS直接アクセス拒否、OpenAPI schema |
+| API | pytest + FastAPI TestClient + PostgreSQL統合 | JWTの署名/iss/aud/exp、所有権、RLS直接アクセス拒否、OpenAPI schema、レート制限（`tests/test_api_rate_limit.py`：ユーザー・書込・認証失敗の接続元の上限と429/Retry-After、上限後は検証しないこと、health/preflightを数えないこと、中継ヘッダーをloopbackからだけ信用すること） |
 | Worker | pytest + 偽LLM | 8ターン/時間/予算、注入文、出力不正、一時障害、重複実行、停止直後 |
 | Scheduler | 固定時刻・DB統合 | 同時cronで予約1件、ブロック/未同意除外、日次上限 |
 | Discord | discord.py境界のMock | 連携ID解決、管理者権限、投稿条件、429、送信結果不明 |

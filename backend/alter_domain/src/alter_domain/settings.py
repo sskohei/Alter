@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres"
     cors_origins: str = "http://localhost:3000"
 
+    # API のレート制限（#32、docs/15）。1 分あたりの回数。0 で無効（負荷試験の調整用）
+    api_rate_limit_per_minute: int = Field(default=60, ge=0)
+    api_write_rate_limit_per_minute: int = Field(default=10, ge=0)
+    api_unauthenticated_rate_limit_per_minute: int = Field(default=30, ge=0)
+    # 中継（Cloudflare Tunnel）が付ける接続元のヘッダー名。直接の接続元が loopback のときだけ使う
+    api_client_ip_header: str = ""
+
     # Supabase Auth（API の JWT 検証）
     supabase_url: str = "http://127.0.0.1:54321"
     supabase_publishable_key: str = ""

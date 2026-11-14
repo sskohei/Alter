@@ -45,6 +45,12 @@ DiscordのAPI制限は [Bot仕様](11-discord-bot.md) の通り。Rate limitを�
 
 MVPのAPI目安は認証済みユーザー60リクエスト/分、書込10リクエスト/分、人格提案3回/日。初期はAPI 1インスタンスのメモリ内制御にし、LLM費用はDB台帳で厳格に止める。APIを複数台に増やす前に共有ストア型のレート制限を導入する。制限値は負荷試験後に調整し、429に`Retry-After`を返す。
 
+実装（#32、`alter_api.rate_limit`）: 認証の依存関係（`CurrentPrincipal`）で数えるので、本人の操作を受けるAPIはすべて対象になる。`/health`・`/ready`・CORSのpreflightは数えない。
+認証済みユーザーごとに直近60秒の全リクエスト60回、書込（GET/HEAD/OPTIONS以外）10回。認証に失敗したリクエスト（tokenなし・不正）は接続元ごとに30回/分で、上限に達した接続元はJWTの検証（JWKS取得・Auth問い合わせ）の前に429で止める。
+値は`API_RATE_LIMIT_PER_MINUTE`・`API_WRITE_RATE_LIMIT_PER_MINUTE`・`API_UNAUTHENTICATED_RATE_LIMIT_PER_MINUTE`（0で無効）。
+接続元の前提: 手元PCの構成（ADR-015）では公開HTTPSの中継がloopbackからAPIへつなぐため、直接の接続元は常に中継になる。`API_CLIENT_IP_HEADER`（Cloudflare Tunnelなら`CF-Connecting-IP`）を設定したときだけ、直接の接続元がloopbackの場合に限ってそのヘッダーを接続元として使う。未設定なら認証失敗の30回/分は全体で共有される。WebのBFF（Vercelのサーバー）経由の要求では、ヘッダーの値もVercelの送信元になるため、実質的には全利用者で共有される。#37の負荷確認で、期限切れtokenの一斉再送などで正規の利用者が止まらないかを確かめて調整する。中継を通らずにAPIへ届く経路は作らない（loopback待ち受け）。
+メモリ内の制限は再起動で数え直しになり、プロセス間で共有されない。uvicornは`--workers 1`で動かし、APIを複数プロセス・複数台にする前に共有ストア型へ置き換える。
+
 ## アイコンの画像検証と用途分離（#15）
 
 PNG/JPEG/WebPの実データを完全デコードして新しいPNGへ再エンコードし、EXIF/GPS・コメント等を
