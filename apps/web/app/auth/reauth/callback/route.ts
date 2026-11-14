@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   const destination = (path: string) => {
     const response = NextResponse.redirect(new URL(path, appOrigin(request)));
     response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
     return response;
   };
   try {

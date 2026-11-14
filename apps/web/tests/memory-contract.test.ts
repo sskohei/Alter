@@ -2,8 +2,8 @@
 import { expect, test } from "vitest";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
-import schema from "../../../packages/api-client/preview.openapi.json";
-import { createPreviewClient, unwrap } from "@alter/api-client/preview";
+import schema from "../../../packages/api-client/openapi.json";
+import { createApiClient, unwrap } from "@alter/api-client";
 import { createMockFetch } from "@alter/api-client/mock";
 import { relationshipLabel } from "../lib/relationships";
 const ajv = new Ajv2020({ strict: false });
@@ -14,7 +14,7 @@ function validate(name: string, value: unknown) {
   expect(check(value), JSON.stringify(check.errors)).toBe(true);
 }
 test("memory deletion persists, retains cursor coverage, and blocks are reflected in relationships", async () => {
-  const client = createPreviewClient(
+  const client = createApiClient(
     "http://mock.test",
     createMockFetch("normal", { seedAgent: true, activity: true }),
   );
@@ -29,7 +29,7 @@ test("memory deletion persists, retains cursor coverage, and blocks are reflecte
   const first = await unwrap(
     await client.GET("/api/v1/memories", { params: { query } }),
   );
-  validate("MemoryPage", first);
+  validate("Page_Memory_", first);
   expect(first.items).toHaveLength(10);
   const deleted = first.items.at(-1)!.id;
   expect(
@@ -44,7 +44,7 @@ test("memory deletion persists, retains cursor coverage, and blocks are reflecte
       params: { query: { ...query, cursor: first.next_cursor! } },
     }),
   );
-  validate("MemoryPage", next);
+  validate("Page_Memory_", next);
   expect(next.items).toHaveLength(2);
   expect(next.items[0].id).not.toBe(first.items[8].id);
   const reload = await unwrap(
@@ -66,7 +66,7 @@ test("memory deletion persists, retains cursor coverage, and blocks are reflecte
     ).response.status,
   ).toBe(404);
   const relations = await unwrap(await client.GET("/api/v1/relationships"));
-  validate("RelationshipPage", relations);
+  validate("Page_Relationship_", relations);
   const params = {
     path: { id: own.id, other_id: relations.items[0].other_agent_id },
   };

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
-import { ApiError, unwrap } from "@alter/api-client/preview";
+import { ApiError, unwrap } from "@alter/api-client";
 import { serverApi } from "../../../../lib/api-server";
 import { appOrigin } from "../../../../lib/origin";
 import {
@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
   )
     return destination("state");
   try {
-    const { client, supabase } = await serverApi();
-    const { data } = await supabase.auth.getUser();
-    if (!data.user || !validDiscordState(pending, state, data.user.id))
+    const { apiClient: client, supabase } = await serverApi();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user || !validDiscordState(pending, state, data.user.id))
       return destination("state");
     await unwrap(
       await client.POST("/api/v1/discord/link/complete", {

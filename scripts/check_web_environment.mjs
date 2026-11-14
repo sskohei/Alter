@@ -11,6 +11,7 @@ function origin(value) {
     const url = new URL(value);
     if (
       url.protocol !== "https:" ||
+      url.origin !== value ||
       url.username ||
       url.password ||
       url.search ||
@@ -41,7 +42,7 @@ export function checkWebEnvironment(env) {
     if (name.startsWith("NEXT_PUBLIC_") && !publicNames.has(name))
       errors.push(`${name}: unexpected public variable`);
     if (
-      /^(SUPABASE_(SECRET_KEY|SERVICE_ROLE_KEY|DB_URL)|DATABASE_URL|DISCORD_(CLIENT_SECRET|BOT_TOKEN)|LLM_API_KEY|PROFILE_ENCRYPTION_KEY.*)$/.test(
+      /^(SUPABASE_(SECRET_KEY|STORAGE_SECRET_KEY|SERVICE_ROLE_KEY|DB_URL)|DATABASE_URL|DISCORD_(CLIENT_SECRET|BOT_TOKEN)|ANTHROPIC_API_KEY|LLM_API_KEY|PROFILE_ENCRYPTION_KEY.*|AGENT_IDEMPOTENCY_HMAC_KEY.*)$/.test(
         name,
       ) &&
       env[name]
@@ -71,6 +72,15 @@ export function checkWebEnvironment(env) {
   if (!origin(other) || origin(other) === origin(env.NEXT_PUBLIC_SUPABASE_URL))
     errors.push(
       "Supabase: distinct Preview and Production project origins required",
+    );
+  const otherApi = env[
+    env.VERCEL_ENV === "preview"
+      ? "ALTER_PRODUCTION_API_URL"
+      : "ALTER_PREVIEW_API_URL"
+  ];
+  if (!origin(otherApi) || origin(otherApi) === origin(env.API_URL))
+    errors.push(
+      "API: distinct Preview and Production HTTPS origins required",
     );
   const allowed = (env.ALTER_REGISTERED_WEB_ORIGINS ?? "")
     .split(",")

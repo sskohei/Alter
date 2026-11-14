@@ -7,11 +7,11 @@ import {
   discordStateCookie,
   stateHash,
 } from "../../../../lib/discord-policy";
-import { unwrap } from "@alter/api-client/preview";
+import { ApiError, unwrap } from "@alter/api-client";
 export async function beginDiscordLink() {
-  const { client, supabase } = await serverApi();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) redirect("/login?error=expired");
+  const { apiClient: client, supabase } = await serverApi();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) redirect("/login?error=expired");
   let destination: string;
   try {
     const origin =
@@ -45,8 +45,9 @@ export async function beginDiscordLink() {
       },
     );
     destination = authorized.url;
-  } catch {
-    redirect("/settings/discord?error=start");
+  } catch (cause) {
+    const reason = cause instanceof ApiError && cause.status === 409 ? "conflict" : "start";
+    redirect(`/settings/discord?error=${reason}`);
   }
   redirect(destination);
 }

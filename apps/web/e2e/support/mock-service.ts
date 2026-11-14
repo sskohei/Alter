@@ -63,8 +63,9 @@ const server = createServer(async (req, res) => {
     let response: Response;
     if (
       url.pathname === "/auth/v1/authorize" &&
-      new URL(url.searchParams.get("redirect_to")!).pathname ===
-        "/auth/reauth/callback"
+      (new URL(url.searchParams.get("redirect_to")!).pathname ===
+        "/auth/reauth/callback" ||
+        new URL(url.searchParams.get("redirect_to")!).searchParams.get("next") === "/deletion-status")
     ) {
       const chunks = (req.headers.cookie ?? "")
         .split(";")
@@ -159,7 +160,7 @@ const server = createServer(async (req, res) => {
       if (mode === "forbidden") response = mockError(403);
       else if (mode === "inactive")
         response = mockError(403, "ACCOUNT_INACTIVE");
-      else if (mode === "unavailable") response = mockError(503);
+      else if (mode === "unavailable") response = mockError(503, "SERVICE_UNAVAILABLE");
       else if (mode === "expired") response = mockError(401);
       else {
         if (!stores.has(which)) {

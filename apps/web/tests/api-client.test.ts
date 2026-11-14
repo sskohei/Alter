@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { expect, test, vi } from "vitest";
-import { authenticatedFetch, createPreviewClient, unwrap, ApiError, pagination } from "@alter/api-client/preview";
+import { authenticatedFetch, createApiClient, unwrap, ApiError, pagination } from "@alter/api-client";
 import { createMockFetch, scenarios, pageFixture } from "@alter/api-client/mock";
 
 test("401 refresh preserves the request body without sending a client request ID", async () => {
@@ -30,7 +30,7 @@ test("persistent 401 stops after a single retry", async () => {
 
 for (const scenario of scenarios.filter(s => !["empty", "inactive"].includes(s))) {
   test(`generated client + mock: ${scenario}`, async () => {
-    const client = createPreviewClient("https://example.test", authenticatedFetch({ accessToken: async () => "synthetic", refreshToken: async () => null, onUnauthenticated: () => {}, fetch: createMockFetch(scenario) }));
+    const client = createApiClient("https://example.test", authenticatedFetch({ accessToken: async () => "synthetic", refreshToken: async () => null, onUnauthenticated: () => {}, fetch: createMockFetch(scenario) }));
     const result = client.GET("/api/v1/users/me").then(unwrap);
     if (scenario === "normal") expect((await result).display_name).toBe("招待ユーザー");
     else await expect(result).rejects.toMatchObject({ status: Number(scenario), detail: { request_id: expect.any(String) } });
@@ -44,7 +44,35 @@ test("pagination keeps opaque cursors and bounds page size", () => {
 
 test("normal and empty page fixtures share the same pagination envelope", () => {
   expect(pageFixture("empty")).toEqual({items: [], next_cursor: null});
-  expect(pageFixture("normal").items).toHaveLength(1);
+  expect(pageFixture("normal").items).toHaveLength(3);
+});
+
+test("missing refreshed credentials remove stale authorization", async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    expect(new Request(input).headers.has("Authorization")).toBe(false);
+    return new Response(null, { status: 401 });
+  });
+  const logout = vi.fn();
+  await authenticatedFetch({ accessToken: async () => null, refreshToken: async () => { throw new Error("expired"); }, onUnauthenticated: logout, fetch: fetcher })("https://example.test", { headers: { Authorization: "Bearer stale" } });
+  expect(fetcher).toHaveBeenCalledOnce();
+  expect(logout).toHaveBeenCalledOnce();
+});
+
+test("429 exposes retry delay and request ID without refreshing auth", async () => {
+  const refreshToken = vi.fn();
+  const client = createApiClient("https://example.test", authenticatedFetch({ accessToken: async () => "synthetic", refreshToken, onUnauthenticated: vi.fn(), fetch: createMockFetch("429") }));
+  await expect(client.GET("/api/v1/users/me").then(unwrap)).rejects.toMatchObject({ status: 429, retryAfterSeconds: 60, detail: { request_id: expect.any(String) } });
+  expect(refreshToken).not.toHaveBeenCalled();
+});
+
+test("pagination normalizes non-finite and fractional sizes", () => {
+  expect(pagination(null, NaN)).toEqual({ limit: 20 });
+  expect(pagination(null, Infinity)).toEqual({ limit: 20 });
+  expect(pagination(null, 2.9)).toEqual({ limit: 2 });
+});
+
+test("unwrap accepts a successful no-content mutation", async () => {
+  await expect(unwrap({ response: new Response(null, { status: 204 }) })).resolves.toBeUndefined();
 });
 
 

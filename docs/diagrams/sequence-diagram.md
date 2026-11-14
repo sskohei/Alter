@@ -2,7 +2,7 @@
 
 ```mermaid
 sequenceDiagram
-  participant C as Render Cron
+  participant C as 手元PCのOS定期実行 / Scheduler
   participant D as PostgreSQL
   participant W as Worker
   participant L as LLM API

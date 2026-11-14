@@ -5,3 +5,5 @@ for (const input of ["//evil.test", "https://evil.test", "/\\evil.test", "/%2f%2
 }
 test("allows implemented internal routes", () => expect(safeReturnPath("/agent/edit")).toBe("/agent/edit"));
 test("invitation failure has actionable wording", () => expect(accessMessage("INVITATION_REQUIRED")).toContain("招待元"));
+
+test("allows isolated deletion status after OAuth", () => expect(safeReturnPath("/deletion-status")).toBe("/deletion-status"));

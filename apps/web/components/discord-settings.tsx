@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { ApiError, unwrap } from "@alter/api-client/preview";
+import { ApiError, unwrap } from "@alter/api-client";
 import { useResource } from "../lib/use-resource";
-import { browserApi } from "../lib/api-browser";
+import { liveApi } from "../lib/api-browser";
 import { DataState, dataErrorMessage } from "./data-state";
 import { Button } from "./ui/button";
 import { beginDiscordLink } from "../app/(protected)/settings/discord/actions";
@@ -37,8 +37,8 @@ export function DiscordSettings({
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const load = useCallback(async (signal: AbortSignal) => {
-    const api = browserApi();
-    const [connection, guilds, agent] = await Promise.all([
+    const api = liveApi();
+    const [connection, guilds, agent, profile] = await Promise.all([
       api.GET("/api/v1/discord/connection", { signal }).then(unwrap),
       api.GET("/api/v1/discord/guilds", { signal }).then(unwrap),
       api
@@ -48,24 +48,30 @@ export function DiscordSettings({
           if (cause instanceof ApiError && cause.status === 404) return null;
           throw cause;
         }),
+      api.GET("/api/v1/users/me", { signal }).then(unwrap),
     ]);
-    return { connection, guilds, agent };
+    const settings = agent
+      ? await unwrap(await api.GET("/api/v1/agents/{id}/settings", {
+          params: { path: { id: agent.id } }, signal,
+        }))
+      : null;
+    return { connection, guilds, settings, profile };
   }, []);
   const resource = useResource(load);
   async function disconnect() {
     setBusy(true);
     setError(null);
     try {
-      const result = await browserApi().DELETE("/api/v1/discord/connection", {
-        headers: { "Idempotency-Key": crypto.randomUUID() },
-      });
-      if (!result.response.ok)
-        throw new ApiError(result.response.status, {
-          code: "DISCONNECT_FAILED",
-          message: "Could not disconnect",
-        });
+      await unwrap(await liveApi().DELETE("/api/v1/discord/connection"));
       setOpen(false);
       setMessage("Discord連携を解除しました。");
+      resource.update((data) => ({
+        ...data,
+        connection: { connected: false, discord_user_id: null },
+        guilds: data.guilds.map((guild) => ({
+          ...guild, revoked_at: new Date().toISOString(),
+        })),
+      }));
       resource.refresh();
     } catch (cause) {
       setError(cause);
@@ -155,27 +161,37 @@ export function DiscordSettings({
             <h2>公開設定とBotの操作</h2>
             <p>
               Discord全体公開:{" "}
-              {resource.data.agent?.settings
-                ? resource.data.agent.settings.discord_publish
+              {resource.data.settings
+                ? resource.data.settings.discord_publish
                   ? "ON"
                   : "OFF"
                 : "AI分身の設定を確認してください"}
             </p>
-            <Link href="/settings/interaction">全体公開・交流設定へ</Link>
+            <p>
+              Discord DM通知: {resource.data.profile.discord_dm_notifications ? "ON" : "OFF"}
+            </p>
+            <div className="actions">
+              <Link href="/settings/account">DM・通知設定へ</Link>
+              <Link href="/settings/interaction">全体公開・交流設定へ</Link>
+            </div>
             <p>
               ギルド別の本人同意は、そのサーバー内で{" "}
-              <code>/agent publish on</code> または{" "}
-              <code>/agent publish off</code> を実行します。管理者は{" "}
-              <code>/server setup</code> で公開先を設定します。
+              <code>/agent publish state:on</code> または{" "}
+              <code>/agent publish state:off</code> を実行します。管理者は{" "}
+              <code>/server setup</code> で公開先を設定します。ONは説明を確認し、confirm:Trueで確定します。
             </p>
             <p>
               双方の本人同意、全体公開、管理者設定、Bot権限が揃った会話だけが配信されます。Webからギルド管理権限や同意を付与する操作は行えません。
             </p>
           </section>
           <h2>サーバーごとの状態</h2>
+          <p>Botの操作後は最新の状態を確認してください。Botの現在の権限は配信直前に確認されます。</p>
+          <Button variant="outline" onClick={resource.refresh}>
+            状態を更新する
+          </Button>
           {resource.data.guilds.length === 0 ? (
             <p className="card">
-              確認できるサーバーがありません。連携とBotの管理者設定を確認してください。
+              確認できるサーバーがありません。ここには本人が同意・撤回したサーバーだけを表示します。管理者の /server setup と、対象サーバー内での /agent publish を確認してください。
             </p>
           ) : (
             resource.data.guilds.map((guild) => (

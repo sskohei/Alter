@@ -19,6 +19,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -64,12 +75,24 @@
         "properties": {
           "hobbies": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
             "title": "Hobbies",
             "type": "array"
+          },
+          "icon_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
@@ -78,7 +101,8 @@
           },
           "interests": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -119,7 +143,8 @@
           },
           "strengths": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -133,7 +158,8 @@
           },
           "weaknesses": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -155,17 +181,36 @@
         "type": "object"
       },
       "AgentPatch": {
+        "additionalProperties": false,
         "properties": {
+          "icon_path": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
+          },
           "name": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           }
         },
-        "required": [
-          "name"
-        ],
         "title": "AgentPatch",
         "type": "object"
       },
@@ -342,7 +387,7 @@
                 "type": "null"
               }
             ],
-            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002",
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002usage_records \u306e kind='charge' \u306e actual_usd \u306e\u5408\u8a08\u3002queued/running \u306e\u9593\u306f\u78ba\u5b9a\u524d\u3068\u3057\u3066 null\u3001\u7d42\u4e86\u5f8c\u306f\u5408\u8a08\uff08\u8ab2\u91d1\u306a\u3057\u306f 0\uff09\u3002",
             "title": "Cost Usd"
           },
           "id": {
@@ -469,34 +514,6 @@
         "title": "ConversationMessage",
         "type": "object"
       },
-      "ConversationPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ConversationSummary"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Cursor"
-          }
-        },
-        "required": [
-          "items",
-          "next_cursor"
-        ],
-        "title": "ConversationPage",
-        "type": "object"
-      },
       "ConversationSummary": {
         "properties": {
           "cost_usd": {
@@ -509,7 +526,7 @@
                 "type": "null"
               }
             ],
-            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002",
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002usage_records \u306e kind='charge' \u306e actual_usd \u306e\u5408\u8a08\u3002queued/running \u306e\u9593\u306f\u78ba\u5b9a\u524d\u3068\u3057\u3066 null\u3001\u7d42\u4e86\u5f8c\u306f\u5408\u8a08\uff08\u8ab2\u91d1\u306a\u3057\u306f 0\uff09\u3002",
             "title": "Cost Usd"
           },
           "id": {
@@ -715,10 +732,12 @@
               "FORBIDDEN",
               "INVITATION_REQUIRED",
               "ACCOUNT_INACTIVE",
+              "REAUTHENTICATION_REQUIRED",
               "NOT_FOUND",
               "METHOD_NOT_ALLOWED",
               "CONFLICT",
               "VALIDATION_ERROR",
+              "OAUTH_STATE_INVALID",
               "RATE_LIMITED",
               "AUTHORIZATION_UNAVAILABLE",
               "SERVICE_UNAVAILABLE",
@@ -864,15 +883,9 @@
             "title": "Source Conversation Id"
           },
           "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
+            "const": "active",
+            "title": "Status",
+            "type": "string"
           },
           "text": {
             "title": "Text",
@@ -884,42 +897,16 @@
           "text",
           "importance",
           "source_conversation_id",
-          "created_at"
+          "created_at",
+          "status"
         ],
         "title": "Memory",
-        "type": "object"
-      },
-      "MemoryPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/Memory"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Cursor"
-          }
-        },
-        "required": [
-          "items",
-          "next_cursor"
-        ],
-        "title": "MemoryPage",
         "type": "object"
       },
       "Notification": {
         "properties": {
           "body": {
+            "description": "\u8868\u793a\u7528\u306e\u6587\u5b57\u5217\u3002\u4f1a\u8a71\u672c\u6587\u3084\u76f8\u624b\u306e\u975e\u516c\u958b\u60c5\u5831\u306f\u542b\u3081\u306a\u3044",
             "title": "Body",
             "type": "string"
           },
@@ -946,6 +933,7 @@
             "type": "string"
           },
           "kind": {
+            "description": "\u73fe\u5728\u306f conversation.completed\u3002\u672a\u77e5\u306e\u7a2e\u985e\u306f\u6c4e\u7528\u8868\u793a\u306b\u3059\u308b",
             "title": "Kind",
             "type": "string"
           },
@@ -972,7 +960,61 @@
         "title": "Notification",
         "type": "object"
       },
-      "NotificationPage": {
+      "Page_ConversationSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ConversationSummary]",
+        "type": "object"
+      },
+      "Page_Memory_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Memory"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[Memory]",
+        "type": "object"
+      },
+      "Page_Notification_": {
         "properties": {
           "items": {
             "items": {
@@ -994,10 +1036,36 @@
           }
         },
         "required": [
-          "items",
-          "next_cursor"
+          "items"
         ],
-        "title": "NotificationPage",
+        "title": "Page[Notification]",
+        "type": "object"
+      },
+      "Page_Relationship_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Relationship"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[Relationship]",
         "type": "object"
       },
       "Preferences": {
@@ -1020,6 +1088,7 @@
       },
       "PreferencesPatch": {
         "additionalProperties": false,
+        "minProperties": 1,
         "properties": {
           "discord_dm_notifications": {
             "anyOf": [
@@ -1108,10 +1177,38 @@
         "title": "Profile",
         "type": "object"
       },
+      "ProfilePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Profile"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ProfilePage",
+        "type": "object"
+      },
       "ProfilePatch": {
         "additionalProperties": false,
         "properties": {
           "display_name": {
+            "description": "\u524d\u5f8c\u306e\u7a7a\u767d\u3092\u9664\u3044\u3066 1\u301c80 \u6587\u5b57\u3002\u7a7a\u767d\u3060\u3051\u30fb\u5236\u5fa1\u6587\u5b57\u306f 422",
             "maxLength": 80,
             "minLength": 1,
             "title": "Display Name",
@@ -1125,6 +1222,7 @@
         "type": "object"
       },
       "ProfileRevision": {
+        "additionalProperties": false,
         "properties": {
           "approved_at": {
             "anyOf": [
@@ -1140,7 +1238,8 @@
           },
           "hobbies": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1154,7 +1253,8 @@
           },
           "interests": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1183,7 +1283,8 @@
           },
           "strengths": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1202,7 +1303,8 @@
           },
           "weaknesses": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1225,10 +1327,12 @@
         "type": "object"
       },
       "PublicPersonality": {
+        "additionalProperties": false,
         "properties": {
           "hobbies": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1242,7 +1346,8 @@
           },
           "interests": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1271,7 +1376,8 @@
           },
           "strengths": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1285,7 +1391,8 @@
           },
           "weaknesses": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1356,34 +1463,6 @@
         "title": "Relationship",
         "type": "object"
       },
-      "RelationshipPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/Relationship"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Cursor"
-          }
-        },
-        "required": [
-          "items",
-          "next_cursor"
-        ],
-        "title": "RelationshipPage",
-        "type": "object"
-      },
       "RevisionInput": {
         "additionalProperties": false,
         "properties": {
@@ -1394,12 +1473,24 @@
           },
           "hobbies": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
             "title": "Hobbies",
             "type": "array"
+          },
+          "icon_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
@@ -1408,7 +1499,8 @@
           },
           "interests": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1449,7 +1541,8 @@
           },
           "strengths": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1463,7 +1556,8 @@
           },
           "weaknesses": {
             "items": {
-              "maxLength": 2000,
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "maxItems": 20,
@@ -1486,12 +1580,15 @@
         "type": "object"
       },
       "SuggestionInput": {
+        "additionalProperties": false,
         "properties": {
           "answers": {
             "additionalProperties": {
               "maxLength": 2000,
               "type": "string"
             },
+            "maxProperties": 11,
+            "minProperties": 1,
             "title": "Answers",
             "type": "object"
           }
@@ -1507,6 +1604,11 @@
       "HTTPBearer": {
         "scheme": "bearer",
         "type": "http"
+      },
+      "SupabaseBearer": {
+        "description": "Supabase Auth \u306e access token\uff08refresh token \u306f\u9001\u3089\u306a\u3044\uff09",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -1516,6 +1618,130 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/__mock/profiles": {
+      "get": {
+        "operationId": "preview_list_synthetic_profiles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Profiles"
+      }
+    },
     "/api/v1/agents": {
       "post": {
         "operationId": "preview_create_agent",
@@ -1829,7 +2055,7 @@
     },
     "/api/v1/agents/{id}/blocks/{other_id}": {
       "delete": {
-        "operationId": "preview_unblock_agent",
+        "operationId": "unblock_agent",
         "parameters": [
           {
             "in": "path",
@@ -1929,13 +2155,16 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Unblock"
+        "summary": "\u30d6\u30ed\u30c3\u30af\u3092\u89e3\u9664\u3059\u308b\uff08\u30d6\u30ed\u30c3\u30af\u3057\u3066\u3044\u306a\u304f\u3066\u3082 204\uff09",
+        "tags": [
+          "settings"
+        ]
       },
       "put": {
-        "operationId": "preview_block_agent",
+        "operationId": "block_agent",
         "parameters": [
           {
             "in": "path",
@@ -2035,10 +2264,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Block"
+        "summary": "\u76f8\u624b\u306e AI \u3092\u30d6\u30ed\u30c3\u30af\u3059\u308b\uff08\u518d\u9001\u3057\u3066\u3082\u540c\u3058\u7d50\u679c\uff09",
+        "tags": [
+          "settings"
+        ]
       }
     },
     "/api/v1/agents/{id}/profile": {
@@ -2615,7 +2847,7 @@
     },
     "/api/v1/agents/{id}/settings": {
       "get": {
-        "operationId": "preview_get_interaction_settings",
+        "operationId": "get_interaction_settings",
         "parameters": [
           {
             "in": "path",
@@ -2712,13 +2944,16 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Settings"
+        "summary": "\u81ea\u5206\u306e AI \u306e\u4ea4\u6d41\u8a2d\u5b9a\u3092\u53d6\u5f97\u3059\u308b",
+        "tags": [
+          "settings"
+        ]
       },
       "patch": {
-        "operationId": "preview_patch_interaction_settings",
+        "operationId": "patch_interaction_settings",
         "parameters": [
           {
             "in": "path",
@@ -2825,32 +3060,19 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Patch Settings"
+        "summary": "\u81ea\u5f8b\u4ea4\u6d41\u30fb\u983b\u5ea6\u30fb\u4e88\u7b97\u30fbDiscord \u516c\u958b\u306e\u8a2d\u5b9a\u3092\u5909\u66f4\u3059\u308b",
+        "tags": [
+          "settings"
+        ]
       }
     },
     "/api/v1/conversations": {
       "get": {
-        "operationId": "preview_list_conversations",
+        "operationId": "list_conversations",
         "parameters": [
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cursor"
-            }
-          },
           {
             "in": "query",
             "name": "limit",
@@ -2862,6 +3084,24 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -2869,7 +3109,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConversationPage"
+                  "$ref": "#/components/schemas/Page_ConversationSummary_"
                 }
               }
             },
@@ -2948,15 +3188,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Conversations"
+        "summary": "\u81ea\u5206\u306e AI \u304c\u53c2\u52a0\u3057\u305f\u4f1a\u8a71\u306e\u4e00\u89a7\uff08\u65b0\u3057\u3044\u9806\uff09",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/conversations/{id}": {
       "get": {
-        "operationId": "preview_get_conversation",
+        "operationId": "get_conversation",
         "parameters": [
           {
             "in": "path",
@@ -3053,15 +3296,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Conversation"
+        "summary": "\u81ea\u5206\u306e AI \u304c\u53c2\u52a0\u3057\u305f\u4f1a\u8a71\u306e\u5168\u6587",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/discord/connection": {
       "delete": {
-        "operationId": "preview_disconnect_discord",
+        "operationId": "disconnect_discord",
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -3139,13 +3385,16 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Disconnect"
+        "summary": "Discord \u9023\u643a\u3092\u89e3\u9664\u3059\u308b\uff08\u672a\u9001\u4fe1\u306e DM\u30fb\u6295\u7a3f\u3068\u30ae\u30eb\u30c9\u5225\u540c\u610f\u3082\u53d6\u308a\u6d88\u3059\u3002\u51aa\u7b49\uff09",
+        "tags": [
+          "discord"
+        ]
       },
       "get": {
-        "operationId": "preview_get_discord_connection",
+        "operationId": "get_discord_connection",
         "responses": {
           "200": {
             "content": {
@@ -3230,15 +3479,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Discord Connection"
+        "summary": "Discord \u9023\u643a\u306e\u72b6\u614b\uff08\u30c8\u30fc\u30af\u30f3\u306f\u8fd4\u3055\u306a\u3044\uff09",
+        "tags": [
+          "discord"
+        ]
       }
     },
     "/api/v1/discord/guilds": {
       "get": {
-        "operationId": "preview_list_discord_guilds",
+        "operationId": "list_discord_guilds",
         "responses": {
           "200": {
             "content": {
@@ -3247,7 +3499,7 @@
                   "items": {
                     "$ref": "#/components/schemas/Guild"
                   },
-                  "title": "Response Preview List Discord Guilds",
+                  "title": "Response List Discord Guilds",
                   "type": "array"
                 }
               }
@@ -3327,15 +3579,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Guilds"
+        "summary": "\u672c\u4eba\u306e AI \u304c\u30ae\u30eb\u30c9\u5225\u516c\u958b\u306b\u540c\u610f\u3057\u305f\u30ae\u30eb\u30c9\u3068\u6295\u7a3f\u5148",
+        "tags": [
+          "discord"
+        ]
       }
     },
     "/api/v1/discord/link/complete": {
       "post": {
-        "operationId": "preview_complete_discord_link",
+        "operationId": "complete_discord_link",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3356,6 +3611,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "state \u307e\u305f\u306f\u30b3\u30fc\u30c9\u304c\u7121\u52b9\uff08\u3084\u308a\u76f4\u3057\uff09"
           },
           "401": {
             "content": {
@@ -3430,15 +3695,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Complete Link"
+        "summary": "Discord \u306e\u8a8d\u53ef\u30b3\u30fc\u30c9\u3067\u9023\u643a\u3092\u5b8c\u4e86\u3059\u308b\uff08state \u306f\u672c\u4eba\u30fb10 \u5206\u4ee5\u5185\u30fb1 \u56de\u3060\u3051\uff09",
+        "tags": [
+          "discord"
+        ]
       }
     },
     "/api/v1/discord/link/start": {
       "post": {
-        "operationId": "preview_start_discord_link",
+        "operationId": "start_discord_link",
         "responses": {
           "200": {
             "content": {
@@ -3523,15 +3791,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Start Link"
+        "summary": "\u9023\u643a\u3092\u958b\u59cb\u3059\u308b\uff0810 \u5206\u30fb\u4f7f\u3044\u6368\u3066\u306e state \u3068 Discord \u306e\u8a8d\u53ef URL\uff09",
+        "tags": [
+          "discord"
+        ]
       }
     },
     "/api/v1/memories": {
       "get": {
-        "operationId": "preview_list_memories",
+        "operationId": "list_memories",
         "parameters": [
           {
             "in": "query",
@@ -3545,22 +3816,6 @@
           },
           {
             "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cursor"
-            }
-          },
-          {
-            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -3570,6 +3825,24 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -3577,7 +3850,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemoryPage"
+                  "$ref": "#/components/schemas/Page_Memory_"
                 }
               }
             },
@@ -3656,15 +3929,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Memories"
+        "summary": "List Memories",
+        "tags": [
+          "memory"
+        ]
       }
     },
     "/api/v1/memories/{id}": {
       "delete": {
-        "operationId": "preview_delete_memory",
+        "operationId": "delete_memory",
         "parameters": [
           {
             "in": "path",
@@ -3754,30 +4030,35 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Delete Memory"
+        "summary": "Delete Memory",
+        "tags": [
+          "memory"
+        ]
       }
     },
     "/api/v1/notifications": {
       "get": {
-        "operationId": "preview_list_notifications",
+        "operationId": "list_notifications",
         "parameters": [
           {
+            "description": "true \u3067\u672a\u8aad\u3060\u3051\u3001false \u3067\u65e2\u8aad\u3060\u3051",
             "in": "query",
-            "name": "cursor",
+            "name": "unread",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "boolean"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
+              "description": "true \u3067\u672a\u8aad\u3060\u3051\u3001false \u3067\u65e2\u8aad\u3060\u3051",
+              "title": "Unread"
             }
           },
           {
@@ -3794,18 +4075,20 @@
           },
           {
             "in": "query",
-            "name": "unread",
+            "name": "cursor",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "boolean"
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Unread"
+              "title": "Cursor"
             }
           }
         ],
@@ -3814,7 +4097,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NotificationPage"
+                  "$ref": "#/components/schemas/Page_Notification_"
                 }
               }
             },
@@ -3893,15 +4176,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Notifications"
+        "summary": "\u81ea\u5206\u3078\u306e\u901a\u77e5\u306e\u4e00\u89a7\uff08\u65b0\u3057\u3044\u9806\uff09",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/notifications/{id}/read": {
       "patch": {
-        "operationId": "preview_read_notification",
+        "operationId": "read_notification",
         "parameters": [
           {
             "in": "path",
@@ -3998,15 +4284,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Read Notification"
+        "summary": "\u901a\u77e5\u3092\u65e2\u8aad\u306b\u3059\u308b\uff08\u518d\u9001\u3057\u3066\u3082\u6700\u521d\u306e\u65e2\u8aad\u65e5\u6642\u306e\u307e\u307e\uff09",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/preferences": {
       "get": {
-        "operationId": "preview_get_preferences",
+        "operationId": "get_preferences",
         "responses": {
           "200": {
             "content": {
@@ -4091,13 +4380,16 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Preferences"
+        "summary": "\u901a\u77e5\u8a2d\u5b9a\u3092\u53d6\u5f97\u3059\u308b",
+        "tags": [
+          "settings"
+        ]
       },
       "patch": {
-        "operationId": "preview_patch_preferences",
+        "operationId": "patch_preferences",
         "requestBody": {
           "content": {
             "application/json": {
@@ -4192,32 +4484,19 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Patch Preferences"
+        "summary": "\u901a\u77e5\u8a2d\u5b9a\u3092\u5909\u66f4\u3059\u308b",
+        "tags": [
+          "settings"
+        ]
       }
     },
     "/api/v1/relationships": {
       "get": {
-        "operationId": "preview_list_relationships",
+        "operationId": "list_relationships",
         "parameters": [
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cursor"
-            }
-          },
           {
             "in": "query",
             "name": "limit",
@@ -4229,6 +4508,24 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -4236,7 +4533,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RelationshipPage"
+                  "$ref": "#/components/schemas/Page_Relationship_"
                 }
               }
             },
@@ -4315,15 +4612,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Relationships"
+        "summary": "List Relationships",
+        "tags": [
+          "memory"
+        ]
       }
     },
     "/api/v1/users/me": {
       "get": {
-        "operationId": "preview_get_current_user",
+        "operationId": "get_current_user",
         "responses": {
           "200": {
             "content": {
@@ -4408,13 +4708,16 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Get User"
+        "summary": "\u62db\u5f85\u30fb\u6709\u52b9\u72b6\u614b\u3092\u78ba\u8a8d\u3057\u3066\u81ea\u5206\u306e\u30d7\u30ed\u30d5\u30a3\u30fc\u30eb\u3092\u4f5c\u6210/\u53d6\u5f97\u3059\u308b",
+        "tags": [
+          "users"
+        ]
       },
       "patch": {
-        "operationId": "preview_patch_current_user",
+        "operationId": "patch_current_user",
         "requestBody": {
           "content": {
             "application/json": {
@@ -4509,15 +4812,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Patch User"
+        "summary": "\u81ea\u5206\u306e\u8868\u793a\u540d\u3092\u5909\u66f4\u3059\u308b",
+        "tags": [
+          "users"
+        ]
       }
     },
     "/api/v1/users/me/deletion": {
       "get": {
-        "operationId": "preview_get_own_deletion",
+        "operationId": "get_own_deletion",
         "responses": {
           "200": {
             "content": {
@@ -4602,13 +4908,38 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Deletion Progress"
+        "summary": "\u81ea\u5206\u306e\u524a\u9664\u8981\u6c42\u306e\u72b6\u6cc1\uff08ID\u30fb\u72b6\u614b\u30fb\u65e5\u6642\u3060\u3051\uff09",
+        "tags": [
+          "account"
+        ]
       },
       "post": {
-        "operationId": "preview_request_deletion",
+        "operationId": "request_deletion",
+        "parameters": [
+          {
+            "description": "\u518d\u9001\u306e\u8b58\u5225\u7528\uff08\u4efb\u610f\uff09\u3002\u524a\u9664\u8981\u6c42\u306f\u5229\u7528\u8005\u3054\u3068\u306b 1 \u4ef6\u306a\u306e\u3067\u3001\u30ad\u30fc\u304c\u306a\u304f\u3066\u3082\u91cd\u8907\u3057\u306a\u3044",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\u518d\u9001\u306e\u8b58\u5225\u7528\uff08\u4efb\u610f\uff09\u3002\u524a\u9664\u8981\u6c42\u306f\u5229\u7528\u8005\u3054\u3068\u306b 1 \u4ef6\u306a\u306e\u3067\u3001\u30ad\u30fc\u304c\u306a\u304f\u3066\u3082\u91cd\u8907\u3057\u306a\u3044",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4703,10 +5034,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Delete Account"
+        "summary": "\u30a2\u30ab\u30a6\u30f3\u30c8\u524a\u9664\u3092\u8981\u6c42\u3059\u308b\uff085 \u5206\u4ee5\u5185\u306e\u518d\u8a8d\u8a3c\u304c\u5fc5\u8981\u3002AI \u3068\u914d\u4fe1\u306f\u3059\u3050\u6b62\u307e\u308b\uff09",
+        "tags": [
+          "account"
+        ]
       }
     }
   }
