@@ -11,7 +11,9 @@
 | Discord | discord.py境界のMock | 連携ID解決、管理者権限、投稿条件、429、送信結果不明 |
 | Design | Figmaレビュー + axe + 手動 | コントラスト、キーボード順、スクリーンリーダー、PC/mobile整合 |
 
-CIは本番LLMや本番Discordへアクセスしない。会話文章の完全一致ではなく、発言者順・schema・上限・禁則・保存/配信条件を検査する。プロンプトインジェクションの固定データセットを持ち、相手発言から秘密開示命令を実行しないことを確認する。DB統合テストはmigrationを空DBに適用して行い、RLSとFK/UNIQUEを検証する。OAuthの外部実接続、Render→Supabaseネットワーク、Discord権限はステージングで最終確認する。
+CIは本番LLMや本番Discordへアクセスしない。会話文章の完全一致ではなく、発言者順・schema・上限・禁則・保存/配信条件を検査する。プロンプトインジェクションの固定データセットを持ち、相手発言から秘密開示命令を実行しないことを確認する。DB統合テストはmigrationを空DBに適用して行い、RLSとFK/UNIQUEを検証する。OAuthの外部実接続、手元PC→SupabaseのTLS/プーラー接続と公開HTTPS経路→手元PC APIの疎通、Discord権限はステージングで最終確認する。
+
+手元PC配置（#34〜#37）では、別端末の公開WebからAPIへ接続し、CORSの許可/拒否、OAuth callback、SSRからのAPI接続を確認する。PCの停止/スリープ/回線断でAPI失敗が表示され、ローカル値やMockへ自動切替しないことを確認する。PC再起動後のプロセス復帰、UTCの15分定期実行と多重起動抑止、Bot単独停止中の会話継続、PC全体停止後のlease回収、課金/配送結果不明の保留、停止期間の一括生成なし、期限内パージとDBバックアップ復元を検証する。文書変更だけでこれらを検証済みと扱わない。
 
 ## 招待・同意・削除の引き渡し（Issue #4）
 
@@ -44,3 +46,12 @@ migration検査は使い捨てのCI環境向け。`db reset`はローカルDBを
 - Worker/Scheduler/Discord: 偽LLM・固定時刻・通信MockとDBを組み合わせ、予算・停止・同時実行・再試行を検査。
 
 2026-11-02時点でGitHub標準secret scanning / push protectionの有効化APIは`422: Secret scanning is not available for this repository`となった。Gitleaksを全PRの必須CIに含めて代替する。これはpush前のブロックを提供しないため、秘密を発見した場合は直ちに失効・再発行し、履歴やログに残った値も対処する。標準機能が利用可能になった時点で追加有効化する。
+
+
+Scheduler（#19）は`tests/test_scheduling.py`と`tests/db/test_scheduling_db.py`で検証する。
+UTC slot、seed再現性、mock/無効時のDB未接続、liveの1回実行/終了/障害伝播、
+同時Cronの同ペア1予約、異なるペアの全体費用競合、予算不足の原子的rollback/次候補、
+承認/双方ON/削除/招待/片側ブロック/日次枠/同時1会話/未確定LLM実行、
+採用モデルの双方費用予約と承認版スナップショット、Discord不同意での非公開交流、
+双方/片側のDiscord公開同意スナップショット、APIとSchedulerの競合時のロック順を含む。
+DBテストは使い捨てのローカルSupabaseでのみ実行し、外部LLM/Discordには接続しない。
