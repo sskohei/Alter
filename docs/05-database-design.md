@@ -129,7 +129,7 @@ rollbackはAPI停止→agents_icon_upload_fk解除→registryをDROP、Storage A
 `20261111110000_memory_suppression.sql`は#22/PR #62と同じ3表（memory_tombstones、
 memory_source_suppressions、memory_completions）を先行導入する。本文は保持せず、本人AI/出典/キーだけ。
 全表RLS/default deny、anon/authenticatedの直接CRUD不可、AI/出典削除でCASCADE。
-`20261114050000_memory_insertion_guard.sql`は本人AI行のロックで候補挿入と削除を直列化し、
+`20261114051000_memory_insertion_guard.sql`は本人AI行のロックで候補挿入と削除を直列化し、
 抑止済み候補のINSERTを破棄する。UPDATEは所属/本文/出典/キー/作成日の変更を拒否する。
 状態/重要度の更新では行→AIの逆順ロックを取らず、削除とのデッドロックを避ける。
 
