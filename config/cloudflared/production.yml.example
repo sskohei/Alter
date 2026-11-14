@@ -1,0 +1,9 @@
+# /etc/alter/production/cloudflared.yml (600); credentials JSONはrepo外。
+tunnel: REPLACE-TUNNEL-UUID
+credentials-file: /etc/alter/production/tunnel.json
+metrics: 127.0.0.1:20241
+loglevel: error
+ingress:
+  - hostname: production-api.example.invalid
+    service: http://127.0.0.1:8000
+  - service: http_status:404

@@ -247,3 +247,24 @@ for (const environment of ["preview", "production"]) {
     assert.deepEqual(checkWebEnvironment(env), []);
   });
 }
+
+
+test("hackathon profile allows one environment while retaining security checks", () => {
+  const demo = {
+    ...valid,
+    ALTER_DEPLOYMENT_PROFILE: "hackathon",
+    VERCEL_ENV: "production",
+  };
+  delete demo.ALTER_PRODUCTION_SUPABASE_URL;
+  delete demo.ALTER_PRODUCTION_API_URL;
+  assert.deepEqual(checkWebEnvironment(demo), []);
+  for (const changes of [
+    { API_URL: "http://localhost:8000" },
+    { NEXT_PUBLIC_API_URL: "https://wrong.test" },
+    { NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_secret_synthetic" },
+    { ANTHROPIC_API_KEY: "synthetic" },
+    { API_IDEMPOTENCY_HMAC_KEYS: "synthetic" },
+    { ALTER_REGISTERED_WEB_ORIGINS: "*" },
+    { ALTER_DEPLOYMENT_PROFILE: "typo" },
+  ]) assert.ok(checkWebEnvironment({ ...demo, ...changes }).length);
+});

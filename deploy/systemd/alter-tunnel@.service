@@ -1,0 +1,26 @@
+[Unit]
+Description=Alter API HTTPS tunnel (%i)
+Wants=network-online.target
+After=network-online.target alter-api@%i.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=alter-%i
+Group=alter-%i
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --config /etc/alter/%i/cloudflared.yml run
+Restart=on-failure
+RestartSec=15
+KillSignal=SIGTERM
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

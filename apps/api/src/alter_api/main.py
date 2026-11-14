@@ -11,7 +11,7 @@ from alter_domain.discord_oauth import DiscordOAuthClient
 from alter_domain.icons import IconStorage, IconStorageUnavailable, InvalidIcon
 from alter_domain.settings import Settings
 from alter_domain.sonnet import SonnetClient
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
@@ -25,10 +25,12 @@ from alter_api.errors import (
     REQUEST_ID_HEADER,
     ErrorResponse,
     RequestIdMiddleware,
+    error_response,
     install_error_handlers,
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
 from alter_api.memory_routes import router as memory_router
+from alter_api.readiness import database_ready
 from alter_api.settings_routes import router as settings_router
 from alter_api.suggestion_routes import router as suggestion_router
 from alter_api.users import router as users_router
@@ -154,6 +156,24 @@ def create_app(
     def health() -> Health:
         # Liveness only. This does not claim DB readiness or authentication support.
         return Health(mode=settings.alter_mode)
+
+    @app.get(
+        "/ready",
+        response_model=Health,
+        operation_id="get_readiness",
+        tags=["operations"],
+        responses={503: {"model": ErrorResponse}},
+    )
+    def ready(request: Request) -> Any:
+        if settings.alter_mode != "live" or not database_ready(app.state.db_engine):
+            response = error_response(request, 503, "SERVICE_UNAVAILABLE", "Service is not ready")
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            Health(mode=settings.alter_mode).model_dump(), headers={"Cache-Control": "no-store"}
+        )
 
     app.include_router(create_api_v1_router())
     _add_shared_components(app)

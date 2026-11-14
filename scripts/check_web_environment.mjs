@@ -29,6 +29,9 @@ function origin(value) {
 export function checkWebEnvironment(env) {
   if (!["preview", "production"].includes(env.VERCEL_ENV)) return [];
   const errors = [];
+  const demo = env.ALTER_DEPLOYMENT_PROFILE === "hackathon";
+  if (env.ALTER_DEPLOYMENT_PROFILE && !demo)
+    errors.push("ALTER_DEPLOYMENT_PROFILE: unknown profile");
   for (const name of [
     "NEXT_PUBLIC_SITE_URL",
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -42,7 +45,7 @@ export function checkWebEnvironment(env) {
     if (name.startsWith("NEXT_PUBLIC_") && !publicNames.has(name))
       errors.push(`${name}: unexpected public variable`);
     if (
-      /^(SUPABASE_(SECRET_KEY|STORAGE_SECRET_KEY|SERVICE_ROLE_KEY|DB_URL)|DATABASE_URL|DISCORD_(CLIENT_SECRET|BOT_TOKEN)|ANTHROPIC_API_KEY|LLM_API_KEY|PROFILE_ENCRYPTION_KEY.*|AGENT_IDEMPOTENCY_HMAC_KEY.*)$/.test(
+      /^(SUPABASE_(SECRET_KEY|STORAGE_SECRET_KEY|SERVICE_ROLE_KEY|DB_URL)|DATABASE_URL|DISCORD_(CLIENT_SECRET|BOT_TOKEN)|ANTHROPIC_API_KEY|LLM_API_KEY|PROFILE_ENCRYPTION_KEY.*|API_IDEMPOTENCY_HMAC_KEYS|AGENT_IDEMPOTENCY_HMAC_KEY.*)$/.test(
         name,
       ) &&
       env[name]
@@ -69,7 +72,7 @@ export function checkWebEnvironment(env) {
         ? "ALTER_PRODUCTION_SUPABASE_URL"
         : "ALTER_PREVIEW_SUPABASE_URL"
     ];
-  if (!origin(other) || origin(other) === origin(env.NEXT_PUBLIC_SUPABASE_URL))
+  if (!demo && (!origin(other) || origin(other) === origin(env.NEXT_PUBLIC_SUPABASE_URL)))
     errors.push(
       "Supabase: distinct Preview and Production project origins required",
     );
@@ -78,7 +81,7 @@ export function checkWebEnvironment(env) {
       ? "ALTER_PRODUCTION_API_URL"
       : "ALTER_PREVIEW_API_URL"
   ];
-  if (!origin(otherApi) || origin(otherApi) === origin(env.API_URL))
+  if (!demo && (!origin(otherApi) || origin(otherApi) === origin(env.API_URL)))
     errors.push(
       "API: distinct Preview and Production HTTPS origins required",
     );
@@ -94,7 +97,7 @@ export function checkWebEnvironment(env) {
       "ALTER_REGISTERED_WEB_ORIGINS: exact registered HTTPS origins required",
     );
   if (
-    env.VERCEL_ENV === "production" &&
+    !demo && env.VERCEL_ENV === "production" &&
     (!/^[a-f0-9]{40}$/.test(env.VERCEL_GIT_COMMIT_SHA ?? "") ||
       env.ALTER_APPROVED_PRODUCTION_COMMIT !== env.VERCEL_GIT_COMMIT_SHA)
   )

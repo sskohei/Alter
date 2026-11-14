@@ -13,6 +13,11 @@ def create_db_engine(settings: Settings) -> Engine:
     return create_engine(
         settings.database_url,
         pool_pre_ping=True,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout=10,
+        # Supavisor transaction mode cannot retain session prepared statements.
+        connect_args={"prepare_threshold": None, "connect_timeout": 10},
         # 接続文字列（パスワードを含む）をログに出さない
         hide_parameters=True,
     )
