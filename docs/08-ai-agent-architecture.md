@@ -114,14 +114,31 @@ UTC日付を越えても会話の実費は消えず、consumeによる予約解�
 
 ## #20 Workerの実装
 
-`conversation.run_one`は90秒leaseをclaimし、25秒ごとの別接続heartbeatとUUID tokenでfencingする。
-DBトランザクションを閉じた状態でLLMを呼ぶ。発言・費用charge/release・job/会話状態・完了eventは
-短いトランザクションで確定する。失効tokenの更新は拒否する。
-`llm_invocations`に呼出前のstartedを残し、途中クラッシュ後の同ターン再呼出を禁止する。
-TemporaryLLMErrorは「供給元で処理/課金されていないことが分かる失敗」だけ。
-最大3回の再試行、30/120/600秒＋jobから決まるジッター、Retry-After相当の待ち時間を尊重する。
-5分上限は再試行待ちも含む。タイムアウト/結果不明/未知エラーは失敗とし、予約額を照合まで残す。
-unsafe出力も呼出費用は計上するが発言本文は保存しない。停止/同意消失後は追加呼出しない。
-`conversation_events`のcompleted/failed/cancelledは1会話1種1件。#21が通知・Discord候補へ接続する。
-実LLMの課金exactly-onceは保証しない。現在のプロセス入口はLLM_BACKEND=fakeのみ有効。
+`conversation.run_one`は`kind=conversation.run`をSKIP LOCKEDでclaimし、90秒leaseと
+25秒ごとの別接続heartbeat、UUID tokenでfencingする。独立Workerは
+`ALTER_MODE=live LLM_ENABLED=true`と`ANTHROPIC_API_KEY`でSonnetを利用する。
+既定mockはDB/LLM通信なし。liveでもLLM無効なら正常終了し、キー未設定はclaim前に拒否する。
 
+`LLMExecution.conversation_turn`を使い、生成と独立安全判定を同じセッション予約で精算する。
+外部I/O中はDBトランザクションを保持しない。生成/判定の既知の費用は各応答後に
+charge/releaseと会話費用へ原子的に反映する。lease失効後の応答も費用だけは記録する。
+検査済み発言・turn_no・呼出完了記録と、最終ターンの状態・残予約解放・完了event・
+Web通知は短いトランザクションで確定する。通知設定と既存の重複防止キーを尊重する。
+API/Botが先に取り消した未実行会話も、Workerが予約解放とcancelled eventを一度だけ確定する。
+
+`llm_invocations`に呼出前のstartedを残し、途中クラッシュ後の同ターン再呼出を禁止する。
+保存済みのターン間で停止した場合は、失効leaseの再claim後に次ターンから継続する。
+各段階とSonnetの各HTTPリクエスト直前に、双方のON/招待/削除/ブロック/承認版、
+費用上限、停止シグナル、5分上限、leaseを確認する。最大8発言、should_endでも終了する。
+
+TemporaryLLMErrorは未課金と確認できる失敗だけ。最大3回の再試行、
+30/120/600秒＋jobから決まるジッター、Retry-After相当の待ち時間を尊重する。
+5分上限は再試行待ちも含むため、次回claimで期限超過なら外部呼出せず終了する。
+生成済みで判定だけが一時失敗した場合はfailedとし、有料の再生成を避ける。
+恒久障害/安全性違反はfailed、同意消失/停止はcancelled、時間/予算上限はcompleted。
+unsafe出力の費用は計上するが本文は保存しない。
+
+タイムアウト/結果不明/クラッシュは予約を保持し、#36の照合へ渡す。
+`conversation_events`のcompleted/failed/cancelledは1会話1種1件。#22/#28の非同期処理の接続点とし、
+Discord公開は#28の双方同意・ギルド設定・投稿直前判定に委ねる。
+実LLMの課金exactly-onceは保証しない。実品質と実環境受け入れは#37、本番配備は#34で検証する。

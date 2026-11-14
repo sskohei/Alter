@@ -52,3 +52,11 @@ UTC slot、seed再現性、mock/無効時のDB未接続、liveの1回実行/終�
 承認/双方ON/削除/招待/片側ブロック/日次枠/同時1会話/未確定LLM実行、
 採用モデルの双方費用予約と承認版スナップショット、Discord不同意での非公開交流を含む。
 DBテストは使い捨てのローカルSupabaseでのみ実行し、外部LLM/Discordには接続しない。
+
+
+Worker（#20）は`tests/test_worker.py`と`tests/db/test_conversation_db.py`で検証する。
+独立入口のmock/無効ゲート・資格情報検査・SIGTERM、25秒heartbeat、同時Workerと90秒lease失効、
+保存済みターンからの再開、未完ターンの再呼出禁止、会話のない古いジョブの除外、古いWorkerの費用のみの記録、
+8発言/should_end/5分/予算、停止/ブロック/削除/人格失効、schema/独立判定の拒否、
+未課金再試行/バックオフ/上限と課金済みの再生成禁止、取消予約解放、event/通知の冪等性を含む。
+Sonnet adapterはHTTP Mockで生成/独立判定とcount_tokens後の停止を検証し、実課金はしない。

@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。Sonnetの費用付き生成/独立安全判定と任意人格提案APIを実装。実OAuth/Storage/LLMの公開受け入れ・本番Worker接続は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
+更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。Sonnetの費用付き生成/独立安全判定と任意人格提案APIを実装。独立Workerの会話生成・安全判定・費用精算を接続済み。実OAuth/Storage/LLMの公開受け入れ・本番配備は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
 
 ## ローカル開発（最初に実行）
 
@@ -67,7 +67,7 @@ Webの`/development`の「APIの接続を確認」で生成TypeScriptクライ�
 
 既定の`ALTER_MODE=mock`ではWorker/Cron/BotのLLM・Discord処理は合成動作となる。APIの`/health`とWebはSupabase停止中でも起動確認できる。本人プロフィールAPI（`GET/PATCH /api/v1/users/me`）はmockモードではJWT検証を通過しても共通認可処理で503 `SERVICE_UNAVAILABLE`を返し、招待確認・DB接続へ進まない。
 
-本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Workerの`live`処理は未実装なので明示的にエラー終了する。Cronは`SCHEDULER_ENABLED=true`でDBへの交流予約を1回実行する（既定無効）。
+本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Workerは`ALTER_MODE=live LLM_ENABLED=true`と`ANTHROPIC_API_KEY`でDBジョブを処理する。LLM無効時は正常終了し、キー未設定は処理前に拒否する。Cronは`SCHEDULER_ENABLED=true`でDBへの交流予約を1回実行する（既定無効）。
 
 ```bash
 uv run --package alter-worker alter-worker --once
@@ -132,7 +132,7 @@ OpenAPIの正本はFastAPI/Pydantic。ユーザー/人格/交流設定/会話/�
 実評価はroot `.env`の`ANTHROPIC_API_KEY`と明示的な`--live`でのみ有効になる。
 [限定評価](evaluations/llm/sonnet-review-2026-11-13.md)・
 [評価手順](evaluations/llm/README.md)・[選定/保持条件](docs/26-llm-candidate-review.md)を参照。
-残りの品質受け入れは#37、本番Workerのadapter・moderation・費用予約の接続は#18の範囲。
+残りの品質受け入れは#37、独立Workerのadapter・moderation・費用予約は#20で接続済み。
 
 ## アイコンAPI（#15）
 
@@ -146,7 +146,7 @@ EXIF/GPS等のメタデータを削除する。専用のprivate bucketとAPI専�
 ## 費用付きLLM実行（#18）
 
 人格提案APIは公開answers辞書から未承認の人格案を返す（保存/承認は本人操作）。
-APIサーバーだけに`ALTER_MODE=live`、`LLM_ENABLED=true`、`ANTHROPIC_API_KEY`を設定して有効化する。
+APIサーバーに`ALTER_MODE=live`、`LLM_ENABLED=true`、`ANTHROPIC_API_KEY`を設定して有効化する。
 既定は無効。Web/CIへ実キーを渡さない。外部テストはMock。
 生成と独立安全判定を事前予約し、UTC日次3回・AI日次/会話/全体の費用上限を検査する。
 課金結果不明は予約を保持して追加実行を停止する。[実行契約](docs/08-ai-agent-architecture.md)を参照。
@@ -158,4 +158,13 @@ APIサーバーだけに`ALTER_MODE=live`、`LLM_ENABLED=true`、`ANTHROPIC_API_
 で同意・枠・予算内のペアをDBへ予約し、終了する。LLM通信やAPIキーは不要。
 Render CronはUTCで15分ごと。選定seed、承認版、双方の費用予約を保存し、
 同時起動の重複予約を防ぐ。詳細は[交流契約](docs/09-autonomous-interaction.md)。
-会話生成/終了時の精算はWorker（#20）、本番配備は#34で行う。
+会話生成/終了時の精算はWorker（#20）へ接続済み。本番配備は#34で行う。
+
+## 会話生成Worker（#20）
+
+`ALTER_MODE=live LLM_ENABLED=true uv run --package alter-worker alter-worker`で、
+Schedulerが予約した`conversation.run`を処理する。`ANTHROPIC_API_KEY`とDB接続はWorkerだけに設定する。
+`--once`は最大1ジョブ（または取消済み1会話の精算）で終了する。API/Botの常駐は不要。
+90秒lease/25秒heartbeat、承認版と同意の再確認、最大8発言/5分/費用上限、独立安全判定、
+冪等な完了eventとWeb通知を実装。SIGTERM/SIGINT後は新規呼出を止める。
+課金結果不明は再試行/予約解放せず#36で照合する。[実行契約](docs/08-ai-agent-architecture.md)を参照。

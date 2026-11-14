@@ -60,11 +60,7 @@ HTTPエラー/usage/schema/秘密/注入検査、本文を持たないllm_runs�
 提案は公開answers辞書、UTC3回、本人の手動保存/承認を維持。Workerの実行ループは#20、
 Schedulerの会話予約は#19、実環境の品質受け入れは#37、照合・復旧は#36の範囲で継続する。
 
-#19: UTC15分slot、seed付き単純matcher、原子的予約を追加。
-#16が未実装なので初期OFFのまま。自律交流の同意を管理SQLや人格承認で代用しない。
-テストだけが専用fixtureでONにする。実供給元がない間のプロセス起動は明示的なfake検証のみ。
-
-#20: lease/token fencing、heartbeat、呼出前記録、8発言/5分/費用/停止と再試行を追加。
-#21の会話API・通知/Discord outboxは未実装。conversation_eventsが完了接続点。
-#22は完了eventを元に記憶を冪等に生成する。実供給元adapterと本番復旧訓練は残件。
-
+#19: UTC15分slot、seed付きmatcher、正式モデルの双方予約を実装。初期OFFを維持する。
+#20: lease/token fencing、heartbeat、呼出前記録、共通の費用付き生成/独立安全判定を接続済み。
+最大8発言/5分/費用/停止、未課金時だけの再試行、完了event/Web通知/取消予約解放を実装。
+#22が記憶、#28がDiscord配信へ接続する。実品質と本番配備は#37/#34、復旧訓練は#36で確認する。

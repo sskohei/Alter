@@ -13,11 +13,16 @@ sequenceDiagram
   W->>D: SKIP LOCKEDでジョブlease取得
   W->>D: 双方の同意・予算を再確認
   loop 最大8発言
+    W->>D: 呼出前marker、同意/承認版/予算/lease再確認
     W->>L: 承認済み人格と公開可能コンテキスト
     L-->>W: 構造化発言
-    W->>D: 検査済み発言・使用量を冪等保存
+    W->>D: 既知使用量を精算
+    W->>L: 別systemで独立安全判定
+    L-->>W: allowed
+    W->>D: 判定使用量の精算、再確認後に発言を冪等保存
   end
-  W->>D: 完了、要約、通知、公開可能ならoutbox
+  W->>D: 最終発言・完了状態・残予約解放・event・Web通知を同時確定
+  Note over W,D: 要約/記憶は#22、Discord outbox/配信は#28
   U->>A: JWT付き履歴Polling
   A->>D: 参加者所有権を確認して読取
   B->>D: 未送信outbox取得・公開条件再確認

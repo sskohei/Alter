@@ -44,7 +44,7 @@ BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制�
 | Web | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_API_URL` | 公開可。秘密を`NEXT_PUBLIC_`へ置かない |
 | Web server | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | SSRクライアント。公開可能な値だがサーバー設定にも保持 |
 | API | `ALTER_ENVIRONMENT`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `WEB_URL`, `CORS_ORIGINS`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `PROFILE_ENCRYPTION_KEY_V1` | DB/OAuth/暗号鍵はRender Secret。`CORS_ORIGINS`はCSVで明示 |
-| Worker | `DATABASE_URL`, `ANTHROPIC_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `JOB_LEASE_SECONDS` | LLMキーをWebに渡さない |
+| Worker | `ALTER_MODE=live`, `LLM_ENABLED=true`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MAX_DAILY_COST_USD` | LLMキーをWebに渡さない |
 | Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはRender Secret |
 | Cron | `ALTER_MODE=live`, `SCHEDULER_ENABLED=true`, `DATABASE_URL`, `SCHEDULER_BATCH_SIZE`, `MAX_DAILY_COST_USD` | 15分ごとに`uv run --package alter-scheduler alter-scheduler`を1回実行。LLMキー不要、既定無効 |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
@@ -96,11 +96,13 @@ API・Workerと明示的な評価CLIの秘密キー名は`ANTHROPIC_API_KEY`。
 旧名`LLM_API_KEY`は使用しない。`LLM_MODEL=claude-sonnet-5-5`を指定し、
 キーをWeb/Vercel/`NEXT_PUBLIC_*`へ渡さない。
 #18のadapter・独立moderation・費用付き共通実行と提案APIは実装済み。
-APIで提案を有効化するときだけ、サーバー側へ`ALTER_MODE=live`、`LLM_ENABLED=true`、
+APIの提案またはWorkerの会話生成を有効化するとき、各サーバー側へ`ALTER_MODE=live`、`LLM_ENABLED=true`、
 `ANTHROPIC_API_KEY`、`MAX_DAILY_COST_USD`（既定1.00）を設定する。
 `LLM_ENABLED`は既定falseで、鍵だけでは有料通信を行わない。Webへ鍵/有効化変数を渡さない。
 `LLM_MODEL`は表示用の固定採用値で、任意モデルへの切替スイッチではない。
-Worker本体のclaim/保存への接続は#20、実品質の受け入れは#37で行う。
+Workerのclaim/保存・独立安全判定は#20で接続済み。lease90秒、heartbeat25秒を固定する。
+`uv run --package alter-worker alter-worker`で起動し、`--once`で最大1件を処理する。
+SIGTERM/SIGINT後は新規呼出を止め、既知費用を精算する。実品質の受け入れは#37で行う。
 呼出は30秒/connect5秒で、HTTP/SDK内部の自動再試行はしない。
 429/未課金一時障害はRetry-Afterを返し、課金不明ならllm_runsと残予約を保持する。
 復旧時は#36で状態・usage_records・供給元利用量を照合し、確認せず再実行/解放しない。

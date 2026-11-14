@@ -104,6 +104,7 @@ class LLMExecution:
         self.transaction = authorized_transaction
         self.global_limit = global_limit
         self.forbidden = forbidden
+        self.run_id: UUID | None = None
 
     def _admit(self, agent: UUID, conversation: UUID | None) -> UUID:
         self.client.require_enabled()
@@ -143,7 +144,8 @@ class LLMExecution:
                 attempts = conn.execute(
                     text(
                         "select count(*) from public.llm_runs where agent_id=:agent "
-                        "and conversation_id=:conv and purpose='conversation'"
+                        "and conversation_id=:conv and purpose='conversation' "
+                        "and status<>'failed'"
                     ),
                     {"agent": agent, "conv": conversation},
                 ).scalar_one()
@@ -228,6 +230,15 @@ class LLMExecution:
                 budget.record(
                     conn, agent, None, self.client.price, "release", key + ":consume", cost
                 )
+            if conversation is not None:
+                conn.execute(
+                    text(
+                        "update public.conversations set cost_usd="
+                        "(select coalesce(sum(actual_usd),0) from public.usage_records "
+                        "where conversation_id=:id and kind='charge') where id=:id"
+                    ),
+                    {"id": conversation},
+                )
             conn.execute(
                 text("update public.llm_runs set status='generated' where id=:id"), {"id": run}
             )
@@ -273,6 +284,7 @@ class LLMExecution:
     ) -> T:
         screen(messages, self.forbidden)
         run = self._admit(agent, conversation)
+        self.run_id = run
         inflight = False
         try:
             self._phase(run, agent, conversation, "reserved")
