@@ -48,7 +48,9 @@ def clean_invitations(engine: Engine) -> Iterator[None]:
 
 
 @pytest.fixture
-def ai_pair(engine: Engine, created_users: list[uuid.UUID]) -> Iterator[list[uuid.UUID]]:
+def ai_pair(
+    engine: Engine, created_users: list[uuid.UUID], request: pytest.FixtureRequest
+) -> Iterator[list[uuid.UUID]]:
     from alter_domain.agent_models import AgentDraftInput
     from alter_domain.agents import approve, create_agent
     from alter_domain.auth_admin import AuthIdentity, AuthUser
@@ -56,7 +58,7 @@ def ai_pair(engine: Engine, created_users: list[uuid.UUID]) -> Iterator[list[uui
 
     agents = []
     with engine.begin() as conn:
-        for _ in range(2):
+        for _ in range(getattr(request, "param", 2)):
             owner = uuid.uuid4()
             created_users.append(owner)
             conn.execute(text("insert into auth.users (id) values (:id)"), {"id": owner})
@@ -81,7 +83,14 @@ def ai_pair(engine: Engine, created_users: list[uuid.UUID]) -> Iterator[list[uui
             approve(conn, owner, agent.id, 1)
             agents.append(agent.id)
     yield agents
+    from alter_domain.budget import release_for_deletion
+
     with engine.begin() as conn:
+        # Discard simulated in-flight calls before releasing fixture-only holds.
+        # No external LLM calls occur in these tests.
+        conn.execute(text("delete from public.llm_runs where agent_id=any(:ids)"), {"ids": agents})
+        for aid in agents:
+            release_for_deletion(conn, agent=aid)
         for aid in agents:
             conn.execute(
                 text(

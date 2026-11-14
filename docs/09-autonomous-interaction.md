@@ -36,3 +36,29 @@ DBの予算既定値と会話単位の予約方式を維持する。MVPは引用
 #20はその結果だけを発言として保存し、終了時に残予約を解放する。追加の予約を積まない。
 結果不明/未完実行があるときは再呼出も残額解放もせず、#36の照合へ渡す。
 [通常費用と最大量シナリオ](20-cost-estimation.md)を参照。
+
+
+## Scheduler実装（#19）
+
+`apps/scheduler`は`ALTER_MODE=live`かつ`SCHEDULER_ENABLED=true`で、
+`scheduling.schedule/select_due`を1回実行して終了する。既定は無効。
+LLM通信は行わず、APIキーや`LLM_ENABLED`は不要。Workerの実行・配備は#20/#34。
+mockはDBへ接続しない。`SCHEDULER_BATCH_SIZE`は1〜10、1回の起動で最大10予約。
+Render Cronは`*/15 * * * *`（UTC）、実行コマンドは
+`uv run --package alter-scheduler alter-scheduler`とする。
+
+10人MVPでは招待→profiles→agents→settings→費用advisory lockの順で、各表をID順にロックする。
+承認済み・active・双方ON・頻度が正・有効招待・削除要求なしを確認し、
+片側ブロック、queued/runningの既存会話、未完/課金結果不明のLLM実行を除外する。
+日次枠はUTC当日作成の参加会話を数え、取消/失敗も消費する保守的な扱いとする。
+`matcher.pair_rank`は共通興味数＋未交流の加点−過去完了回数で選定し、
+同点は正規化ペアとseedのハッシュで決める。seedは起動ごとに生成しjob payloadへ記録する。
+
+UTC日付/15分slot/ID昇順ペアのdedupe_keyで、終了済みジョブの同slot再予約も防ぐ。
+`kind=conversation.run`のjob・会話・承認版スナップショット・2参加者・双方の`session_reservation()`を
+savepoint内で一括作成する。片側/全体の予算不足は全体を戻し、次候補を試す。
+予算は#18の正式モデル設定を利用し、Workerは同じ予約をconsumeする。
+会話開始時の各参加者の`discord_publish`を`conversation_participants.discord_consent`へ保存する。
+Discord公開不同意は非公開交流を妨げない。配送処理（#28/#74）が完了時と投稿直前に
+双方の現在の公開設定・ギルド別同意・チャンネル設定・安全性を再確認し、配送可否を決める。
+OFF/ブロックによるqueued取消後の残予約解放は#20の終了処理へ引き渡す。

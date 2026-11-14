@@ -46,7 +46,7 @@ BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制�
 | API | `ALTER_ENVIRONMENT`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `WEB_URL`, `CORS_ORIGINS`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `PROFILE_ENCRYPTION_KEY_V1` | DB/OAuth/暗号鍵はRender Secret。`CORS_ORIGINS`はCSVで明示 |
 | Worker | `DATABASE_URL`, `ANTHROPIC_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `JOB_LEASE_SECONDS` | LLMキーをWebに渡さない |
 | Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはRender Secret |
-| Cron | `DATABASE_URL`, `SCHEDULER_BATCH_SIZE` | バッチ上限を設ける |
+| Cron | `ALTER_MODE=live`, `SCHEDULER_ENABLED=true`, `DATABASE_URL`, `SCHEDULER_BATCH_SIZE`, `MAX_DAILY_COST_USD` | 15分ごとに`uv run --package alter-scheduler alter-scheduler`を1回実行。LLMキー不要、既定無効 |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
 
 ### APIの環境別設定（#34、#35 と対応）

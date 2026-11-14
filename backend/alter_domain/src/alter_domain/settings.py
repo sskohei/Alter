@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     # 配置先の環境。production では API の Swagger UI（/docs・/redoc）を出さない（#34）
     alter_environment: Literal["local", "preview", "production"] = "local"
     discord_enabled: bool = False
+    scheduler_enabled: bool = False
+    scheduler_batch_size: int = Field(default=10, ge=1, le=10)
     profile_encryption_key_v1: SecretStr = SecretStr("")
     api_idempotency_hmac_keys: dict[PositiveInt, SecretStr] = Field(default_factory=dict)
     api_idempotency_hmac_active_version: PositiveInt = 1
