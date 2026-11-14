@@ -2,6 +2,7 @@
 
 import copy
 import json
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -69,7 +70,14 @@ def wire_schema(model: type[BaseModel]) -> dict[str, Any]:
 
 
 class SonnetClient:
-    def __init__(self, settings: Settings, http: httpx.Client) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        http: httpx.Client,
+        *,
+        before_request: Callable[[], None] | None = None,
+    ) -> None:
+        self.before_request = before_request
         self.price = model_price()
         self._settings = settings
         self._http = http
@@ -84,6 +92,8 @@ class SonnetClient:
 
     def _post(self, path: str, body: dict[str, Any], *, billable: bool) -> dict[str, Any]:
         self.require_enabled()
+        if self.before_request is not None:
+            self.before_request()
         try:
             response = self._http.post(
                 "https://api.anthropic.com/v1/" + path,

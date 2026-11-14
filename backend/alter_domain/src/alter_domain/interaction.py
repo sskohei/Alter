@@ -21,7 +21,7 @@ def lock_interactions(conn: Connection) -> None:
     lock_budget(conn)
 
 
-def eligible_agents(conn: Connection) -> list[RowMapping]:
+def eligible_agents(conn: Connection, *, active_run: UUID | None = None) -> list[RowMapping]:
     return list(
         conn.execute(
             text(
@@ -40,15 +40,22 @@ def eligible_agents(conn: Connection) -> list[RowMapping]:
                 "and not exists(select 1 from public.deletion_requests d "
                 "where d.profile_id=u.id) "
                 "and not exists(select 1 from public.llm_runs r where r.agent_id=a.id "
-                "and r.status in ('reserved','generating','generated','moderating','unknown')) "
+                "and r.status in ('reserved','generating','generated','moderating','unknown') "
+                "and (cast(:run as uuid) is null or r.id<>:run)) "
                 "order by a.id"
-            )
+            ),
+            {"run": active_run},
         ).mappings()
     )
 
 
 def pair_allowed(
-    conn: Connection, ids: tuple[UUID, UUID], now: datetime, *, conversation: UUID | None = None
+    conn: Connection,
+    ids: tuple[UUID, UUID],
+    now: datetime,
+    *,
+    conversation: UUID | None = None,
+    active_run: UUID | None = None,
 ) -> bool:
     if ids[0] == ids[1]:
         return False
@@ -61,7 +68,7 @@ def pair_allowed(
         {"a": ids[0], "b": ids[1]},
     ).first():
         return False
-    eligible = {row["id"]: row for row in eligible_agents(conn)}
+    eligible = {row["id"]: row for row in eligible_agents(conn, active_run=active_run)}
     for aid in ids:
         if aid not in eligible:
             return False
