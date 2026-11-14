@@ -300,7 +300,7 @@
                 "type": "null"
               }
             ],
-            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002",
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002usage_records \u306e kind='charge' \u306e actual_usd \u306e\u5408\u8a08\u3002queued/running \u306e\u9593\u306f\u78ba\u5b9a\u524d\u3068\u3057\u3066 null\u3001\u7d42\u4e86\u5f8c\u306f\u5408\u8a08\uff08\u8ab2\u91d1\u306a\u3057\u306f 0\uff09\u3002",
             "title": "Cost Usd"
           },
           "id": {
@@ -427,34 +427,6 @@
         "title": "ConversationMessage",
         "type": "object"
       },
-      "ConversationPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ConversationSummary"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Cursor"
-          }
-        },
-        "required": [
-          "items",
-          "next_cursor"
-        ],
-        "title": "ConversationPage",
-        "type": "object"
-      },
       "ConversationSummary": {
         "properties": {
           "cost_usd": {
@@ -467,7 +439,7 @@
                 "type": "null"
               }
             ],
-            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002",
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002usage_records \u306e kind='charge' \u306e actual_usd \u306e\u5408\u8a08\u3002queued/running \u306e\u9593\u306f\u78ba\u5b9a\u524d\u3068\u3057\u3066 null\u3001\u7d42\u4e86\u5f8c\u306f\u5408\u8a08\uff08\u8ab2\u91d1\u306a\u3057\u306f 0\uff09\u3002",
             "title": "Cost Usd"
           },
           "id": {
@@ -618,6 +590,7 @@
       "Notification": {
         "properties": {
           "body": {
+            "description": "\u8868\u793a\u7528\u306e\u6587\u5b57\u5217\u3002\u4f1a\u8a71\u672c\u6587\u3084\u76f8\u624b\u306e\u975e\u516c\u958b\u60c5\u5831\u306f\u542b\u3081\u306a\u3044",
             "title": "Body",
             "type": "string"
           },
@@ -644,6 +617,7 @@
             "type": "string"
           },
           "kind": {
+            "description": "\u73fe\u5728\u306f conversation.completed\u3002\u672a\u77e5\u306e\u7a2e\u985e\u306f\u6c4e\u7528\u8868\u793a\u306b\u3059\u308b",
             "title": "Kind",
             "type": "string"
           },
@@ -670,7 +644,34 @@
         "title": "Notification",
         "type": "object"
       },
-      "NotificationPage": {
+      "Page_ConversationSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ConversationSummary]",
+        "type": "object"
+      },
+      "Page_Notification_": {
         "properties": {
           "items": {
             "items": {
@@ -692,10 +693,9 @@
           }
         },
         "required": [
-          "items",
-          "next_cursor"
+          "items"
         ],
-        "title": "NotificationPage",
+        "title": "Page[Notification]",
         "type": "object"
       },
       "PrivateInfo": {
@@ -2141,24 +2141,8 @@
     },
     "/api/v1/conversations": {
       "get": {
-        "operationId": "preview_list_conversations",
+        "operationId": "list_conversations",
         "parameters": [
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cursor"
-            }
-          },
           {
             "in": "query",
             "name": "limit",
@@ -2170,6 +2154,24 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -2177,7 +2179,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConversationPage"
+                  "$ref": "#/components/schemas/Page_ConversationSummary_"
                 }
               }
             },
@@ -2256,15 +2258,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Conversations"
+        "summary": "\u81ea\u5206\u306e AI \u304c\u53c2\u52a0\u3057\u305f\u4f1a\u8a71\u306e\u4e00\u89a7\uff08\u65b0\u3057\u3044\u9806\uff09",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/conversations/{id}": {
       "get": {
-        "operationId": "preview_get_conversation",
+        "operationId": "get_conversation",
         "parameters": [
           {
             "in": "path",
@@ -2361,10 +2366,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Conversation"
+        "summary": "\u81ea\u5206\u306e AI \u304c\u53c2\u52a0\u3057\u305f\u4f1a\u8a71\u306e\u5168\u6587",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/discord/connection": {
@@ -2462,22 +2470,24 @@
     },
     "/api/v1/notifications": {
       "get": {
-        "operationId": "preview_list_notifications",
+        "operationId": "list_notifications",
         "parameters": [
           {
+            "description": "true \u3067\u672a\u8aad\u3060\u3051\u3001false \u3067\u65e2\u8aad\u3060\u3051",
             "in": "query",
-            "name": "cursor",
+            "name": "unread",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "boolean"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
+              "description": "true \u3067\u672a\u8aad\u3060\u3051\u3001false \u3067\u65e2\u8aad\u3060\u3051",
+              "title": "Unread"
             }
           },
           {
@@ -2494,18 +2504,20 @@
           },
           {
             "in": "query",
-            "name": "unread",
+            "name": "cursor",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "boolean"
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Unread"
+              "title": "Cursor"
             }
           }
         ],
@@ -2514,7 +2526,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NotificationPage"
+                  "$ref": "#/components/schemas/Page_Notification_"
                 }
               }
             },
@@ -2593,15 +2605,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Notifications"
+        "summary": "\u81ea\u5206\u3078\u306e\u901a\u77e5\u306e\u4e00\u89a7\uff08\u65b0\u3057\u3044\u9806\uff09",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/notifications/{id}/read": {
       "patch": {
-        "operationId": "preview_read_notification",
+        "operationId": "read_notification",
         "parameters": [
           {
             "in": "path",
@@ -2698,10 +2713,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Read Notification"
+        "summary": "\u901a\u77e5\u3092\u65e2\u8aad\u306b\u3059\u308b\uff08\u518d\u9001\u3057\u3066\u3082\u6700\u521d\u306e\u65e2\u8aad\u65e5\u6642\u306e\u307e\u307e\uff09",
+        "tags": [
+          "activity"
+        ]
       }
     },
     "/api/v1/users/me": {

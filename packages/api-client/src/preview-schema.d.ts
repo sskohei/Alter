@@ -164,8 +164,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Conversations */
-        get: operations["preview_list_conversations"];
+        /** 自分の AI が参加した会話の一覧（新しい順） */
+        get: operations["list_conversations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -181,8 +181,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Conversation */
-        get: operations["preview_get_conversation"];
+        /** 自分の AI が参加した会話の全文 */
+        get: operations["get_conversation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -215,8 +215,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Notifications */
-        get: operations["preview_list_notifications"];
+        /** 自分への通知の一覧（新しい順） */
+        get: operations["list_notifications"];
         put?: never;
         post?: never;
         delete?: never;
@@ -238,8 +238,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Read Notification */
-        patch: operations["preview_read_notification"];
+        /** 通知を既読にする（再送しても最初の既読日時のまま） */
+        patch: operations["read_notification"];
         trace?: never;
     };
     "/api/v1/users/me": {
@@ -370,7 +370,7 @@ export interface components {
         ConversationDetail: {
             /**
              * Cost Usd
-             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。usage_records の kind='charge' の actual_usd の合計。queued/running の間は確定前として null、終了後は合計（課金なしは 0）。
              */
             cost_usd?: number | null;
             /**
@@ -422,18 +422,11 @@ export interface components {
             /** Turn No */
             turn_no: number;
         };
-        /** ConversationPage */
-        ConversationPage: {
-            /** Items */
-            items: components["schemas"]["ConversationSummary"][];
-            /** Next Cursor */
-            next_cursor: string | null;
-        };
         /** ConversationSummary */
         ConversationSummary: {
             /**
              * Cost Usd
-             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。usage_records の kind='charge' の actual_usd の合計。queued/running の間は確定前として null、終了後は合計（課金なしは 0）。
              */
             cost_usd?: number | null;
             /**
@@ -484,7 +477,10 @@ export interface components {
         };
         /** Notification */
         Notification: {
-            /** Body */
+            /**
+             * Body
+             * @description 表示用の文字列。会話本文や相手の非公開情報は含めない
+             */
             body: string;
             /** Conversation Id */
             conversation_id?: string | null;
@@ -498,17 +494,27 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Kind */
+            /**
+             * Kind
+             * @description 現在は conversation.completed。未知の種類は汎用表示にする
+             */
             kind: string;
             /** Read At */
             read_at: string | null;
         };
-        /** NotificationPage */
-        NotificationPage: {
+        /** Page[ConversationSummary] */
+        Page_ConversationSummary_: {
+            /** Items */
+            items: components["schemas"]["ConversationSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Page[Notification] */
+        Page_Notification_: {
             /** Items */
             items: components["schemas"]["Notification"][];
             /** Next Cursor */
-            next_cursor: string | null;
+            next_cursor?: string | null;
         };
         /** PrivateInfo */
         PrivateInfo: {
@@ -1435,11 +1441,11 @@ export interface operations {
             };
         };
     };
-    preview_list_conversations: {
+    list_conversations: {
         parameters: {
             query?: {
-                cursor?: string | null;
                 limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -1453,7 +1459,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationPage"];
+                    "application/json": components["schemas"]["Page_ConversationSummary_"];
                 };
             };
             /** @description Unauthorized */
@@ -1521,7 +1527,7 @@ export interface operations {
             };
         };
     };
-    preview_get_conversation: {
+    get_conversation: {
         parameters: {
             query?: never;
             header?: never;
@@ -1689,12 +1695,13 @@ export interface operations {
             };
         };
     };
-    preview_list_notifications: {
+    list_notifications: {
         parameters: {
             query?: {
-                cursor?: string | null;
-                limit?: number;
+                /** @description true で未読だけ、false で既読だけ */
                 unread?: boolean | null;
+                limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -1708,7 +1715,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotificationPage"];
+                    "application/json": components["schemas"]["Page_Notification_"];
                 };
             };
             /** @description Unauthorized */
@@ -1776,7 +1783,7 @@ export interface operations {
             };
         };
     };
-    preview_read_notification: {
+    read_notification: {
         parameters: {
             query?: never;
             header?: never;

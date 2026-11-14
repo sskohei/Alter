@@ -77,7 +77,7 @@ export function createMockFetch(
     const request = new Request(input, init);
     const url = new URL(request.url);
     if (url.pathname === "/health") return request.method === "GET" ? success({ status: "ok", service: "api", mode: "mock" }) : mockError(405);
-    if (!/^\/api\/v1\/(?:conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/connection)$/.test(url.pathname) && !["/api/v1/users/me", "/api/v1/agent-icons", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
+    if (!/^\/api\/v1\/(?:conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/connection)$/.test(url.pathname) && !["/api/v1/users/me", "/api/v1/agent-icons", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
     if (["/api/v1/users/me", "/__mock/profiles"].includes(url.pathname) && !(url.pathname === "/api/v1/users/me" ? ["GET", "PATCH"] : ["GET"]).includes(request.method)) return mockError(405);
     if (!/^Bearer \S+$/i.test(request.headers.get("Authorization") ?? "")) return mockError(401);
     if (scenario === "inactive") return mockError(403, "ACCOUNT_INACTIVE");
@@ -193,6 +193,12 @@ export function createMockFetch(
       if (suffix === "/profile/suggest" && request.method === "POST")
         return mockError(503, "SERVICE_UNAVAILABLE");
     }
+    if (url.pathname === `/api/v1/agents/${agent?.id}/settings` && request.method === "GET")
+      return success(agent!.settings ?? {
+        autonomy_enabled: false, discord_publish: false, frequency_per_day: 0,
+        daily_budget_usd: 0, max_session_usd: 0, web_visibility: "participants",
+        updated_at: profile.created_at,
+      });
     const activityResponse = await activity(request);
     if (activityResponse) return activityResponse;
     return mockError(404);

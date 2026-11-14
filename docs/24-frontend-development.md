@@ -5,7 +5,7 @@
 #3（CI）と#7（JWT・共通認可・GET/PATCH `/api/v1/users/me`）はmainへ統合済み。
 実APIの正本はFastAPI/Pydanticで、`pnpm api:generate`により次を再生成する。
 
-- `packages/api-client/openapi.json` / `src/schema.d.ts`: `/health`と本人プロフィールの正式契約。
+- `packages/api-client/openapi.json` / `src/schema.d.ts`: `/health`と本人プロフィール・人格・設定・会話・通知等の正式契約。
 - `packages/api-client/preview.openapi.json` / `src/preview-schema.d.ts`: 同じuserルーター・モデルを再利用し、合成一覧`/__mock/profiles`と人格のpreview契約案を含む開発用契約。本番APIにはマウントしない。
 
 `@alter/api-client`の`createApiClient(baseUrl, fetcher?)`に`authenticatedFetch`を渡すと、
@@ -119,23 +119,43 @@ http://127.0.0.1:3000/login で同意→Google/GitHub→テストOAuthのnormal�
 forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現できる。
 テストAuthはセッションごとに状態を分離し、プロセス停止で消える。実ユーザーの情報を入れない。
 
-## #23 ダッシュボード・会話・通知（Draft）
+## #23 ダッシュボード・会話・通知
 
-依存: #17（PR #46）、#11（Figma未提供）、#21（正式API未提供）。
-`activity_preview.py`に文書を基にしたPydantic案を分離し、既存preview OpenAPI/型へ生成する。
-partner/participantsは`{id,name}`、開始前日時/未生成要約はnull。PR #47のBレビューでこの形に合わせる方針を確認済み。
-Discord連携の読み取りだけはダッシュボードのため#26の契約案を先行する。
+#17と#21の正式APIを利用する。4画面の活動データは`activityApi()`と
+`@alter/api-client`の正式生成型を使う。preview側も会話・通知は正式routerを再利用し、
+独立したPydantic案は保持しない。Mock応答は正式OpenAPIのSchemaで検査する。
+
+ダッシュボードは`GET /agents/me`の後、`GET /agents/{id}/settings`で本人の設定を取得する。
+AIの404だけを未作成として扱い、設定取得の失敗は再試行を案内する。
+Discord読み取りは#26の独立した契約で、取得失敗時もAI・交流・通知を表示する。
+未実装404では「現在利用できません」と表示し、未連携とは判断しない。
 
 一覧・通知・ダッシュボードは30秒、queued/runningの詳細は15秒Polling。
 完了/失敗/停止後は詳細Pollingを止め、非表示タブでは自動取得を控える。
 リクエストの重複を避け、移動・cursor変更時はabort/連番で古い応答を破棄する。
-401/403/404等の失敗で表示データを消去し、所有者変更でクライアント表示を作り直す。
+401/403/404等の取得失敗で表示データを消去し、所有者変更でクライアント表示を作り直す。
 429はBFFのRetry-Afterを引き継ぎ、指定時間（未提供時60秒）まで再取得を止める。
-ページングは不透明cursor、既読は成功時だけ反映し、失敗時は未読のまま再試行可能。
-発言はturn_noのDOM順、生成時刻とAI分身ラベルを表示する。第三者公開は行わない。
+既読は成功時だけ反映し、失敗時は未読のまま再試行可能。成功後に操作ボタンが消える際は
+同じ通知の会話リンク（リンクがなければ通知本体）へフォーカスを移す。
+常設のpolite/atomic領域で最新通知と未読件数を読み上げ、会話本文の自動読み上げはしない。
 
 テストOAuthの`activity`は承認済みAIと合成会話12件、`activity-empty`は空の交流を返す。
-本番FastAPIに業務APIを追加したことや、実認可が完了したことを意味しない。
+PlaywrightはPC/375pxで通知→詳細、ページング、既読失敗からの復帰、15/30秒更新、
+閲覧中404で本文消去、認証切替、Discord障害、未作成、キーボード操作を検証する。
+`tests/db/test_activity_api_db.py::test_generated_web_client_against_live_api`は、
+正式生成TSクライアント→実HTTP FastAPI→使い捨てPostgreSQLを接続し、
+本人会話・本人確定費用・ページング・既読の冪等性・非参加者404を検証する。
+外部Authだけテスト内で差し替え、製品コードに認証迂回は追加しない。
+
+```bash
+# migration適用済みの使い捨てDBにだけ向ける（招待テーブルを空にする）
+ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres \
+ALTER_REQUIRE_DB_TESTS=1 uv run --all-packages pytest tests/db/test_activity_api_db.py
+```
+
+#11のコード上のデザイン仕上げ（ADR-015）と外部OAuth/本番環境の公開受け入れは、
+それぞれ#11/#37で追跡する。#23では既存UIの機能・正式契約接続・PC/mobile操作を完了する。
+
 ## PRレビュー反映（#45）
 
 OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
@@ -160,4 +180,4 @@ Mockの既存ユーザーでの遷移確認だけでは、この受け入れ条�
 ## PRレビュー反映（#47）
 
 `cost_usd`は本人AIの確定費用だけという方針をAPI説明・生成型・一覧/詳細文言に反映した。
-集計対象列と未確定時のnull/0は#21で確定待ち。nullは従来どおり未提供として表示し、0へ変換しない。
+正式な集計は本人AIのcharge.actual_usd。queued/runningはnull（集計中）、終了後の課金なしは0。UIでnullを0へ変換しない。

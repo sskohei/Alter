@@ -98,7 +98,8 @@ JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDI
 
 会話一覧・詳細の`cost_usd`は本人のAIがこの会話で消費した確定費用（USD）だけを返す。
 2体分の合計や相手の利用額を返さない。UIは「自分のAIの確定費用」と表示し、nullを0に補完しない。
-`usage_records`のchargeの集計対象列と、未確定時のnull/0の扱いは#21で正式契約として確定する。
+`usage_records.kind=charge`の`actual_usd`を合計する。queued/runningはnull、終了後の課金なしは0（下記#21）。
+#23の4画面は正式生成クライアントを利用し、previewの会話・通知も正式routerを再利用する。
 
 Issue #8のMockは同じuserルーターとモデルを再利用する。`/__mock/profiles`はページングを試す合成データ専用契約で、本番APIに追加しない。手順は[フロント開発](24-frontend-development.md)を参照。
 
