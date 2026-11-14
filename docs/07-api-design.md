@@ -8,7 +8,7 @@
 
 招待照合はDBの`invitations`・`invitation_identities`を参照する。DB障害・データ不整合・Auth照会障害は503で拒否する。運営専用CLIは共通ドメイン処理を利用し、公開APIに招待管理操作や招待一覧を追加しない（ADR-014）。
 
-#7 は複数のPRに分けて実装する。共通基盤・JWT検証、招待DB・運営専用CLI・招待照合のドメイン処理（`alter_domain.invitations.evaluate_access`）は実装済み。APIの停止/削除・招待の共通認可と`GET/PATCH /users/me`は次のPRで追加する。業務エンドポイントの追加時にPydantic/OpenAPIと生成TypeScriptを同時更新する。
+#7 は複数のPRに分けて実装する。共通基盤・JWT検証、招待DB・運営専用CLI・招待照合のドメイン処理（`alter_domain.invitations.evaluate_access`）は実装済み。APIの停止/削除・招待の共通認可は#15で接続済み。`GET/PATCH /users/me`は残件。業務エンドポイントの追加時にPydantic/OpenAPIと生成TypeScriptを同時更新する。
 
 ## スキーマ（公開API）
 
@@ -73,7 +73,7 @@
 
 ## 開発基盤の運用エンドポイント
 
-上記の業務APIは未実装。`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）のみ提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
+業務APIの実装済み範囲は下段#15/#18/#22を参照。その他は将来契約。`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）は引き続き提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
 
 ## 実装済みの共通基盤（#7 前半）
 

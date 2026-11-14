@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-02。`docs/`が実装契約で、現在は開発用Monorepo雛形とIssue #3のCI・PR品質ゲートを実装済み。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
+更新日: 2026-11-11。`docs/`が実装契約。開発基盤に加え、AI関連のドラフトスタック（#14/#15/#18/#19/#20/#22/#38）を実装した。正式LLM接続・同意設定API・通知接続・本番実測は残件。[依存と実装範囲](docs/24-ai-implementation-stack.md)を参照。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
 
 ## ローカル開発（最初に実行）
 
@@ -60,11 +60,11 @@ uv run --package alter-discord-bot alter-bot     # 既定は無効、正常終�
 uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
-Webの「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIに業務エンドポイントはまだない。
+Webの「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。人格・記憶/関係性APIは`ALTER_MODE=live`とDB/Auth管理照会・有効な招待が必要。通常のmock起動では業務永続化は503となる。
 
 ### Mockと無効化
 
-既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。これは初期接続確認用のMockで、認証や業務APIのMockは後続Issueで契約に合わせて追加する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。これは初期接続確認用のMock。DBを使うWorker/Cron検証は`ALTER_MODE=live,LLM_BACKEND=fake`で可能（実LLM通信なし）。Cronはさらに`SCHEDULER_ENABLED=true`が必要。正式供給元の接続と本人の交流ON設定API（#16）は未実装。
 
 ```bash
 uv run --package alter-worker alter-worker --once
@@ -105,7 +105,7 @@ ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/p
 
 GitHub Actionsの必須チェックは`CI required`。Python/Web/API生成差分/空Supabase migration/secret scanningの検査範囲は[テスト戦略](docs/16-testing-strategy.md)、`MainRule`の承認・保護設定は[Git運用](docs/22-git-workflow.md)を参照。
 
-OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生成し、業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
+OpenAPIの正本はFastAPI/Pydantic。`GET /health`、人格・任意提案（供給元待ちは503）・記憶/関係性APIを生成する。実装済み範囲と将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
 
 ## 読む順序
 
@@ -120,3 +120,9 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生�
 ## MVPの成立条件
 
 招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
+
+## AIの計測
+
+`uv run --package alter-domain alter-ai-metrics --output /tmp/alter-ai-metrics.json`で、
+DATABASE_URLのDBをread-onlyで集計する。本文・個人IDは出力しない。
+[本番計測計画](docs/25-post-mvp-measurement.md)に従い、MVP公開後の実測から改善案を評価する。

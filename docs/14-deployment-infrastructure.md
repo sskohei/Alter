@@ -44,7 +44,7 @@ BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制�
 | Web | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_API_URL` | 公開可。秘密を`NEXT_PUBLIC_`へ置かない |
 | Web server | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | SSRクライアント。公開可能な値だがサーバー設定にも保持 |
 | API | `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `WEB_URL`, `CORS_ORIGINS`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `PROFILE_ENCRYPTION_KEY_V1` | DB/OAuth/暗号鍵はRender Secret。`CORS_ORIGINS`はCSVで明示 |
-| Worker | `DATABASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `JOB_LEASE_SECONDS` | LLMキーをWebに渡さない |
+| Worker | `DATABASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `LLM_BACKEND` | LLMキーをWebに渡さない |
 | Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはRender Secret |
 | Cron | `DATABASE_URL`, `SCHEDULER_BATCH_SIZE` | バッチ上限を設ける |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
@@ -66,3 +66,7 @@ BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制�
 5. rollbackはアプリを前版へ戻す。破壊的DDLは別リリースで実行する。DBバックアップ復元手順を定期演習する。
 
 費用と無料枠は [費用試算](20-cost-estimation.md)。
+
+AIドラフト実装ではWorker leaseは固定90秒、25秒heartbeat。LLM_BACKENDは既定disabled、
+fakeは開発DB検証専用。SchedulerはSCHEDULER_ENABLEDも既定false。
+正式供給元・同意設定API・通知/Discord consumerの接続条件は[依存一覧](24-ai-implementation-stack.md)を参照。
