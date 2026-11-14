@@ -200,14 +200,21 @@ class SafetyModerator(BaselineModerator):
     """Local input/output policy, followed by an independent model review in execution.
 
     It is a conservative screen, not a claim to detect every harmful sentence.
+    Representative inputs and the expected verdicts live in ``evaluations/injection/cases.json``
+    (#32). Cases this screen intentionally lets through are left to the independent review.
     """
 
     _injection = re.compile(
-        r"ignore\s+(?:all\s+)?(?:previous|system)\s+instructions|"
-        r"reveal\s+(?:all\s+)?(?:secrets|system\s+prompt)|"
-        r"(?:指示|命令).{0,8}(?:無視|上書き)|(?:秘密|システムプロンプト).{0,8}(?:開示|教え|表示)|"
+        r"(?:ignore|disregard|forget|override)\s*(?:all\s*)?(?:of\s*)?(?:the\s*)?"
+        r"(?:previous|prior|above|earlier|system|your)\s*(?:instructions|rules|prompts?)|"
+        r"(?:reveal|print|show|repeat)\s*(?:all\s*)?(?:your\s*|the\s*)?"
+        r"(?:secrets|system\s*prompt)|"
+        r"(?:指示|命令).{0,8}(?:無視|上書き)|(?:これまで|今まで|以前|上|最初)の(?:指示|命令).{0,6}忘れ|"
+        r"(?:秘密|システムプロンプト).{0,8}(?:開示|教え|表示)|"
+        r"(?:制限|フィルター?)を.{0,4}(?:解除|無効|外)|開発者モード.{0,4}(?:切り替|有効|オン)|"
+        r"\\?\"role\\?\"\s*:\s*\\?\"(?:system|developer)|</?\s*(?:system|developer)\s*>|"
         r"(?:殺害|殺す|自殺|自傷|爆弾|児童ポルノ).{0,15}(?:方法|手順|作り方)|"
-        r"(?:how\s+to\s+(?:kill|build\s+a\s+bomb)|child\s+porn)",
+        r"(?:how\s*to\s*(?:kill(?!\s*time)|build\s*a\s*bomb)|child\s*porn)",
         re.IGNORECASE,
     )
     _token = re.compile(
@@ -219,9 +226,15 @@ class SafetyModerator(BaselineModerator):
     def allowed(self, text: str) -> bool:
         import unicodedata
 
-        normalized = unicodedata.normalize("NFKC", text)
+        # 幅の違い（NFKC）とゼロ幅文字などの見えない文字を除いてから見る。注入の検査は
+        # 「i g n o r e」のように空白で区切った書き方も、空白を詰めた形で確かめる
+        normalized = "".join(
+            ch for ch in unicodedata.normalize("NFKC", text) if unicodedata.category(ch) != "Cf"
+        )
+        compact = "".join(normalized.split())
         return (
             super().allowed(normalized)
             and self._injection.search(normalized) is None
+            and self._injection.search(compact) is None
             and self._token.search(normalized) is None
         )

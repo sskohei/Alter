@@ -57,7 +57,7 @@ count_tokens＋余裕1024が収まるまで古い引用記憶・履歴だけを�
 収まらなければ生成せず422。型・出力制約・モデルID・usage・cache未使用を検証する。
 
 `llm_execution.LLMExecution`が会話/人格提案に共通の予約・生成・独立安全性判定・課金を担う。
-入力と出力をNFKC正規化したローカルルールでPII/トークン/既知秘密/代表的な注入指示を検査する。
+入力と出力をNFKC正規化し、ゼロ幅文字などの見えない文字を除いたローカルルールでPII/トークン/既知秘密/代表的な注入指示を検査する（空白で区切った書き方も詰めて検査する）。止める文・止めない文の固定評価セットは`evaluations/injection/cases.json`（#32、[テスト](16-testing-strategy.md)）。
 生成後は別のsystem境界でSonnetによる`allowed:bool`の独立判定を必須にする。
 判定はinput512/output16、余裕128、effort low / `between_tools`（Sonnet 5.5はdisabledを拒否）。
 判定が枠に収まらない・不正schema・拒否なら返却しない。ローカルルールだけで公開しない。

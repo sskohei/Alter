@@ -576,3 +576,72 @@ def test_orphaned_job_does_not_block_valid_conversation(engine, ai_pair):
     finally:
         with engine.begin() as conn:
             conn.execute(text("delete from public.background_jobs where id=:id"), {"id": orphan})
+
+
+@pytest.mark.parametrize("fail_at", [1, 3])
+def test_deletion_request_during_retry_wait_stops_the_resumed_conversation(
+    engine: Engine, ai_pair: list[UUID], fail_at: int
+):
+    """#32 削除と再試行: 一時障害で再試行待ちの間に削除要求が来たら、再開しても LLM を呼ばない。"""
+    from alter_domain.account_deletion import request_deletion
+
+    now = queued(engine)
+
+    class Flaky(PricedFake):
+        calls = 0
+
+        def generate(self, messages):
+            self.calls += 1
+            if self.calls == fail_at:
+                raise TemporaryLLMError(1)
+            return super().generate(messages)
+
+    def counts(conn):
+        return conn.execute(
+            text(
+                "select (select count(*) from public.messages), j.status from "
+                "public.background_jobs j join public.conversations c on c.job_id = j.id"
+            )
+        ).one()
+
+    client = Flaky()
+    run_one(engine, client, clock=lambda: now)
+    with engine.begin() as conn:
+        saved, status = counts(conn)
+        assert (saved, status) == (fail_at - 1, "retry_wait")
+        owner = conn.execute(
+            text("select owner_id from public.agents where id = :a"), {"a": ai_pair[0]}
+        ).scalar_one()
+    try:
+        with engine.begin() as conn:
+            request_deletion(conn, owner)
+        calls = client.calls
+        # 再試行の時刻を過ぎて Worker が取り直しても、発言前の再確認で止まる
+        while run_one(engine, client, clock=lambda: now + timedelta(seconds=45)):
+            pass
+        assert client.calls == calls
+        with engine.begin() as conn:
+            saved, status = counts(conn)
+            assert saved == fail_at - 1
+            assert status not in {"queued", "retry_wait", "running"}
+            charged = conn.execute(
+                text(
+                    "select coalesce(sum(actual_usd), 0) from public.usage_records "
+                    "where kind = 'charge'"
+                )
+            ).scalar_one()
+            # 予約は残らず、使った分だけが費用になる
+            assert exposure(conn) == charged
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "delete from public.background_jobs where kind = 'account.purge' and "
+                    "payload ->> 'deletion_request_id' in (select id::text from "
+                    "public.deletion_requests where profile_id = :o)"
+                ),
+                {"o": owner},
+            )
+            conn.execute(
+                text("delete from public.deletion_requests where profile_id = :o"), {"o": owner}
+            )

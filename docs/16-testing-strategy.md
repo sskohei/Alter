@@ -71,3 +71,16 @@ Sonnet adapterはHTTP Mockで生成/独立判定とcount_tokens後の停止を�
 既存`test_memory_api_db.py`の正式API認可・再送・挿入ガードも維持する。
 `memory_suppression.test.sql`は3表のRLS・ポリシー0件・直接CRUDと全テーブル権限の拒否、
 AI／会話CASCADE・無関係な記録の保持・パージtriggerの権限を検証する。
+
+## 競合と注入文の固定評価セット（Issue #32）
+
+同時に起きる操作の組み合わせは、次のテストで確かめる。どれも実PostgreSQLで、2本の接続（またはスレッド）を実際に重ねる。
+
+| 競合 | 確かめること | テスト |
+|---|---|---|
+| 公開の撤回と投稿 | 公開OFF・ブロック・連携解除・DM OFFとBotの取り出しが重なっても行き詰まらない。撤回が先なら取り出さずに`cancelled`、取り出しが先なら`sending`の行は送信を続けて結果を記録でき、撤回は残りの`pending`だけを取り消す | `tests/db/test_discord_delivery_db.py`（`test_withdrawal_first_wins_over_claim`・`test_claim_first_keeps_sending_and_withdrawal_waits`）、`tests/db/test_discord_commands_db.py`（投稿先の変更・連携解除と公開の操作） |
+| 停止とLLM | 生成中・独立レビュー中に停止・同意の撤回・人格の変更・リース切れが起きたら、出力を保存せず、呼び出した分だけ課金して次を呼ばない | `tests/db/test_conversation_db.py`（`test_no_more_calls_after_unknown_stop_consent_or_unsafe`・`test_changes_during_generation_block_moderation_and_persistence`・`test_revocation_during_independent_review_discards_output_and_charges_both_calls`・`test_lease_reclaimed_during_provider_call_rejects_stale_output_but_records_cost`）、`tests/db/test_agent_api_db.py`（提案の生成中の失効） |
+| 削除と再試行 | 一時障害で再試行待ちの会話に削除要求が来たら、再開してもLLMを呼ばず、予約を残さない。パージは未確定のLLM呼び出し・送信中の投稿・取り出し中のジョブを待つ | `tests/db/test_conversation_db.py`（`test_deletion_request_during_retry_wait_stops_the_resumed_conversation`）、`tests/db/test_account_purge_db.py`、`tests/db/test_deletion_api_db.py`（同時の削除要求で1件） |
+| 並行予算予約 | 同時の予約が全体の上限と会話の上限を超えない。同時のcronでも予約は1件。同時の提案は1回だけ課金する | `tests/db/test_budget_db.py`、`tests/db/test_scheduling_db.py`、`tests/db/test_agent_api_db.py`（`test_parallel_suggestions_allow_only_one_paid_execution`） |
+
+注入文の固定評価セットは`evaluations/injection/cases.json`に置き、`tests/test_injection_eval.py`が外部通信なしで毎回確かめる。各文に、入出力のローカル検査（`SafetyModerator`）で止める`block`か、止めない`allow`かを決めておく。`block`の文は、人格・相手の発言・記憶・要約・提案の回答のどの入口から入ってもLLMを呼ぶ前に止まり、モデルが従ってしまった場合の出力も止まること、`allow`の文は止めすぎないこと（普通の会話の誤検知の回帰）、どの入口でもsystem指示が変わらないことを確かめる。役割の乗っ取りや個人情報の推測の依頼のように、言い回しが多様でローカルでは誤検知が増えるものは`category: model`として、system指示と独立レビューに任せる理由を残す。モデルを含めた実際の判定は、課金を伴うので#37の受け入れで別に評価する。
