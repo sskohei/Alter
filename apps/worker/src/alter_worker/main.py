@@ -6,6 +6,7 @@ import threading
 import httpx
 from alter_domain.conversation import run_one
 from alter_domain.db import create_db_engine
+from alter_domain.memory import enrich_pending
 from alter_domain.runtime import run_mock_process
 from alter_domain.settings import Settings
 from alter_domain.sonnet import SonnetClient
@@ -36,13 +37,20 @@ def main() -> None:
         engine = create_db_engine(settings)
         try:
             while not stopped.is_set():
+                forbidden = (settings.anthropic_api_key.get_secret_value(),)
+                # Drain committed completion events even after a previous Worker crash.
+                enriched = enrich_pending(engine, limit=1, forbidden=forbidden)
+                if args.once and enriched:
+                    return
                 processed = run_one(
                     engine,
                     client,
                     stopped=stopped,
                     global_limit=settings.max_daily_cost_usd,
-                    forbidden=(settings.anthropic_api_key.get_secret_value(),),
+                    forbidden=forbidden,
                 )
+                if not stopped.is_set():
+                    enrich_pending(engine, limit=1, forbidden=forbidden)
                 if args.once:
                     return
                 if not processed:
