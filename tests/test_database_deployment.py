@@ -40,3 +40,35 @@ def test_probe_accepts_matching_tls_pooler():
         "postgres?sslmode=verify-full&sslrootcert=/ca",
         "ref",
     )
+
+
+@pytest.mark.parametrize("tls", [True, False])
+def test_probe_uses_client_tls_instead_of_pooler_upstream(tls):
+    from unittest.mock import MagicMock
+
+    probe = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/check_supabase.py"))[
+        "check"
+    ]
+    engine = MagicMock()
+    conn = engine.connect.return_value.__enter__.return_value
+    conn.connection.driver_connection.pgconn.ssl_in_use = tls
+    conn.scalar.return_value = False  # Pooler-to-DB TLS is a different connection.
+    conn.scalars.return_value = {
+        p.name.split("_", 1)[0]
+        for p in Path(__file__).resolve().parents[1].joinpath("supabase/migrations").glob("*.sql")
+    }
+    http = MagicMock()
+    http.Client.return_value.__enter__.return_value.get.return_value.json.return_value = {
+        "keys": [{"kty": "EC"}]
+    }
+    with patch.dict(probe.__globals__, create_engine=MagicMock(return_value=engine), httpx=http):
+        url = (
+            "postgresql+psycopg://postgres.ref:secret@aws-0.pooler.supabase.com:6543/"
+            "postgres?sslmode=verify-full&sslrootcert=/ca"
+        )
+        if tls:
+            probe(url, "ref")
+        else:
+            with pytest.raises(ValueError, match="TLS required"):
+                probe(url, "ref")
+    engine.dispose.assert_called_once()
