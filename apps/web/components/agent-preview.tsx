@@ -19,7 +19,7 @@ export function AgentPreview({
                 <span className="diff-label">変更後</span>
               </>
             )}
-            {values[field] || "未入力"}
+            <span className={previous ? "diff-new" : undefined}>{values[field] || "未入力"}</span>
           </dd>
         </div>
       ))}

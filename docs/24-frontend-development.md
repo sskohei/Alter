@@ -156,7 +156,7 @@ ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/p
 ALTER_REQUIRE_DB_TESTS=1 uv run --all-packages pytest tests/db/test_activity_api_db.py
 ```
 
-#11のコード上のデザイン仕上げ（ADR-015）と外部OAuth/本番環境の公開受け入れは、
+#11のコード上のデザイン仕上げ（ADR-016）と外部OAuth/本番環境の公開受け入れは、
 それぞれ#11/#37で追跡する。#23では既存UIの機能・正式契約接続・PC/mobile操作を完了する。
 
 ## #37 MVP受け入れ
@@ -253,7 +253,7 @@ previewは正式routerを再利用し、独立した記憶/関係性モデルは
 出典CASCADE削除、削除再送、同じ出典/キーの再投入抑止、関係再集計、ブロックを実DBで検証する。
 正式TSクライアント→実HTTP FastAPI→PostgreSQLの接続も確認する。外部Authだけテスト内で差し替える。
 PlaywrightはPC/375px/320px、削除失敗/復元/永続化、出典の404、ページング、認証切替を検査する。
-#11のコード上のデザイン仕上げ（ADR-015）、#37の実環境公開受け入れは各Issueで継続する。
+#11のコード上のデザイン仕上げ（ADR-016）、#37の実環境公開受け入れは各Issueで継続する。
 
 ## #31 アカウント設定・削除状況
 

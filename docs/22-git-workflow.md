@@ -47,7 +47,7 @@ git push -u origin feature/12-conversation-api
 
 ## Pull Request
 
-PRのベースは`main`。下書きPRを早めに開き、完了時にReady for reviewへする。本文にはIssue、目的、主な変更、受け入れ条件、実行したテストと結果、未検証事項を記載する。UI変更はPC/mobileの画像かFigmaリンク、API変更はOpenAPI差分、DB変更はmigrationと戻し方を添える。原則1〜2日でレビュー可能な大きさにし、機能追加と無関係な整形を混ぜない。
+PRのベースは`main`。下書きPRを早めに開き、完了時にReady for reviewへする。本文にはIssue、目的、主な変更、受け入れ条件、実行したテストと結果、未検証事項を記載する。UI変更はPC/mobileの画像、API変更はOpenAPI差分、DB変更はmigrationと戻し方を添える。原則1〜2日でレビュー可能な大きさにし、機能追加と無関係な整形を混ぜない。
 
 マージ条件はCI成功と作成者以外1名の承認。権限・公開・削除・費用上限はフロント/バック両方の視点で確認する。GitHubのブランチ保護で`main`への直接push、force push、未承認マージを禁止する。マージ方式は**Squash and merge**、マージ後は作業ブランチを削除する。
 
@@ -70,7 +70,7 @@ git push
 
 ## Issueと変更順
 
-Issueには主担当、目的、受け入れ条件、依存Issue、影響するAPI/DB/Figmaを記す。API契約やDB migrationを先に小さなPRで確定し、フロントは同じ契約のMockで並行実装する。破壊的なDB変更は、追加→アプリ移行→旧列削除を別PR・別デプロイで進める。仕様判断が変わるPRでは [ADR](decisions/architecture-decisions.md) と関連する仕様書を同時に更新する。
+Issueには主担当、目的、受け入れ条件、依存Issue、影響するAPI/DB/デザインを記す。API契約やDB migrationを先に小さなPRで確定し、フロントは同じ契約のMockで並行実装する。破壊的なDB変更は、追加→アプリ移行→旧列削除を別PR・別デプロイで進める。仕様判断が変わるPRでは [ADR](decisions/architecture-decisions.md) と関連する仕様書を同時に更新する。
 
 ## GitHub設定と必須チェック（Issue #3）
 

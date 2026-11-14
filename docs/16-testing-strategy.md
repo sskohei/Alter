@@ -9,7 +9,7 @@
 | Worker | pytest + 偽LLM | 8ターン/時間/予算、注入文、出力不正、一時障害、重複実行、停止直後 |
 | Scheduler | 固定時刻・DB統合 | 同時cronで予約1件、ブロック/未同意除外、日次上限 |
 | Discord | discord.py境界のMock | 連携ID解決、管理者権限、投稿条件、429、送信結果不明 |
-| Design | Figmaレビュー + axe + 手動 | コントラスト、キーボード順、スクリーンリーダー、PC/mobile整合 |
+| Design | PRの画面レビュー（PC/mobile画像・Preview）+ axe + 手動 | コントラスト、キーボード順、スクリーンリーダー、PC/mobile整合 |
 
 CIは本番LLMや本番Discordへアクセスしない。会話文章の完全一致ではなく、発言者順・schema・上限・禁則・保存/配信条件を検査する。プロンプトインジェクションの固定データセットを持ち、相手発言から秘密開示命令を実行しないことを確認する。DB統合テストはmigrationを空DBに適用して行い、RLSとFK/UNIQUEを検証する。OAuthの外部実接続、手元PC→SupabaseのTLS/プーラー接続と公開HTTPS経路→手元PC APIの疎通、Discord権限はステージングで最終確認する。
 

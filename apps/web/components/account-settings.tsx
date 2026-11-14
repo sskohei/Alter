@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useRef, useState } from "react";
+import { AlterMark } from "./landing/alter-logo";
 import { useRouter } from "next/navigation";
 import { ApiError, unwrap, type components } from "@alter/api-client";
 import { activityApi as browserApi } from "../lib/api-browser";
@@ -140,7 +141,9 @@ export function AccountSettings({
       )}
       {message && <p role="status">{message}</p>}
       {retry.seconds > 0 && <p role="status">あと{retry.seconds}秒後に再試行できます。</p>}
-      <section className="card">
+      <section className="card passport">
+        <span className="passport-face" aria-hidden="true"><AlterMark /></span>
+        <p className="passport-k" aria-hidden="true">ALTER ID · INVITED MEMBER</p>
         <h2>表示名</h2>
         <p>保存済み: {savedName}</p>
         <form
@@ -206,7 +209,7 @@ export function AccountSettings({
         <h2>ログアウト</h2>
         <LogoutButton />
       </section>
-      <section className="card">
+      <section className="card danger-zone">
         <h2>アカウント削除</h2>
         <p>
           AIを直ちに停止し、関連する共有会話を相手の画面からも非表示にします。関連記憶・通知も削除し、アプリの個人データは原則30日以内に削除します。
