@@ -21,7 +21,7 @@ docker-compose.yml        手元PCのプロセス管理候補（未実装、#34�
 
 `uv`でPythonの共通パッケージをworkspace依存にし、手元PCの各Pythonプロセスはrepo rootと同じlockfileを使う。`pnpm`もlockfileをrootに置く。ローカルはSupabase CLIでDB/Authを起動し、`uv run`でAPI/Worker/Bot（Botはテスト用ギルド）、`pnpm --filter web dev`でWebを起動する。この開発環境のローカルSupabaseと、MVP運用時のクラウドSupabaseを区別する。MVP運用ではDBをPC上に追加せず、Supabase Freeの環境別プロジェクトへ接続する。OSサービス管理またはDocker Composeによる起動/再起動の具体化は #34 で行う。CIではRuff、mypy、pytest、ESLint、TypeScript、Vitest、Playwrightの必要ゲートを実行する。
 
-Issue #2で開発用雛形を配置済み。固定バージョン、初回設定、起動・停止・reset、Mockの制約は[README](../README.md#ローカル開発最初に実行)を参照。認証/人格/活動等のAPIは実装済み。Scheduler/Workerの本番処理と実配置の受け入れは後続Issueで継続する。本節のPC起動設定・HTTPS公開経路・定期実行・バックアップは配置契約であり、本変更では実装/設定していない。
+Issue #2で開発用雛形を配置済み。固定バージョン、初回設定、起動・停止・reset、Mockの制約は[README](../README.md#ローカル開発最初に実行)を参照。認証/人格/活動等のAPIは実装済み。SchedulerのDB交流予約は #19 で実装済み。Workerの本番処理と実配置の受け入れは後続Issueで継続する。本節のPC起動設定・HTTPS公開経路・定期実行・バックアップは配置契約であり、本変更では実装/設定していない。
 
 ## 配置と起動
 
@@ -56,7 +56,7 @@ repo rootで`uv sync --all-packages --locked`を行い、専用の実行ユー�
 
 OSのサービス管理（Linuxならsystemd等）でAPI・Worker・Bot・HTTPS中継を個別に管理し、起動順・作業ディレクトリ・環境ファイル・終了シグナル・再起動回数の制限・本文/秘密を含めないログを設定する。自動起動と自動再起動を検証し、PCのスリープを稼働時間中は無効にする。OSや運用スクリプトの具体化は #34 で行う。
 
-SchedulerはOS側のタイムゾーンをUTCに明示した15分定期実行とし、repo rootで`uv run --package alter-scheduler alter-scheduler`を1回だけ実行する。OSロック等で前回の実行中は次の起動を抑止し、DBの一意制約も併用する。停止中に逃した全スロットを復帰時に再生せず、現在の枠から再開する。
+Schedulerは`ALTER_MODE=live`かつ`SCHEDULER_ENABLED=true`でDB交流予約を行う（既定無効、LLMキー不要）。OS側のタイムゾーンをUTCに明示した15分定期実行とし、repo rootで`uv run --package alter-scheduler alter-scheduler`を1回だけ実行する。OSロック等で前回の実行中は次の起動を抑止し、DBの一意制約も併用する。停止中に逃した全スロットを復帰時に再生せず、現在の枠から再開する。
 
 計画停止では定期実行を止め、Worker/Botが新規claimしないようにして進行中処理を制限時間内に終了させ、APIと中継を停止する。強制停止後もジョブや予約を手動で一括削除しない。復旧では時刻同期・回線・DB接続・migration版を確認し、失効/削除要求と課金/投稿の結果不明を照合する。失効leaseはDBジョブの規則で回収し、投稿結果不明や課金不明を自動再送/再課金/予約解放しない。確認後にAPI→Worker→Bot→定期実行を再開する。
 
@@ -73,7 +73,7 @@ Supabase Freeでマネージド自動バックアップは利用できる前提�
 | API | `ALTER_ENVIRONMENT`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `WEB_URL`, `CORS_ORIGINS`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `PROFILE_ENCRYPTION_KEY_V1` | DB/OAuth/暗号鍵はPCのAPI専用環境ファイル/OS秘密管理。`CORS_ORIGINS`はCSVで明示 |
 | Worker | `DATABASE_URL`, `ANTHROPIC_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `JOB_LEASE_SECONDS` | LLMキーをWebに渡さない |
 | Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはPCのBot専用環境ファイル/OS秘密管理 |
-| Cron | `DATABASE_URL`, `SCHEDULER_BATCH_SIZE` | バッチ上限を設ける |
+| Scheduler（OS定期実行） | `ALTER_MODE=live`, `SCHEDULER_ENABLED=true`, `DATABASE_URL`, `SCHEDULER_BATCH_SIZE`, `MAX_DAILY_COST_USD` | 15分ごとに`uv run --package alter-scheduler alter-scheduler`を1回実行。LLMキー不要、既定無効 |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
 
 ### APIの環境別設定（#34、#35 と対応）

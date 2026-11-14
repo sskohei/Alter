@@ -73,7 +73,7 @@ Webの`/development`の「APIの接続を確認」で生成TypeScriptクライ�
 
 既定の`ALTER_MODE=mock`ではWorker/Cron/BotのLLM・Discord処理は合成動作となる。APIの`/health`とWebはSupabase停止中でも起動確認できる。本人プロフィールAPI（`GET/PATCH /api/v1/users/me`）はmockモードではJWT検証を通過しても共通認可処理で503 `SERVICE_UNAVAILABLE`を返し、招待確認・DB接続へ進まない。
 
-本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Workerの`live`処理は未実装なので明示的にエラー終了する。Cronは`SCHEDULER_ENABLED=true`でDBへの交流予約を1回実行する（既定無効）。
 
 ```bash
 uv run --package alter-worker alter-worker --once
@@ -156,3 +156,12 @@ APIサーバーだけに`ALTER_MODE=live`、`LLM_ENABLED=true`、`ANTHROPIC_API_
 既定は無効。Web/CIへ実キーを渡さない。外部テストはMock。
 生成と独立安全判定を事前予約し、UTC日次3回・AI日次/会話/全体の費用上限を検査する。
 課金結果不明は予約を保持して追加実行を停止する。[実行契約](docs/08-ai-agent-architecture.md)を参照。
+
+
+## 自律交流Scheduler（#19）
+
+`ALTER_MODE=live SCHEDULER_ENABLED=true uv run --package alter-scheduler alter-scheduler`
+で同意・枠・予算内のペアをDBへ予約し、終了する。LLM通信やAPIキーは不要。
+Render CronはUTCで15分ごと。選定seed、承認版、双方の費用予約を保存し、
+同時起動の重複予約を防ぐ。詳細は[交流契約](docs/09-autonomous-interaction.md)。
+会話生成/終了時の精算はWorker（#20）、本番配備は#34で行う。

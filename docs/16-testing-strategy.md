@@ -46,3 +46,12 @@ migration検査は使い捨てのCI環境向け。`db reset`はローカルDBを
 - Worker/Scheduler/Discord: 偽LLM・固定時刻・通信MockとDBを組み合わせ、予算・停止・同時実行・再試行を検査。
 
 2026-11-02時点でGitHub標準secret scanning / push protectionの有効化APIは`422: Secret scanning is not available for this repository`となった。Gitleaksを全PRの必須CIに含めて代替する。これはpush前のブロックを提供しないため、秘密を発見した場合は直ちに失効・再発行し、履歴やログに残った値も対処する。標準機能が利用可能になった時点で追加有効化する。
+
+
+Scheduler（#19）は`tests/test_scheduling.py`と`tests/db/test_scheduling_db.py`で検証する。
+UTC slot、seed再現性、mock/無効時のDB未接続、liveの1回実行/終了/障害伝播、
+同時Cronの同ペア1予約、異なるペアの全体費用競合、予算不足の原子的rollback/次候補、
+承認/双方ON/削除/招待/片側ブロック/日次枠/同時1会話/未確定LLM実行、
+採用モデルの双方費用予約と承認版スナップショット、Discord不同意での非公開交流、
+双方/片側のDiscord公開同意スナップショット、APIとSchedulerの競合時のロック順を含む。
+DBテストは使い捨てのローカルSupabaseでのみ実行し、外部LLM/Discordには接続しない。
