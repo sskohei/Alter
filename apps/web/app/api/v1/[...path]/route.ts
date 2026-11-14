@@ -13,7 +13,7 @@ async function forward(
   const pathname = path.join("/");
   // Fixed allowlist prevents using this route as an arbitrary authenticated proxy.
   if (
-    !/^(users\/me(?:\/deletion)?|preferences|memories(?:\/[a-f\d-]{36})?|relationships|agent-icons|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds)|agents(?:\/me|\/[a-f\d-]{36}(?:\/blocks\/[a-f\d-]{36}|\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?)$/.test(
+    !/^(users\/me(?:\/deletion)?|preferences|memories(?:\/[a-f\d-]{36})?|relationships|agent-icons|conversations(?:\/(?:start|[a-f\d-]{36}))?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds)|agents(?:\/me|\/[a-f\d-]{36}(?:\/blocks\/[a-f\d-]{36}|\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?)$/.test(
       pathname,
     )
   )

@@ -99,3 +99,76 @@ probeはpsycopgの実接続`ssl_in_use`と設定上のverify-fullを確認する
 - Vercel上でのログイン後SSR/BFF→API、本人/他人の認可、実会話生成・Discord配送は未実施。
 - 検証: Ruff/mypy、Python全体385 passed/291 DB skipped、追加TLS回帰2件、deployment 81件、
   API再生成差分なし、TypeScript、ローカルWeb build、全履歴Gitleaks。
+
+
+## Web/APIをlocalhostで見せるデモ（#89）
+
+招待済み3人のクラウドSupabaseを引き続き使用し、Web/APIだけを手元PCで起動できる。
+SupabaseのRedirect URLsへ`http://localhost:3000/**`を追加し、Google/GitHubのcallbackは
+既存クラウドSupabaseの`/auth/v1/callback`を使う。Webはlocalhostで再ログインする。
+
+Webの`apps/web/.env.local`に既存Supabaseの公開URL/キー、`NEXT_PUBLIC_SITE_URL=http://localhost:3000`、
+`API_URL`/`NEXT_PUBLIC_API_URL=http://localhost:8000`を設定する。
+WebのLLM表示名/データ方針URLも従来どおり設定する。
+APIのroot `.env`は既存DB・Auth・暗号鍵/HMAC鍵・確定済み同意文面版を引き継ぎ、
+`ALTER_MODE=live`、`ALTER_ENVIRONMENT=local`、`CORS_ORIGINS=http://localhost:3000`、
+`DEMO_MANUAL_INTERACTIONS_ENABLED=true`を設定する。秘密はGitへ入れない。
+root `.env`を置くこのcheckoutでは、root `.env`を禁止する`run_demo.py`と併用しない。
+
+```bash
+# APIとWebは別ターミナル。Workerは独立して起動する。
+uv run --package alter-api uvicorn alter_api.main:app --host 127.0.0.1 --port 8000 --no-access-log
+pnpm --filter web exec next dev --hostname 127.0.0.1 --port 3000
+```
+
+WorkerにはAPI用の管理鍵を渡さず、DB・live/LLM有効化・LLMキー・費用上限だけの環境を渡す。
+Workerは`uv run --package alter-worker alter-worker --env-file ~/.config/alter/demo/local-worker.env`で起動する。
+`--env-file`で指定した専用ファイルだけを読み、root `.env`を読まない。
+同ファイルは600、`ALTER_MODE`/`LLM_ENABLED`/`DATABASE_URL`/`ANTHROPIC_API_KEY`/`MAX_DAILY_COST_USD`
+（必要ならDBプール設定）だけを設定し、親シェルにもAPI用の管理鍵をexportしない。Schedulerは手動開始のためには不要。
+「交流」または「交流設定」で開始し、会話画面でqueued/runningから完了まで確認する。
+進行中は2秒ごとに更新し、終了時はポーリングを止める。回数制限は手動開始だけ除外し、
+費用上限と双方の同意を維持する。AIの日次予算・運営全体上限へ達したら追加予約はできない。
+
+2026-11-14: クラウドDBへ`20261114150000_account_purge.sql`をトランザクションで適用し、
+migration履歴とreadinessの一致を確認。public/Auth/Storage/migration履歴の事前dumpを
+repo外へ暗号化保存し、復号一致を確認した。同じPC内保存であり別媒体復元は未検証。
+追加した手動開始は使い捨てDBとFakeLLMで検証し、参加者の実会話は自動テストで生成しない。
+
+
+#89の検証: Python非DB 417件、手動開始/予約/Workerの使い捨てDBテスト、Web単体113件、
+PC/375pxの手動開始・既存交流設定/履歴E2E36件、Ruff/mypy/ESLint/TypeScript/buildが成功。
+実クラウドではmigration適用後の`/ready=200`と未認証手動開始`401`を確認。
+有料LLMの実生成は自動実行していない。画面は[PC](images/frontend-manual-interaction/desktop.png)・
+[mobile](images/frontend-manual-interaction/mobile.png)を参照（合成データ）。
+
+
+### クラウドDB往復による返信の遅延（#89 / PR #90）
+
+2026-11-14の実会話で、1発言保存後に2発言目の公開前確認が5分制限へ達した。
+Worker停止や未送信ではなく、LLM応答は成功していた。手元PCからDBの1往復は約0.3秒で、
+多数の小さいSQLと重複した検証が時間を使っていた。
+
+招待→profiles→agents→settings→予算のロック順をDB内の1呼出にまとめ、Workerのlease・承認版・
+有効招待・削除・ブロック・同時会話・費用の確認を1つのスナップショットから取得する。
+記憶/要約と削除抑止もまとめて読み、データをキャッシュして再検証を省略することはしない。
+実Sonnet adapterでは、token countを含む各外部送信の直前に完全な確認を行い、
+phase記録だけのための重複確認/トランザクションを避ける。保存前にも完全確認を維持する。
+送信直前の拒否は未送信として扱い、課金結果不明と混同しない。
+
+5分・8発言・同意・安全判定・費用上限は維持。終端になった会話を自動で再送/再課金しない。
+修正後はAPI/Workerを再起動し、利用者が「交流を開始する」から新しい会話を予約する。
+外部送信なしの実adapter HTTP Mockで、8発言・16回の生成/独立判定と全送信前guardを検証する。
+回帰テストはSQL/BEGIN/COMMIT等の往復数に上限を設け、実測RTTでDB時間だけが5分を超えることを防ぐ。
+
+
+### 自己紹介・同じ質問の反復（2026-11-15、#93）
+
+23:47の会話を確認し、7発言すべてで自己紹介を繰り返して質問への応答が進まないことを確認した。
+発言者なしの文字列履歴を、本人/相手の役割・発言番号つき履歴へ変更した。
+返答対象、発言済み状態、過去の交流文脈も伝え、自己紹介より相手への具体的な返答を優先する。
+Workerの再起動後は新しく予約する会話へ適用される。保存済み会話の本文は書き換えない。
+
+検証は合成人格とMockによる全8ターンの視点切替・再claim時の継続・入力切詰め後の直近文脈保持を対象にする。
+実モデルの発言品質は新しい会話で確認し、Mock成功だけで品質保証とは扱わない。
+費用/同意/安全判定の条件は変更しない。#89 / PR #90のローカルデモを土台にする。

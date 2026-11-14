@@ -15,8 +15,9 @@ from alter_domain.sonnet import SonnetClient
 def main() -> None:
     parser = argparse.ArgumentParser(description="Alter conversation Worker")
     parser.add_argument("--once", action="store_true", help="Process at most one job")
+    parser.add_argument("--env-file", help="Read only this role-specific environment file")
     args = parser.parse_args()
-    settings = Settings()
+    settings = Settings(_env_file=args.env_file) if args.env_file else Settings()  # type: ignore[call-arg]
     if settings.alter_mode == "mock":
         run_mock_process("worker", once=args.once)
         return

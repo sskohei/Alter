@@ -6,8 +6,9 @@ No extra LLM invocation: quote only already moderated utterances, never promote 
 import hashlib
 import unicodedata
 import uuid
+from typing import Any
 
-from sqlalchemy import Connection, Engine, text
+from sqlalchemy import Connection, Engine, Row, text
 
 from alter_domain.activity import _VISIBLE_CONVERSATION
 from alter_domain.interaction import lock_interactions
@@ -183,31 +184,29 @@ def enrich_pending(engine: Engine, *, limit: int = 10, forbidden: tuple[str, ...
     return count
 
 
+_CONTEXT_SQL = (
+    "select m.text from public.memories m "
+    "join public.conversations c on c.id=m.source_conversation_id and "
+    "c.status='completed' "
+    "join public.conversation_participants p on p.conversation_id=c.id and "
+    "p.agent_id=:other "
+    "join public.conversation_participants me on me.conversation_id=c.id "
+    "and me.agent_id=:agent "
+    "join public.agents a on a.id=:agent join public.profiles u on u.id=a.owner_id "
+    "where m.agent_id=:agent and m.status='active' and u.deleted_at is null "
+    "and m.created_at>now()-interval '180 days' and "
+    + _VISIBLE_CONVERSATION
+    + " and not exists(select 1 from public.memory_tombstones t "
+    "where t.agent_id=m.agent_id and t.dedupe_key=m.dedupe_key) "
+    "and a.status<>'deleted' and not exists (select 1 from "
+    "public.memory_source_suppressions s "
+    "where s.agent_id=m.agent_id and s.source_conversation_id=c.id) "
+    "order by m.importance desc,m.created_at desc,m.id desc limit 5"
+)
+
+
 def context(conn: Connection, agent: uuid.UUID, other: uuid.UUID) -> list[str]:
-    return list(
-        conn.execute(
-            text(
-                "select m.text from public.memories m "
-                "join public.conversations c on c.id=m.source_conversation_id and "
-                "c.status='completed' "
-                "join public.conversation_participants p on p.conversation_id=c.id and "
-                "p.agent_id=:other "
-                "join public.conversation_participants me on me.conversation_id=c.id "
-                "and me.agent_id=:agent "
-                "join public.agents a on a.id=:agent join public.profiles u on u.id=a.owner_id "
-                "where m.agent_id=:agent and m.status='active' and u.deleted_at is null "
-                "and m.created_at>now()-interval '180 days' and "
-                + _VISIBLE_CONVERSATION
-                + " and not exists(select 1 from public.memory_tombstones t "
-                "where t.agent_id=m.agent_id and t.dedupe_key=m.dedupe_key) "
-                "and a.status<>'deleted' and not exists (select 1 from "
-                "public.memory_source_suppressions s "
-                "where s.agent_id=m.agent_id and s.source_conversation_id=c.id) "
-                "order by m.importance desc,m.created_at desc,m.id desc limit 5"
-            ),
-            {"agent": agent, "other": other},
-        ).scalars()
-    )
+    return list(conn.execute(text(_CONTEXT_SQL), {"agent": agent, "other": other}).scalars())
 
 
 def delete_conversation(conn: Connection, conversation: uuid.UUID) -> None:
@@ -227,41 +226,31 @@ def delete_conversation(conn: Connection, conversation: uuid.UUID) -> None:
         recompute_relationship(conn, ids[0], ids[1])
 
 
-def recent_summary(conn: Connection, agent: uuid.UUID, other: uuid.UUID) -> str | None:
-    row = conn.execute(
-        text(
-            "select c.id,c.summary,p.ordinal from public.conversations c "
-            "join public.conversation_participants p on p.conversation_id=c.id and "
-            "p.agent_id=:agent "
-            "join public.conversation_participants q on q.conversation_id=c.id and "
-            "q.agent_id=:other "
-            "where c.status='completed' and c.summary is not null and "
-            + _VISIBLE_CONVERSATION
-            + " and not exists "
-            "(select 1 from public.memory_source_suppressions s "
-            "where s.agent_id=:agent and s.source_conversation_id=c.id) "
-            "order by c.ended_at desc,c.id desc limit 1"
-        ),
-        {"agent": agent, "other": other},
-    ).first()
-    if row is None or not safe(row.summary):
+_RECENT_SUMMARY_SQL = (
+    "select c.id,c.summary,p.ordinal, "
+    "array(select dedupe_key from public.memory_tombstones where agent_id=:agent) "
+    "as tombstone_keys, coalesce((select jsonb_agg(jsonb_build_object("
+    "'agent_id',m.agent_id::text,'content',m.content)) from public.messages m "
+    "where m.conversation_id=c.id and m.moderation_status='allowed'),'[]'::jsonb) "
+    "as messages from public.conversations c "
+    "join public.conversation_participants p on p.conversation_id=c.id and p.agent_id=:agent "
+    "join public.conversation_participants q on q.conversation_id=c.id and q.agent_id=:other "
+    "where c.status='completed' and c.summary is not null and "
+    + _VISIBLE_CONVERSATION
+    + " and not exists(select 1 from public.memory_source_suppressions s "
+    "where s.agent_id=:agent and s.source_conversation_id=c.id) "
+    "order by c.ended_at desc,c.id desc limit 1"
+)
+
+
+def _visible_summary(row: Row[Any] | None, agent: uuid.UUID) -> str | None:
+    if row is None or row.summary is None or not safe(row.summary):
         return None
-    # A deleted hash may occur in another source too. Do not reintroduce it via a summary.
-    keys = set(
-        conn.execute(
-            text("select dedupe_key from public.memory_tombstones where agent_id=:id"),
-            {"id": agent},
-        ).scalars()
-    )
-    for message in conn.execute(
-        text(
-            "select agent_id,content from public.messages where conversation_id=:id "
-            "and moderation_status='allowed'"
-        ),
-        {"id": row.id},
-    ):
-        role = "自分のAI" if message.agent_id == agent else "相手のAI"
-        value = f"会話中の{role}の発言（確定事実ではない）: {message.content[:900]}"
+    # A deleted hash may occur in another source too. Never reintroduce it via a summary.
+    keys = set(row.tombstone_keys)
+    for message in row.messages:
+        role = "自分のAI" if message["agent_id"] == str(agent) else "相手のAI"
+        value = f"会話中の{role}の発言（確定事実ではない）: {message['content'][:900]}"
         if dedupe(value) in keys:
             return None
     return (
@@ -269,3 +258,22 @@ def recent_summary(conn: Connection, agent: uuid.UUID, other: uuid.UUID) -> str 
         .replace(f"AI{row.ordinal}の", "自分のAIの")
         .replace(f"AI{3 - row.ordinal}の", "相手のAIの")
     )
+
+
+def recent_summary(conn: Connection, agent: uuid.UUID, other: uuid.UUID) -> str | None:
+    row = conn.execute(text(_RECENT_SUMMARY_SQL), {"agent": agent, "other": other}).first()
+    return _visible_summary(row, agent)
+
+
+def prompt_context(
+    conn: Connection, agent: uuid.UUID, other: uuid.UUID
+) -> tuple[list[str], str | None]:
+    """Load memories, summary and deletion checks in one database snapshot/round trip."""
+    row = conn.execute(
+        text(
+            "select array(select m.text from (" + _CONTEXT_SQL + ") m) as memories,recent.* "
+            "from (select 1) anchor left join lateral (" + _RECENT_SUMMARY_SQL + ") recent on true"
+        ),
+        {"agent": agent, "other": other},
+    ).one()
+    return list(row.memories), _visible_summary(row, agent)

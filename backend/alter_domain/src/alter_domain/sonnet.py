@@ -35,6 +35,14 @@ class LLMUnavailable(Exception):
     pass
 
 
+class RequestNotSent(Exception):
+    """A pre-dispatch authorization guard failed before any provider request."""
+
+    def __init__(self, reason: Exception) -> None:
+        super().__init__("Request rejected before dispatch")
+        self.reason = reason
+
+
 class Usage(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
     input_tokens: int = Field(ge=0)
@@ -93,7 +101,10 @@ class SonnetClient:
     def _post(self, path: str, body: dict[str, Any], *, billable: bool) -> dict[str, Any]:
         self.require_enabled()
         if self.before_request is not None:
-            self.before_request()
+            try:
+                self.before_request()
+            except Exception as exc:
+                raise RequestNotSent(exc) from None
         try:
             response = self._http.post(
                 "https://api.anthropic.com/v1/" + path,
@@ -171,6 +182,8 @@ class SonnetClient:
                 history = data.get("quoted_memories") or data.get("quoted_turns")
                 if not isinstance(history, list) or not history:
                     raise ValueError
+                if history is data.get("quoted_turns") and len(history) <= 2:
+                    raise UnsafeOutput("Recent dialogue exceeds the token bound")
                 history.pop(-1 if data.get("quoted_memories") else 0)
                 body["messages"][0]["content"] = json.dumps(data, ensure_ascii=False)
             except (ValueError, TypeError, AttributeError):

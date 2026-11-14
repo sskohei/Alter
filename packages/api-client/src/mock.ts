@@ -85,11 +85,16 @@ export function createMockFetch(
     const request = new Request(input, init);
     const url = new URL(request.url);
     if (url.pathname === "/health") return request.method === "GET" ? success({ status: "ok", service: "api", mode: "mock" }) : mockError(405);
-    if (!/^\/api\/v1\/(?:memories(?:\/[a-f\d-]{36})?|relationships|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds|link\/(?:start|complete)))$/.test(url.pathname) && !["/api/v1/users/me", "/api/v1/users/me/deletion", "/api/v1/preferences", "/api/v1/agent-icons", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/blocks\/[a-f\d-]{36}|\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
+    if (!/^\/api\/v1\/(?:memories(?:\/[a-f\d-]{36})?|relationships|conversations(?:\/(?:start|[a-f\d-]{36}))?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds|link\/(?:start|complete)))$/.test(url.pathname) && !["/api/v1/users/me", "/api/v1/users/me/deletion", "/api/v1/preferences", "/api/v1/agent-icons", "/__mock/profiles"].includes(url.pathname) && !/^\/api\/v1\/agents(?:\/me|\/[a-f\d-]{36}(?:\/blocks\/[a-f\d-]{36}|\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?$/.test(url.pathname)) return mockError(404);
     if (["/api/v1/users/me", "/__mock/profiles"].includes(url.pathname) && !(url.pathname === "/api/v1/users/me" ? ["GET", "PATCH"] : ["GET"]).includes(request.method)) return mockError(405);
     if (!/^Bearer \S+$/i.test(request.headers.get("Authorization") ?? "")) return mockError(401);
     if (scenario === "inactive") return mockError(403, "ACCOUNT_INACTIVE");
     if (!Number.isNaN(Number(scenario))) return mockError(Number(scenario));
+    if (url.pathname === "/api/v1/conversations/start") {
+      return request.method === "GET"
+        ? success({ enabled: false, unlimited_daily_count: false })
+        : mockError(403);
+    }
     const accountResponse = await account(request);
     if (accountResponse) return accountResponse;
     if (url.pathname === "/api/v1/agent-icons") {

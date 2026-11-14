@@ -13,6 +13,7 @@ import { costLabel } from "../lib/activity";
 import { DataState, dataErrorMessage } from "./data-state";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { ManualInteraction } from "./manual-interaction";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -64,6 +65,7 @@ export function InteractionSettings({
         自律交流とDiscord公開はそれぞれ本人が選びます。設定はAPIで保存できた後に反映します。
       </p>
       <DataState {...resource} retry={resource.refresh} />
+      <ManualInteraction />
       {!resource.loading && !resource.error && !resource.data && (
         <section className="card">
           <h2>AI分身を作成してください</h2>

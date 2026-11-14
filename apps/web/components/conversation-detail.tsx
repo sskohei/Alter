@@ -32,7 +32,7 @@ export function ConversationDetail({ id }: { id: string }) {
     [],
   );
   const own = useResource(ownLoad);
-  const resource = useResource(load, 15_000, isOngoing);
+  const resource = useResource(load, 2_000, isOngoing);
   const detail = resource.data;
   return (
     <>
