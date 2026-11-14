@@ -36,6 +36,12 @@ def people(engine: Engine, created_users: list[uuid.UUID]) -> Iterator[list[Pers
     made: list[Person] = []
     yield made
     with engine.begin() as conn:
+        # Dispose synthetic ledger rows before conversation/AI deletion; outstanding
+        # reserves are intentionally protected by #18's production deletion guard.
+        conn.execute(
+            text("delete from public.usage_records where agent_id = any(:a)"),
+            {"a": [p.agent for p in made]},
+        )
         conn.execute(
             text(
                 "delete from public.conversations where id in ("

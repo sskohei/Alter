@@ -8,7 +8,7 @@ def test_preview_contract_is_not_exposed_as_live_api() -> None:
     # #15 now exposes the real agent API; preview-only endpoints/operation IDs stay unmounted.
     assert "/api/v1/agents" in live
     assert "/__mock/profiles" not in live
-    assert "/api/v1/agents/{id}/profile/suggest" not in live
+    assert "/api/v1/agents/{agent_id}/profile/suggest" in live
     for path in live.values():
         for method, operation in path.items():
             if method in {"get", "post", "patch", "put", "delete"}:

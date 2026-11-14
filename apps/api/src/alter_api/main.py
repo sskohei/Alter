@@ -10,6 +10,7 @@ from alter_domain.db import create_db_engine
 from alter_domain.discord_oauth import DiscordOAuthClient
 from alter_domain.icons import IconStorage, IconStorageUnavailable, InvalidIcon
 from alter_domain.settings import Settings
+from alter_domain.sonnet import SonnetClient
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -28,6 +29,7 @@ from alter_api.errors import (
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
 from alter_api.settings_routes import router as settings_router
+from alter_api.suggestion_routes import router as suggestion_router
 from alter_api.users import router as users_router
 
 API_V1_PREFIX = "/api/v1"
@@ -45,6 +47,7 @@ def create_api_v1_router() -> APIRouter:
     router.include_router(users_router)
     router.include_router(settings_router)
     router.include_router(agent_router)
+    router.include_router(suggestion_router)
     router.include_router(activity_router)
     router.include_router(deletion_router)
     router.include_router(discord_router)
@@ -104,6 +107,7 @@ def create_app(
     app.state.db_engine = create_db_engine(settings)
     app.state.auth_admin = SupabaseAuthAdmin(settings, client)
     app.state.icon_storage = IconStorage(settings, client)
+    app.state.llm_client = SonnetClient(settings, client)
     app.state.jwt_verifier = JwtVerifier(settings, client)
     app.state.discord_oauth = DiscordOAuthClient(settings, client)
 
@@ -139,7 +143,7 @@ def create_app(
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", IDEMPOTENCY_KEY_HEADER],
-        expose_headers=[REQUEST_ID_HEADER],
+        expose_headers=[REQUEST_ID_HEADER, "Retry-After"],
     )
     # 外側から request_id → CORS → 予期しない例外の変換 → ルーター。
     app.add_middleware(RequestIdMiddleware)

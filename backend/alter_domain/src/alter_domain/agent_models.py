@@ -74,3 +74,20 @@ class Approval(BaseModel):
 
 class PrivateInfo(BaseModel):
     private_info: str = Field(repr=False)
+
+
+class SuggestionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    answers: dict[str, Annotated[str, Field(max_length=2000)]] = Field(
+        min_length=1, max_length=11, repr=False
+    )
+
+    @model_validator(mode="after")
+    def public_answers_only(self) -> "SuggestionInput":
+        if set(self.answers) - (set(ProfileInput.model_fields) | {"name"}):
+            raise ValueError("Only public personality answers are accepted")
+        if sum(map(len, self.answers.values())) > 8000 or not any(
+            value.strip() for value in self.answers.values()
+        ):
+            raise ValueError("Answers exceed the input limit or are blank")
+        return self

@@ -123,3 +123,23 @@ Storage APIでパージし、未参照/未登録のアップロードは24時間
 SQL削除だけでblobを消したと扱わない。置換後の旧objectも同じ未参照清掃に含める。
 rollbackはAPI停止→agents_icon_upload_fk解除→registryをDROP、Storage APIでobjectを消してから
 空bucketを削除。既存アイコンの参照/署名URLが失われるので、通常は前方修正を選ぶ。
+
+### 費用予約と削除の追加制約（#18、2026-11-14）
+
+`20261114050000_budget_deletion_guard.sql`により、残予約のある会話/AIは物理削除を拒否する。
+#30は新規呼出停止・結果照合後、固定費用advisory lock→`budget.release_for_deletion`→DELETEを
+同一トランザクションで行う。会話削除は両参加者の予約、AI削除は会話なしの予約も解放する。
+課金結果不明なら予約を保持して削除を保留する。確定費用の匿名化/12か月保持は維持する。
+既存のSET NULL/匿名化DDLは変更しない。詳細は[AI処理](08-ai-agent-architecture.md)を参照。
+
+
+### LLM実行状態（#18）
+
+`llm_runs`はAPI/Worker専用の実行メタデータ。id、agent_id（削除CASCADE）、conversation_id
+（SET NULL）、purpose、status、reserved_usd、固定error_code、作成/更新時刻だけを保持する。
+本文・回答・出力・秘密は保存しない。RLS default deny/ブラウザ権限なし。
+`reserved/generating/generated/moderating/unknown`は1体1行までの部分UNIQUEで並行呼出を拒否する。
+UTC日次のsuggestion行数で失敗も含め3回を検査。金額の正本はusage_records。
+プロセス停止後も自動で再実行/予約解放しない。#36で照合後に状態と台帳を確定する。
+メタデータの保持は費用台帳と同じ12か月とし、#30のパージで完了行を清掃する。
+新規migrationは`20261114130000_llm_runs.sql`。戻すときは未完実行を照合してから表を削除する。

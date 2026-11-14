@@ -40,3 +40,19 @@ def session_generation_reservation() -> Decimal:
     calls must be bounded separately within the same session/day/global limits.
     """
     return model_price().cost(MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS) * GENERATIONS_PER_AGENT
+
+
+# Independent safety classification has its own tight, separately counted bound.
+MODERATION_INPUT_TOKENS: Final = 512
+MODERATION_OUTPUT_TOKENS: Final = 16
+
+
+def call_reservation() -> Decimal:
+    """One generation and one independent moderation request, including thinking."""
+    return model_price().cost(MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS) + model_price().cost(
+        MODERATION_INPUT_TOKENS, MODERATION_OUTPUT_TOKENS
+    )
+
+
+def session_reservation() -> Decimal:
+    return call_reservation() * GENERATIONS_PER_AGENT

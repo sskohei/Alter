@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。実OAuth/Storageの公開受け入れ・本番Worker接続は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
+更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。Sonnetの費用付き生成/独立安全判定と任意人格提案APIを実装。実OAuth/Storage/LLMの公開受け入れ・本番Worker接続は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
 
 ## ローカル開発（最初に実行）
 
@@ -60,7 +60,7 @@ uv run --package alter-discord-bot alter-bot     # 既定は無効、正常終�
 uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
-Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIは招待認可付きの`GET/PATCH /api/v1/users/me`を提供する。人格APIは未実装。
+Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIは招待認可付きのユーザー/人格/交流設定等を提供する（[API設計](docs/07-api-design.md)）。
 `/development/mock`では合成データでプロフィール・ページング・エラーを確認できる。
 
 ### Mockと無効化
@@ -108,7 +108,7 @@ ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/p
 
 GitHub Actionsの必須チェックは`CI required`。Python/Web/API生成差分/空Supabase migration/secret scanningの検査範囲は[テスト戦略](docs/16-testing-strategy.md)、`MainRule`の承認・保護設定は[Git運用](docs/22-git-workflow.md)を参照。
 
-OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`と`GET/PATCH /api/v1/users/me`を生成し、その他の業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
+OpenAPIの正本はFastAPI/Pydantic。ユーザー/人格/交流設定/会話/通知/Discord連携/削除受付の実装を生成し、詳細と将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
 
 ## 読む順序
 
@@ -141,3 +141,12 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`と`GET/PATCH 
 入力/正規化後とも2 MiB以下・2048px以下・単一フレーム。実画像をデコード/PNG再エンコードし、
 EXIF/GPS等のメタデータを削除する。専用のprivate bucketとAPI専用Storageキーを使う。
 [API契約](docs/07-api-design.md)・[Storage設定](docs/14-deployment-infrastructure.md)を参照。
+
+
+## 費用付きLLM実行（#18）
+
+人格提案APIは公開answers辞書から未承認の人格案を返す（保存/承認は本人操作）。
+APIサーバーだけに`ALTER_MODE=live`、`LLM_ENABLED=true`、`ANTHROPIC_API_KEY`を設定して有効化する。
+既定は無効。Web/CIへ実キーを渡さない。外部テストはMock。
+生成と独立安全判定を事前予約し、UTC日次3回・AI日次/会話/全体の費用上限を検査する。
+課金結果不明は予約を保持して追加実行を停止する。[実行契約](docs/08-ai-agent-architecture.md)を参照。
