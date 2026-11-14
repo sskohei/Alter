@@ -7,3 +7,5 @@
 [フロント先行実装とMock](24-frontend-development.md)は#8/#9/#17の依存、レビュー用契約、ローカル起動・合成データと実接続の区別。
 
 [Webデプロイと受け入れ](25-web-deployment.md)は#35のVercel環境設定・callback/CORS・スモークと実環境の完了条件。
+
+[運用手順書](27-operations-runbook.md)は#36の定期確認（`alter-ops status`）と警告コードごとの対応、PCの停止・復旧の順番、Discord配送の要確認とLLM結果不明の照合、バックアップ・鍵交換・切り戻しの概要。

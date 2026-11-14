@@ -111,6 +111,21 @@ def _postable_channels(conn: Connection, conversation_id: uuid.UUID) -> list[str
     )
 
 
+def _competing_channels(conn: Connection, conversation_id: uuid.UUID) -> list[str]:
+    """取り出し時の重複確認用。選ばれなかった（``not_chosen``）投稿先を除く。"""
+    excluded = set(
+        conn.execute(
+            text(
+                "select channel_id from public.discord_deliveries "
+                "where conversation_id = :c and status = 'cancelled' "
+                "and last_error = 'not_chosen'"
+            ),
+            {"c": conversation_id},
+        ).scalars()
+    )
+    return [ch for ch in _postable_channels(conn, conversation_id) if ch not in excluded]
+
+
 def enqueue_conversation_posts(conn: Connection, conversation_id: uuid.UUID) -> int:
     """完了した会話の投稿行を作る（再実行しても増えない）。作った行の件数を返す。
 
@@ -229,8 +244,9 @@ def claim_next_post(conn: Connection) -> PostJob | None:
         if ok is None:
             _set_post(conn, row.id, "cancelled", "not_eligible")
             continue
-        if len(_postable_channels(conn, row.conversation_id)) > 1:
+        if len(_competing_channels(conn, row.conversation_id)) > 1:
             # 作成後に別のギルドでも条件がそろった。どこへ送るか決まらないので保留する
+            # （運営・管理者が選ばなかった投稿先 not_chosen は数えない。#36 ops.choose_target）
             _set_post(conn, row.id, "needs_review", "ambiguous_target")
             continue
         lines = tuple(
@@ -357,8 +373,19 @@ def mark_dm_failed(conn: Connection, delivery_id: uuid.UUID, outcome: Outcome, c
 
 
 def recover_stale_sending(conn: Connection, *, minutes: int = STALE_SENDING_MINUTES) -> int:
-    """送信中のまま止まった行を ``needs_review`` にする（自動では再送しない）。"""
-    total = 0
+    """送信中のまま止まった行を ``needs_review`` にする（自動では再送しない）。
+
+    スレッド削除（``discord_cleanup_tasks``）は何度試しても重複しないので ``pending`` に戻す。
+    """
+    total = int(
+        conn.execute(
+            text(
+                "update public.discord_cleanup_tasks set status = 'pending' "
+                "where status = 'sending' and updated_at < now() - make_interval(mins => :m)"
+            ),
+            {"m": minutes},
+        ).rowcount
+    )
     for table in ("discord_deliveries", "discord_dm_deliveries"):
         total += int(
             conn.execute(
@@ -474,3 +501,64 @@ def render_dm(job: DmJob, web_url: str) -> str:
     if job.conversation_id is None:
         return f"Alter に新しいお知らせがあります: {web_url}/dashboard"
     return f"新しい交流があります: {web_url}/conversations/{job.conversation_id}"
+
+
+# -- アカウント削除に伴うスレッド削除（#30） -------------------------------------------------
+
+CleanupResult = Literal["deleted", "forbidden", "not_found", "retry"]
+
+
+@dataclass(frozen=True)
+class CleanupJob:
+    task_id: uuid.UUID
+    thread_id: str
+    attempts: int
+
+
+def claim_next_cleanup(conn: Connection) -> CleanupJob | None:
+    """削除を試すスレッドを 1 件取り出して ``sending`` にする。なければ None。"""
+    row = conn.execute(
+        text(
+            "select id, thread_id, attempts from public.discord_cleanup_tasks "
+            "where status = 'pending' and next_attempt_at <= now() "
+            "order by next_attempt_at, id for update skip locked limit 1"
+        )
+    ).first()
+    if row is None:
+        return None
+    conn.execute(
+        text(
+            "update public.discord_cleanup_tasks set status = 'sending', "
+            "attempts = attempts + 1, last_error = null where id = :id"
+        ),
+        {"id": row.id},
+    )
+    return CleanupJob(row.id, row.thread_id, row.attempts + 1)
+
+
+def mark_cleanup(conn: Connection, task_id: uuid.UUID, result: CleanupResult, code: str) -> None:
+    """結果を記録する。削除は何度試しても重複しないので、分からない失敗は再試行する。
+
+    再試行は 2^回数 分（最大 60 分）、``MAX_ATTEMPTS`` 回で ``failed``。
+    """
+    code = code[:100]
+    if result == "retry":
+        conn.execute(
+            text(
+                "update public.discord_cleanup_tasks set "
+                "status = case when attempts >= :max then 'failed' else 'pending' end, "
+                "completed_at = case when attempts >= :max then now() end, "
+                "last_error = :code, next_attempt_at = now() "
+                "  + make_interval(mins => least(power(2, attempts)::int, 60)) "
+                "where id = :id and status = 'sending'"
+            ),
+            {"id": task_id, "code": code, "max": MAX_ATTEMPTS},
+        )
+        return
+    conn.execute(
+        text(
+            "update public.discord_cleanup_tasks set status = :s, completed_at = now(), "
+            "last_error = :code where id = :id and status = 'sending'"
+        ),
+        {"id": task_id, "s": result, "code": code or None},
+    )

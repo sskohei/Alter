@@ -32,6 +32,8 @@ Issue #2で開発用雛形を配置済み。固定バージョン、初回設定
 | Worker | 手元PCの独立プロセス | ジョブループ、並列数1から開始、lease更新と終了シグナル対応 |
 | Bot | 手元PCの独立プロセス | PC稼働中はGateway接続、再接続、コマンド同期は配置時のみ |
 | Scheduler | 手元PCのOS定期実行 | UTC `*/15 * * * *`、1回実行で終了。DB一意制約とOS側の重複起動抑止 |
+| Purge | 手元PCのOS定期実行 | `alter-api-purge`（APIパッケージ）、毎時1回実行で終了。アカウント削除のパージと保持期限の削除（ADR-016）。ジョブはskip lockedとリースで重複起動しても二重に処理しない |
+| Ops確認 | 手元PCのOS定期実行 | `alter-ops status`（ドメインパッケージ）、15分ごとに実行して終了。件数と警告コードだけを出し、警告があれば終了コード3で運営者へ知らせる。読み取りのみ（[運用手順書](27-operations-runbook.md)） |
 | DB/Auth | Supabase Free | 本番/Previewは別プロジェクト。RLS、Auth redirect allowlist。バックアップを別途取得 |
 
 2026-11-14の方針変更（ADR-015、#75）によりRenderへの配置とBlueprint作成は行わない。API・Worker・Botのプロセス境界は保つが、PC・電源・回線は共有する。RedisはMVP不要。
@@ -58,7 +60,7 @@ OSのサービス管理（Linuxならsystemd等）でAPI・Worker・Bot・HTTPS�
 
 Schedulerは`ALTER_MODE=live`かつ`SCHEDULER_ENABLED=true`でDB交流予約を行う（既定無効、LLMキー不要）。OS側のタイムゾーンをUTCに明示した15分定期実行とし、repo rootで`uv run --package alter-scheduler alter-scheduler`を1回だけ実行する。OSロック等で前回の実行中は次の起動を抑止し、DBの一意制約も併用する。停止中に逃した全スロットを復帰時に再生せず、現在の枠から再開する。
 
-計画停止では定期実行を止め、Worker/Botが新規claimしないようにして進行中処理を制限時間内に終了させ、APIと中継を停止する。強制停止後もジョブや予約を手動で一括削除しない。復旧では時刻同期・回線・DB接続・migration版を確認し、失効/削除要求と課金/投稿の結果不明を照合する。失効leaseはDBジョブの規則で回収し、投稿結果不明や課金不明を自動再送/再課金/予約解放しない。確認後にAPI→Worker→Bot→定期実行を再開する。
+計画停止では定期実行を止め、Worker/Botが新規claimしないようにして進行中処理を制限時間内に終了させ、APIと中継を停止する。強制停止後もジョブや予約を手動で一括削除しない。復旧では時刻同期・回線・DB接続・migration版を確認し、失効/削除要求と課金/投稿の結果不明を照合する。失効leaseはDBジョブの規則で回収し、投稿結果不明や課金不明を自動再送/再課金/予約解放しない。確認後にAPI→Worker→Bot→定期実行を再開する。具体的な確認と照合のコマンドは[運用手順書](27-operations-runbook.md)に記載する。
 
 ### バックアップと復元（#33、#36）
 
@@ -74,6 +76,8 @@ Supabase Freeでマネージド自動バックアップは利用できる前提�
 | Worker | `ALTER_MODE=live`, `LLM_ENABLED=true`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MAX_DAILY_COST_USD` | LLMキーをWebに渡さない |
 | Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはPCのBot専用環境ファイル/OS秘密管理 |
 | Scheduler（OS定期実行） | `ALTER_MODE=live`, `SCHEDULER_ENABLED=true`, `DATABASE_URL`, `SCHEDULER_BATCH_SIZE`, `MAX_DAILY_COST_USD` | 15分ごとに`uv run --package alter-scheduler alter-scheduler`を1回実行。LLMキー不要、既定無効 |
+| Purge（OS定期実行） | `ALTER_MODE=live`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_STORAGE_SECRET_KEY` | 毎時`uv run --package alter-api alter-api-purge`を1回実行。管理鍵はAPIと同じPCの専用環境ファイル/OS秘密管理に置き、Scheduler・Worker・Botの環境ファイルに入れない（ADR-016） |
+| Ops確認（OS定期実行） | `DATABASE_URL`, `MAX_DAILY_COST_USD` | `uv run alter-ops --env production --operator <担当> status`。LLMキー・管理鍵・Bot tokenは不要 |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
 
 ### APIの環境別設定（#34、#35 と対応）
@@ -89,7 +93,7 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 | `SUPABASE_SECRET_KEY` | `supabase status`のSecret | その環境のSecret Key（PCのAPI専用秘密管理） | その環境のSecret Key（PCのAPI専用秘密管理） |
 | `CORS_ORIGINS` | `http://localhost:3000` | VercelのPreview用`NEXT_PUBLIC_SITE_URL`と完全一致 | VercelのProduction用`NEXT_PUBLIC_SITE_URL`と完全一致 |
 
-`SUPABASE_SECRET_KEY`はAPI/運営CLIだけに置き、Web・Worker・Bot・Cronへ渡さない。`CORS_ORIGINS`に`*`は指定できない（起動時に拒否）。
+`SUPABASE_SECRET_KEY`はAPI/運営CLIだけに置き、Web・Worker・Bot・Cronへ渡さない。パージ用の運営CLI（`alter-api-purge`、ADR-016）はこの「運営CLI」に含まれ、`SUPABASE_STORAGE_SECRET_KEY`とともにAPIと同じ管理下で使う。Schedulerの定期実行には渡さない。`CORS_ORIGINS`に`*`は指定できない（起動時に拒否）。
 
 ### APIドキュメントの公開範囲
 
