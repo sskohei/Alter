@@ -12,18 +12,18 @@ export async function serverApi() {
     onUnauthenticated: () => {},
   });
   const client = createPreviewClient(process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000", fetcher);
-  const accountClient = createApiClient(process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000", fetcher);
-  return { client, accountClient, supabase };
+  const apiClient = createApiClient(process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000", fetcher);
+  return { client, apiClient, supabase };
 }
 
 // Per-render memoization; never persist profiles in a shared Next cache.
 export const requireProfile = cache(async () => {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) redirect("/login?error=configuration");
-  const { accountClient, supabase } = await serverApi();
+  const { apiClient, supabase } = await serverApi();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) redirect("/login?error=expired");
   try {
-    return await unwrap(await accountClient.GET("/api/v1/users/me"));
+    return await unwrap(await apiClient.GET("/api/v1/users/me"));
   } catch (cause) {
     if (cause instanceof ApiError) {
       if (cause.status === 401) redirect("/login?error=expired");
