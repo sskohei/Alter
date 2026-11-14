@@ -161,3 +161,6 @@ PCのsystemd設定・HTTPS候補・起動前検査・停止/復旧・実機受�
 [PC運用手順](28-pc-services-https.md)を参照する。
 Supabaseの環境別設定・接続検査・migration・バックアップの具体手順と未実施記録は
 [Supabase運用手順](27-supabase-operations.md)を参照する。
+
+ユーザー指定のハッカソン発表用1環境は[発表用手順](29-hackathon-demo.md)を参照する。
+正式本番の受け入れとは分け、手動プロセスとQuick Tunnelを利用する。

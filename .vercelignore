@@ -1,0 +1,16 @@
+.git
+.vercel
+.venv
+**/node_modules
+**/.next
+**/.env
+**/.env.*
+**/*.log
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+artifacts
+playwright
+**/test-results
+**/playwright-report
