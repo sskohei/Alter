@@ -4,7 +4,7 @@
 
 | 段階 | F（フロント） | B（バック） | D（デザイン） | 成果物・受け入れ / 依存 |
 |---|---|---|---|---|
-| P1 基盤（1〜2週） | Next.js/SSR、ログイン、レイアウト、OpenAPI Mock | FastAPI、SQL migration、JWT/所有権、Bot接続雛形、CI | ブランド/トークン、ログイン/作成/ダッシュボード4状態 | `GET /users/me`が401/200、Figma基礎引き渡し。外部Auth設定が依存 |
+| P1 基盤（1〜2週） | Next.js/SSR、ログイン、レイアウト、OpenAPI Mock | FastAPI、SQL migration、JWT/所有権、Bot接続雛形、CI | ブランド/トークン、ログイン/作成/ダッシュボード4状態 | `GET /users/me`が401/200、基礎トークンのコード化。外部Auth設定が依存 |
 | P2 分身作成（2〜3週） | 質問/下書き/承認、人格編集/プロフィール | agents/profile/settings API、LLM adapter、費用台帳 | 作成フロー改善、人格編集/公開同意 | 未承認では交流不可、編集版保存。P1のAPI契約とDBが依存 |
 | P3 交流MVP（3〜4週） | 履歴/詳細/設定/通知/Discord連携UI、E2E | Cron/Matcher/Worker/安全性、会話保存、Discord OAuth/コマンド/公開outbox | 会話/通知/Discord同意、モバイル検証 | 10人で自律交流、Web/Discord閲覧、OFF/予算/ブロック検証。P2の承認人格が依存 |
 | P4 強化（2週以降） | 記憶/関係性画面、分析改善 | 記憶整理、関係性再集計、監視/負荷対策 | 全体UI統一/ユーザビリティ | 記憶削除、関係表示、障害復旧。MVP後に着手可 |

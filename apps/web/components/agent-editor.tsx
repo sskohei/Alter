@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import { AlterCardPreview, cardTags } from "./alter-card";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { unwrap } from "@alter/api-client/preview";
@@ -52,11 +53,13 @@ export function AgentEditor({
     reset,
     setValue,
     getValues,
+    control,
     formState: { errors, isDirty },
   } = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
     defaultValues: defaults,
   });
+  const live = useWatch({ control }) as Partial<AgentFormValues>;
   const [agent, setAgent] = useState(initial?.agent);
   const [saved, setSaved] = useState(
     initial?.revision.approved_at === null ? initial.revision : null,
@@ -273,8 +276,8 @@ export function AgentEditor({
   }
   return (
     <>
-      <p className="eyebrow">
-        AI分身 /{" "}
+      <p className="eyebrow page-no">
+        02 / STUDIO · AI分身 /{" "}
         {initial ? `人格の編集 · 版 ${initial.revision.version}` : "人格の作成"}
       </p>
       <h1>{initial ? "あなたらしさを更新する" : "あなたのAI分身をつくる"}</h1>
@@ -299,7 +302,9 @@ export function AgentEditor({
           非公開欄の読込を再試行
         </Button>
       )}
+      <div className="studio">
       <form
+        className="studio-form"
         onSubmit={handleSubmit(save)}
         onChange={(event) => {
           const target = event.target;
@@ -395,6 +400,13 @@ export function AgentEditor({
           </div>
         </fieldset>
       </form>
+      <AlterCardPreview
+        name={String(live.name ?? "").trim()}
+        tags={cardTags(live.personality, live.values_text, live.interests)}
+        status={saved ? `版 ${saved.version} · 未承認` : agent ? "編集中" : "未保存の下書き"}
+        version={saved ? `v${saved.version}` : "v0"}
+      />
+      </div>
       {agent && (
         <section className="card">
           <h2>AIからの提案（任意）</h2>
@@ -413,7 +425,8 @@ export function AgentEditor({
         </section>
       )}
       {saved && preview && (
-        <section className="card" aria-label="人格の確認">
+        <section className="card approve-card" aria-label="人格の確認" data-agreed={agreed ? "true" : "false"}>
+          <span className="approve-stamp" aria-hidden="true">APPROVED</span>
           <h2>版 {saved.version} の確認・本人承認</h2>
           <p>
             未承認の下書きです。非公開欄の内容はプレビュー・差分には表示しません。

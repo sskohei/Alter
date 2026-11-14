@@ -29,7 +29,7 @@ Closes #
 
 <!-- 該当しない項目は「対象外」。 -->
 
-- UI: PC/mobile画像またはFigma frame URL
+- UI: PC/mobile画像（必要ならPreview URL）
 - API: Pydantic/OpenAPI・生成TypeScript差分、互換性
 - DB: SQL migration、戻し方・データ影響、RLS/所有権の確認結果
 

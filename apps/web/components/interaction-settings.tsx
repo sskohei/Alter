@@ -207,7 +207,8 @@ function SettingsForm({
           最新の状態を読み直す（未保存の入力を破棄）
         </Button>
       )}
-      <section className="card">
+      <section className="card power" data-on={settings.autonomy_enabled ? "true" : "false"}>
+        <span className="power-switch" aria-hidden="true"><i /></span>
         <h2>自律交流: {settings.autonomy_enabled ? "ON" : "OFF"}</h2>
         <p>
           保存済みの頻度: 1日{settings.frequency_per_day}回 / 日次予算:{" "}
@@ -251,7 +252,7 @@ function SettingsForm({
         </div>
       </section>
       <form onSubmit={handleSubmit((values) => patch(values))} noValidate>
-        <fieldset className="card stack" disabled={busy}>
+        <fieldset className="card stack mixer" disabled={busy}>
           <legend className="text-xl font-bold">頻度と費用上限</legend>
           <p>
             0の予算・頻度では新しい交流を開始しません。予算を上げても、自律交流やDiscord公開は自動でONになりません。
@@ -303,7 +304,8 @@ function SettingsForm({
           )}
         </fieldset>
       </form>
-      <section className="card">
+      <section className="card power" data-on={settings.discord_publish ? "true" : "false"}>
+        <span className="power-switch" aria-hidden="true"><i /></span>
         <h2>Discord全体公開: {settings.discord_publish ? "ON" : "OFF"}</h2>
         <p>
           自律交流とは別の設定です。全体ONに加え、双方のギルド別同意と管理者設定が揃った会話だけが投稿されます。
