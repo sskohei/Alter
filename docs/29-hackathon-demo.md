@@ -86,3 +86,16 @@ probeはpsycopgの実接続`ssl_in_use`と設定上のverify-fullを確認する
 
 接続/配置の成功と、実OAuth・招待・人格作成・双方同意・会話完了・Discord公開の成功は別に記録する。
 実LLM/Discord通信は今回の自動検査では実行しない。未設定のAuthや未確認の保持条件をMockへ退避して隠さない。
+
+
+## 接続検査の結果（2026-11-14）
+
+- デプロイ: `dpl_kBEzZ9x7Y8WNVDzQMTEKoayqz91v`、ソースSHA `82b00d25ff4bcf18799c2d52e84bcd6a7b71a6c7`、READY。
+- 固定Web URLの `/`・`/login` は200、`/dashboard`はログインへ307、未認証BFFは401。
+- OAuth取消callbackは同じWeb Originのエラー画面へ307、認証関連応答はno-store。
+- APIのローカル/Quick Tunnelのhealth/readinessは200、未認証本人APIは401。
+- 実URLで`web:smoke`成功（許可/拒否CORS、未認証拒否、OpenAPI、callback/cache）。
+- Auth管理キーの接続は200。Authユーザーはまだ存在せず、両OAuth providerは無効。
+- Vercel上でのログイン後SSR/BFF→API、本人/他人の認可、実会話生成・Discord配送は未実施。
+- 検証: Ruff/mypy、Python全体385 passed/291 DB skipped、追加TLS回帰2件、deployment 81件、
+  API再生成差分なし、TypeScript、ローカルWeb build、全履歴Gitleaks。
