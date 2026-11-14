@@ -134,11 +134,12 @@ for (const status of [409, 429, 503]) {
     page,
   }) => {
     await openSettings(page);
+    if (status === 429) await page.clock.install();
     await proposeStart(page);
     await page.route("**/api/v1/agents/*/settings", async (route) => {
       await route.fulfill({
         status,
-        headers: status === 429 ? { "Retry-After": "1" } : {},
+        headers: status === 429 ? { "Retry-After": "60" } : {},
         json: { error: { code: `TEST_${status}`, message: "synthetic" } },
       });
       await page.unroute("**/api/v1/agents/*/settings");
@@ -160,6 +161,7 @@ for (const status of [409, 429, 503]) {
     if (status === 429) {
       await expect(page.getByRole("alertdialog").getByRole("status")).toContainText("再試行まで");
       await expect(page.getByRole("alertdialog").getByRole("button", {name: "交流の開始を確定する"})).toBeDisabled();
+      await page.clock.fastForward(60_000);
     }
     if (status === 409) await expect(page.getByRole("alertdialog").getByRole("alert")).toContainText("同意設定");
     await page
