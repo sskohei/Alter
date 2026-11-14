@@ -50,6 +50,10 @@ MVPのAPI目安は認証済みユーザー60リクエスト/分、書込10リク
 値は`API_RATE_LIMIT_PER_MINUTE`・`API_WRITE_RATE_LIMIT_PER_MINUTE`・`API_UNAUTHENTICATED_RATE_LIMIT_PER_MINUTE`（0で無効）。
 接続元の前提: 手元PCの構成（ADR-015）では公開HTTPSの中継がloopbackからAPIへつなぐため、直接の接続元は常に中継になる。`API_CLIENT_IP_HEADER`（Cloudflare Tunnelなら`CF-Connecting-IP`）を設定したときだけ、直接の接続元がloopbackの場合に限ってそのヘッダーを接続元として使う。未設定なら認証失敗の30回/分は全体で共有される。WebのBFF（Vercelのサーバー）経由の要求では、ヘッダーの値もVercelの送信元になるため、実質的には全利用者で共有される。#37の負荷確認で、期限切れtokenの一斉再送などで正規の利用者が止まらないかを確かめて調整する。中継を通らずにAPIへ届く経路は作らない（loopback待ち受け）。
 メモリ内の制限は再起動で数え直しになり、プロセス間で共有されない。uvicornは`--workers 1`で動かし、APIを複数プロセス・複数台にする前に共有ストア型へ置き換える。
+入力の大きさ（#32）: JSONの文字列はすべて`maxLength`、配列は`maxItems`を持ち、自由なキーは人格提案の`answers`（許可リストのキーだけ）に限る。本文全体も読み込みの段階で既定256 KiB（アイコンのアップロードは2 MiB＋64 KiB。2 MiBを少し超える画像は今までどおり画像の検証が422で返す）に制限し、超えたら413（`VALIDATION_ERROR`、本文は反射しない）で打ち切る。上限はいちばん大きい正規の本文（AIの作成・改訂、全文字をエスケープした最悪値で約134 KB）より大きい。`tests/test_api_body_limit.py`がOpenAPIから最悪値を計算し、上限との関係とスキーマの上限の付け忘れを毎回確かめる。
+
+秘密の表示（#32）: 設定の鍵・秘密・tokenはすべて`SecretStr`で持ち、repr・文字列化・JSONに値を出さない。DB接続文字列（パスワードを含む）はreprに出さない。鍵の項目を足したら`SecretStr`にする（`tests/test_settings_secrets.py`が項目名で確かめる）。
+監査と本文（#32）: 人格の承認、交流設定（ONは同意文面の版を記録）、ブロック/解除、通知設定、記憶の削除、削除要求は本人を主体に監査を残し、監査・アプリのログ・エラー応答に人格・表示名・記憶の本文やtokenを含めない。`tests/db/test_audit_privacy_db.py`が目印の文字列を入れた入力で一通り操作して確かめる。
 
 ## アイコンの画像検証と用途分離（#15）
 

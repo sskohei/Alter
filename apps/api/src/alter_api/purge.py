@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with httpx.Client() as http:
             auth = account_purge.SupabaseAuthDeleter(
-                settings.supabase_url, settings.supabase_secret_key, http
+                settings.supabase_url, settings.supabase_secret_key.get_secret_value(), http
             )
             storage = account_purge.SupabaseStoragePurger(
                 settings.supabase_url,

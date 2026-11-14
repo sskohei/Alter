@@ -55,11 +55,11 @@ def suggest(
     settings = request.app.state.settings
     forbidden = (
         settings.anthropic_api_key.get_secret_value(),
-        settings.supabase_secret_key,
+        settings.supabase_secret_key.get_secret_value(),
         settings.supabase_storage_secret_key.get_secret_value(),
         request.headers.get("authorization", "").partition(" ")[2],
         settings.profile_encryption_key_v1.get_secret_value(),
-        settings.discord_client_secret,
+        settings.discord_client_secret.get_secret_value(),
         *(key.get_secret_value() for key in settings.api_idempotency_hmac_keys.values()),
     )
     execution = LLMExecution(

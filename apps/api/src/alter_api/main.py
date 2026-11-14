@@ -8,6 +8,7 @@ from alter_domain import agents
 from alter_domain.auth_admin import SupabaseAuthAdmin
 from alter_domain.db import create_db_engine
 from alter_domain.discord_oauth import DiscordOAuthClient
+from alter_domain.icons import MAX_BYTES as ICON_MAX_BYTES
 from alter_domain.icons import IconStorage, IconStorageUnavailable, InvalidIcon
 from alter_domain.settings import Settings
 from alter_domain.sonnet import SonnetClient
@@ -19,6 +20,7 @@ from pydantic.json_schema import models_json_schema
 from alter_api.activity_routes import router as activity_router
 from alter_api.agent_routes import router as agent_router
 from alter_api.auth import JwtVerifier
+from alter_api.body_limit import ICON_HEADROOM_BYTES, BodySizeLimitMiddleware
 from alter_api.deletion_routes import router as deletion_router
 from alter_api.discord_routes import router as discord_router
 from alter_api.errors import (
@@ -143,6 +145,12 @@ def create_app(
     app.add_exception_handler(IconStorageUnavailable, unavailable_icon)
     app.add_exception_handler(agents.AgentNotFound, agent_not_found)
     app.add_exception_handler(agents.AgentConflict, agent_conflict)
+    # 本文の大きさの上限（#32）。CORS の内側に置き、413 にも CORS ヘッダーを付ける
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        # アイコンは画像の上限を少し超えるまでルーターへ通し、既存の 422（画像の検証）で返す
+        per_path={f"{API_V1_PREFIX}/agent-icons": ICON_MAX_BYTES + ICON_HEADROOM_BYTES},
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -151,7 +159,7 @@ def create_app(
         allow_headers=["Authorization", "Content-Type", IDEMPOTENCY_KEY_HEADER],
         expose_headers=[REQUEST_ID_HEADER, "Retry-After"],
     )
-    # 外側から request_id → CORS → 予期しない例外の変換 → ルーター。
+    # 外側から request_id → CORS → 本文の上限 → 予期しない例外の変換 → ルーター。
     app.add_middleware(RequestIdMiddleware)
 
     @app.get("/health", response_model=Health, operation_id="get_health", tags=["operations"])

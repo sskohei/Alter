@@ -40,7 +40,7 @@ def _is_snowflake(value: object) -> bool:
 class DiscordOAuthClient:
     def __init__(self, settings: Settings, http: httpx.Client) -> None:
         self._client_id = settings.discord_client_id
-        self._client_secret = settings.discord_client_secret
+        self._client_secret = settings.discord_client_secret.get_secret_value()
         self._redirect_uri = settings.discord_redirect_uri
         self._http = http
 
