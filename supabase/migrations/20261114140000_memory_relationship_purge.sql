@@ -47,4 +47,4 @@ create trigger conversations_recompute_relationship_before_delete
 before delete on public.conversations
 for each row execute function public.recompute_relationship_on_conversation_delete();
 revoke all on function public.recompute_relationship_on_conversation_delete()
-from public, anon, authenticated;
+from public, anon, authenticated, service_role;
