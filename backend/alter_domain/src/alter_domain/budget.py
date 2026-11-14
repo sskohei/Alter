@@ -1,4 +1,6 @@
-"""Append-only USD ledger. All writers take one advisory transaction lock before agent locks.
+"""Append-only USD ledger. Budget operations serialize writes with one advisory transaction lock.
+
+Callers holding authorization/interaction rows acquire those before this lock.
 
 Outstanding holds include previous UTC days; unknown outcomes retain the hold until reconciliation.
 Amounts must be worst-case bounds (including provider retries), not expected averages.

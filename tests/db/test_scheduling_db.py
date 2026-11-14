@@ -2,13 +2,16 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from itertools import combinations
+from queue import Queue
+from threading import Event
+from time import monotonic
 from uuid import UUID, uuid4
 
 import pytest
-from alter_domain.budget import release_session, reserve
+from alter_domain.budget import lock_budget, release_session, reserve
 from alter_domain.interaction import pair_allowed
 from alter_domain.llm_selection import model_price, session_reservation
-from alter_domain.scheduling import schedule
+from alter_domain.scheduling import schedule, select_due
 from sqlalchemy import Engine, text
 
 TABLES = ("background_jobs", "conversations", "conversation_participants", "usage_records")
@@ -297,3 +300,71 @@ def test_parallel_cron_respects_global_cap_across_different_pairs(engine, ai_pai
             conn.execute(text("select sum(estimated_usd) from public.usage_records")).scalar_one()
             == session_reservation() * 2
         )
+
+
+@pytest.mark.parametrize("consents", [(False, False), (True, False), (False, True), (True, True)])
+def test_participants_snapshot_individual_discord_consent(engine, ai_pair, consents):
+    expected = dict(zip(ai_pair, consents, strict=True))
+    with engine.begin() as conn:
+        for agent, consent in expected.items():
+            conn.execute(
+                text(
+                    "update public.agent_settings set autonomy_enabled=true,"
+                    "discord_publish=:consent "
+                    "where agent_id=:agent"
+                ),
+                {"agent": agent, "consent": consent},
+            )
+    assert len(schedule(engine, datetime.now(UTC), Decimal("1"))) == 1
+    with engine.begin() as conn:
+        # Later settings changes must not rewrite the consent captured at conversation start.
+        conn.execute(text("update public.agent_settings set discord_publish=not discord_publish"))
+        participants = conn.execute(
+            text(
+                "select agent_id,discord_consent,web_consent from public.conversation_participants"
+            )
+        ).all()
+        assert {row.agent_id: row.discord_consent for row in participants} == expected
+        assert all(row.web_consent for row in participants)
+
+
+def test_scheduler_waiting_for_api_rows_does_not_hold_budget_lock(engine, ai_pair):
+    scheduler_pid = Queue()
+
+    def run_scheduler():
+        with engine.begin() as conn:
+            conn.execute(text("set local lock_timeout='5s'"))
+            scheduler_pid.put(conn.execute(text("select pg_backend_pid()")).scalar_one())
+            return select_due(conn, datetime.now(UTC), Decimal("1"))
+
+    with engine.begin() as conn:
+        conn.execute(text("update public.agent_settings set autonomy_enabled=true"))
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with engine.begin() as conn:
+            # Reproduce business_connection's authorization locks before budget work.
+            conn.execute(text("set local lock_timeout='2s'"))
+            owner = conn.execute(
+                text("select owner_id from public.agents where id=:agent"), {"agent": ai_pair[0]}
+            ).scalar_one()
+            conn.execute(
+                text("select id from public.invitations where auth_user_id=:owner for update"),
+                {"owner": owner},
+            ).all()
+            conn.execute(
+                text("select id from public.profiles where id=:owner for update"), {"owner": owner}
+            ).all()
+            api_pid = conn.execute(text("select pg_backend_pid()")).scalar_one()
+            future = pool.submit(run_scheduler)
+            pid = scheduler_pid.get(timeout=5)
+            deadline = monotonic() + 5
+            while True:
+                blockers = conn.execute(
+                    text("select pg_blocking_pids(:pid)"), {"pid": pid}
+                ).scalar_one()
+                if api_pid in blockers:
+                    break
+                assert monotonic() < deadline, "Scheduler did not wait on API authorization locks"
+                Event().wait(0.01)
+            # Must succeed while Scheduler waits for our rows: the old order deadlocks here.
+            lock_budget(conn)
+        assert future.result(timeout=5) is not None

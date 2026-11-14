@@ -50,5 +50,6 @@ Scheduler（#19）は`tests/test_scheduling.py`と`tests/db/test_scheduling_db.p
 UTC slot、seed再現性、mock/無効時のDB未接続、liveの1回実行/終了/障害伝播、
 同時Cronの同ペア1予約、異なるペアの全体費用競合、予算不足の原子的rollback/次候補、
 承認/双方ON/削除/招待/片側ブロック/日次枠/同時1会話/未確定LLM実行、
-採用モデルの双方費用予約と承認版スナップショット、Discord不同意での非公開交流を含む。
+採用モデルの双方費用予約と承認版スナップショット、Discord不同意での非公開交流、
+双方/片側のDiscord公開同意スナップショット、APIとSchedulerの競合時のロック順を含む。
 DBテストは使い捨てのローカルSupabaseでのみ実行し、外部LLM/Discordには接続しない。
