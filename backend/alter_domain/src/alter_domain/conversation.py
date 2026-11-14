@@ -386,6 +386,7 @@ def run_one(
             if stopped.is_set():
                 raise WorkerStopped()
             check_context(conn, lease, clock(), global_limit, active_run=execution.run_id)
+            execution.validate_memory_context(conn)
             yield conn
 
     def before_request() -> None:
@@ -402,6 +403,7 @@ def run_one(
         with Heartbeat(engine, lease, clock):
             while True:
                 execution.run_id = None
+                execution.memory_snapshot = None
                 with engine.begin() as conn:
                     aid, turn, turns = prepare(conn, lease, clock(), global_limit)
                 value = execution.conversation_turn(aid, lease.conversation, turns)
@@ -411,6 +413,7 @@ def run_one(
                     if stopped.is_set():
                         raise WorkerStopped()
                     check_context(conn, lease, clock(), global_limit)
+                    execution.validate_memory_context(conn)
                     usage = conn.execute(
                         text(
                             "select coalesce(sum(input_tokens),0) as i,"

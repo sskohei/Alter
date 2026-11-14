@@ -312,7 +312,7 @@ def test_shared_conversation_execution_uses_only_approved_profile_and_session_re
                 release_session(conn, ai_pair[0], conv, model_price())
             return
         for _ in range(4):
-            result = service.conversation_turn(ai_pair[0], conv, ["最近の本"], ["本の話題"])
+            result = service.conversation_turn(ai_pair[0], conv, ["最近の本"])
             assert result.utterance == "本について話しましょう"
         before = len(requests)
         with pytest.raises(BudgetExceeded):

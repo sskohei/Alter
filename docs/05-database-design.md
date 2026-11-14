@@ -166,3 +166,14 @@ background_jobsに`lease_token uuid`を追加。
 双方とも会話削除でCASCADE、RLS default deny。本文・秘密は持たない。
 rollbackはWorker停止後に2表DROPとlease_token列DROP（呼出の不明状態/完了eventを失うため運用照合必須）。
 
+
+
+### #22の会話パージと関係キャッシュ
+
+`20261114140000_memory_relationship_purge.sql`は会話DELETEの直前に参加ペアを取得し、
+残る可視completed会話から`agent_relationships.conversation_count,last_met_at`を更新する。
+残存0件ではペアを削除する。記憶・出典抑止・完了印の削除は既存FK CASCADEに任せる。
+API一覧の可視性判定と、完了consumerによる冪等再集計は維持する。
+巻戻しはWorker停止後にtrigger `conversations_recompute_relationship_before_delete`、
+function `public.recompute_relationship_on_conversation_delete()`の順でDROPする。
+削除抑止表・挿入ガードは残し、#25の削除保証を維持する。再開前に残存会話からキャッシュを再集計する。
