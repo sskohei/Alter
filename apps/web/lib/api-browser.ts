@@ -10,7 +10,8 @@ const browserFetch: typeof fetch = async (input, init) => {
   return response;
 };
 export const browserApi = () => createPreviewClient("", browserFetch);
-export const activityApi = () => createApiClient("", browserFetch);
+export const liveApi = () => createApiClient("", browserFetch);
+export const activityApi = liveApi;
 export function operationMessage(cause: unknown) {
   if (!(cause instanceof ApiError))
     return "接続できませんでした。入力を保持しています。再試行してください。";

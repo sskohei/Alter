@@ -272,3 +272,31 @@ Auth削除後や認証失効で状況を取得できない場合は、招待時�
 表示名、再認証拒否、202/再送、即時停止/招待失効、相手の共有会話404、本人限定の進捗を検証する。
 外部Authはテスト内だけで差し替える。実パージ・Auth/Storage/Discordの削除処理は#30、
 実OAuthと法務確認・本番公開受け入れは#37で追跡し、UIの状態表示だけで削除完了と扱わない。
+
+## Discord本人連携・解除（#29 / PR #52）
+
+`/settings/discord`と`/auth/discord/callback`は#26の正式OpenAPIから生成したクライアントを使う。
+旧Discord preview定義は削除し、previewアプリも正式routerを共有する。
+開始Server Actionとcallback Route HandlerはSupabase `getUser()`で本人を確認する。
+コード交換はServer RouteからBearer付きでFastAPIへ転送し、Discord secretやユーザートークンを
+Webへ渡さない。ブラウザ用APIプロキシでは`link/start`・`link/complete`を公開しない。
+登録済みcallback・Discordドメイン・identify単独scopeを検査し、本人ID・stateハッシュ・期限だけを
+10分のHttpOnly/SameSite=Lax cookieへ保存する（HTTPSではSecure）。callbackでcookieを消費し、
+成功・キャンセル・state不正/失効・409・障害を秘密を含まない理由コードへ変換する。
+レスポンスはno-store/no-referrer。APIの本人拘束・使い捨て検査を認可の正本とする。
+
+画面は連携ID、全体公開、DM通知、サーバー/公開先の名前とID、管理者設定、ギルド別本人同意を
+分けて表示する。Bot操作後は「状態を更新する」で再取得できる。一覧は本人が同意・撤回した
+サーバーだけで、全参加サーバーの一覧でもBotの現在権限の保証でもない。
+`/agent publish state:on|off`（ONは説明後に`confirm:True`）と管理者の`/server setup`を案内し、
+Webからギルド権限・公開同意を付与しない。連携だけで公開・DM・同意をONにしない。
+解除直前には未配信停止と公開済み投稿の完全回収不可を表示する。成功後は連携・同意を消去して
+正式APIから再取得し、失敗時は連携済み表示と確認Dialogを維持して再試行できる。
+解除はAPIの冪等DELETEを使い、全体公開/DMの本人設定は書き換えない。
+
+検証は`discord-policy.test.ts`、`discord-callback.test.ts`、`discord-contract.test.ts`と
+`e2e/discord.spec.ts`（PC/375px）。成功・キャンセル・失効・再利用・別本人・409・403・未連携・
+未設定公開先・解除失敗/再試行・再読み込みを確認する。callbackテストでは正式クライアントを通る
+Bearerと送信先/本文、ブラウザ応答への秘密の非混入も検査する。
+外部Discord OAuth/テストギルドへの実接続は#37のステージング受け入れで行い、自動テストは
+外部境界をMockする。DB/Discordの原子性は#26/#27のAPI/DBテストが担当する。
