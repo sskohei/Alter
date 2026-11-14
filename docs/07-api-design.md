@@ -247,6 +247,11 @@ previewも正式settings routerを再利用し、Patchの厳密型・null/未知
 回数は残存する可視completed会話から再計算し、共通興味は双方の承認済み公開人格を使う。
 生成/抽出/Worker consumerは#22の後続実装で、#25の閲覧・削除完了と区別する。
 
+### 稼働準備確認（#34）
+
+`GET /ready`は認証不要。liveかつcheckoutが必要とするDB全migrationが適用済みなら200（Health型）、
+それ以外は503共通エラー。no-storeとしDB接続詳細を返さない。
+`/health`は引き続きDBに依存しない生存確認。OAuth/LLM/Discordの実疎通は別の受け入れで確認する。
 
 #22のWorker生成を#25の正式な記憶・関係性APIへ統合する。`Relationship.blocked`は本人からだけのブロック。
 記憶の出典NULL対応・保持期限・可視性・本人の削除再送は維持し、削除処理は`memory_read`を共用する。

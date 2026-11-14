@@ -1,0 +1,35 @@
+[Unit]
+Description=Alter scheduler (%i)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=alter-%i
+Group=alter-%i
+WorkingDirectory=/opt/alter/%i/current
+EnvironmentFile=/etc/alter/%i/scheduler.env
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+RuntimeDirectory=alter-%i-scheduler
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 0 /run/alter-%i-scheduler/run.lock /opt/alter/%i/current/.venv/bin/python scripts/run_service.py scheduler %i
+Restart=no
+RestartPreventExitStatus=78
+RestartSec=15
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# Until application log redaction is accepted, retain only systemd lifecycle status.
+StandardOutput=null
+StandardError=null

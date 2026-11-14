@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     api_idempotency_hmac_keys: dict[PositiveInt, SecretStr] = Field(default_factory=dict)
     api_idempotency_hmac_active_version: PositiveInt = 1
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres"
+    database_pool_size: int = Field(default=2, ge=1, le=5)
+    database_max_overflow: int = Field(default=0, ge=0, le=2)
     cors_origins: str = "http://localhost:3000"
 
     # API のレート制限（#32、docs/15）。1 分あたりの回数。0 で無効（負荷試験の調整用）

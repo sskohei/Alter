@@ -296,3 +296,26 @@ Google/GitHub両方を検証する。1人分の総合passで未実施操作を�
 | ADR-016 | アカウント削除のパージは、API パッケージの運営 CLI `alter-api-purge` を手元 PC の OS の定期実行（1 時間ごと、ADR-015）で 1 回ずつ起動して行う。Auth・Storage の管理鍵（`SUPABASE_SECRET_KEY`・`SUPABASE_STORAGE_SECRET_KEY`）はこの CLI と API の環境ファイルにだけ置き、Scheduler・Worker・Bot の環境ファイルには入れない。Discord のスレッド削除は Bot が `discord_cleanup_tasks` から試行して結果を記録する | 管理鍵を持つ処理を API コードの 1 か所に閉じ、常時動く Worker/Bot から鍵を外す。ジョブは DB の `background_jobs` と `deletion_requests` で追跡し、途中失敗は再試行・8 回で `failed`（sskohei が確認して利用者へ連絡）。件数や頻度が増えたら API 内の管理ジョブ化を再検討 |
 
 結果の通知経路: 利用者は `/deletion-status`（#31）で状態を確認し、Auth 削除後は招待時の私的窓口で sskohei が伝える。`failed` と Discord の `forbidden`・`failed` は sskohei が 30 日以内に確認する。PC の停止中はパージも止まるが、削除の期限（30 日）は延ばさない（ADR-015）。
+
+## PC起動管理の実装方式（2026-11-14、#34）
+
+| ID | 決定 | 理由 / 再検討条件 |
+|---|---|---|
+| ADR-016 | Linux向けsystemdで環境別API/Worker/Bot/tunnelを独立管理し、SchedulerはUTC timer+flock、Persistent=falseとする | repo/uv.lockを共用しつつ停止/再起動と秘密を分離する。運用PCのOSは未確認のため、Linux以外では方式を再検討する |
+
+HTTPSはCloudflare named Tunnelを設定候補として用意する。既存ドメインが未準備のため、
+無料固定URLの成立・ドメイン費・提供条件・別端末/Vercelからの疎通は未決定の受け入れ項目とする。
+採用/契約を完了したとは扱わず、#34の実施記録と#37公開ゲートで判断する。
+Quick Tunnelを固定URLの代わりに使わない。APIのJWT/招待/所有権・両者/ギルド同意は維持する。
+実PCでの自動再開方針は#36の結果不明照合後に確定し、それまでは生成/配送timerの自動起動を有効化しない。
+
+## 発表用の一時配置（2026-11-14、#34）
+
+| ID | 決定 | 理由 / 再検討条件 |
+|---|---|---|
+| ADR-017 | ユーザーのハッカソン発表用途に限り、Supabase 1環境、WSL手動プロセス、Quick Tunnel、Vercelの明示hackathon profileを使う | 固定ドメイン・systemd常時起動・2環境分離の準備を発表後へ回す。正式公開はADR-015/#33〜#37の受け入れを維持 |
+
+Webの環境検査自体は維持し、hackathon profileだけで環境分離/正式公開承認SHAの条件を省く。
+認証・招待・所有権・両参加者/ギルド同意・費用上限は変更しない。
+Vercelのproduction targetを発表用aliasへ割り当てても、正式本番の公開ゲートを完了したとは扱わない。
+[発表用手順](../29-hackathon-demo.md)に実設定と残件を記録する。
