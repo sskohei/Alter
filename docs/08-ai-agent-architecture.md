@@ -77,7 +77,7 @@ UTC日付を越えても会話の実費は消えず、consumeによる予約解�
 3. `release_for_deletion(conn, conversation=id)`または`release_for_deletion(conn, agent=id)`を呼ぶ。対象の残予約だけをprovider/model別にreleaseとして追記する。再実行しても解放済み残額は増えない。
 4. 会話→AIの既定順で削除する。共有会話の削除では会話ごとの解放も呼び、相手の予約を残さない。失敗時はreleaseも削除もrollbackする。
 
-`20261114040000_budget_deletion_guard.sql`は残予約を持つ会話/AIのDELETEを23514で拒否する。
+`20261114050000_budget_deletion_guard.sql`は残予約を持つ会話/AIのDELETEを23514で拒否する。
 自動releaseは行わず、SET NULL/匿名化前の解放漏れと、結果不明の予約が失われることを防ぐ。
 確定chargeは#56の匿名化/12か月保持を維持し、AI削除後も全体の日次費用に含める。
 既に参照を失った過去の未解放予約は自動補正しない。導入済み環境では#36で履歴を照合する。

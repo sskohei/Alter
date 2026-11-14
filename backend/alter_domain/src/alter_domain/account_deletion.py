@@ -5,7 +5,7 @@
    共有会話・通知は相手の画面からも外れる）
 2. 本人の AI の自律交流を OFF にし、稼働中なら ``paused`` にする
 3. 本人の AI が参加する未開始（queued）の交流とジョブを取り消す
-4. 未配信の取消（``invitations.cancel_pending_deliveries``。配信表は #26 / #28 で足す）
+4. 未配信の取消（``invitations.cancel_pending_deliveries``。未送信の DM・投稿とギルド別同意）
 5. 招待を失効する（招待の識別情報は 30 日以内にパージ。#30 後半）
 6. ``deletion_requests`` を ``pending`` で作り、非同期パージのジョブ ``account.purge`` を積む
 7. 監査に要求 ID だけを残す（表示名などの個人情報は残さない）

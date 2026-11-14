@@ -96,3 +96,11 @@ test("404 clears previously visible content", async () => {
   expect(result.current.data).toBeNull();
   expect(result.current.error).toBeInstanceOf(ApiError);
 });
+test("a successful null result is an empty resource, not endless loading", async () => {
+  const loader = async () => null;
+  const { result } = renderHook(() => useResource(loader));
+  await flush();
+  expect(result.current.loading).toBe(false);
+  expect(result.current.data).toBeNull();
+  expect(result.current.error).toBeNull();
+});

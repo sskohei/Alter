@@ -60,7 +60,7 @@
 | `GET /discord/connection` | 連携状態 | — → `DiscordConnection` | 401 | discord_connections | `/settings/discord` |
 | `POST /discord/link/start` | state生成、認可URL返却 | — → `url,state_expires_at` | 409 | discord_oauth_states | `/settings/discord` |
 | `POST /discord/link/complete` | OAuth code交換 | `code,state` → `DiscordConnection` | 400,409 | discord_oauth_states, discord_connections | `/auth/discord/callback` |
-| `DELETE /discord/connection` | 本人連携解除 | — → 204 | 404 | discord_connections | `/settings/discord` |
+| `DELETE /discord/connection` | 本人連携解除（冪等） | — → 204 | 401 | discord_connections, discord_dm_deliveries, agent_discord_consents, discord_deliveries | `/settings/discord` |
 | `GET /discord/guilds` | 本人が同意したギルドと設定 | — → `Guild[]` | 401 | discord_guilds, channels, agent_discord_consents | `/settings/discord` |
 | `PUT /discord/guilds/{id}/channel` | 管理者が公開先設定 | `channel_id,enabled` → `GuildChannel` | 403,422 | discord_guilds, channels | `/settings/discord` |
 | `GET /preferences` | 通知等の個人設定（operationId: `get_preferences`） | — → `Preferences` | 401 | profiles（MVP） | `/settings/account` |
@@ -199,3 +199,29 @@ icon_pathの省略は維持、nullは解除、非nullは検証済みの本人画
 `POST /agents/{id}/profile/suggest`は本人所有権を検証後、未接続の間は503を返す。
 成功時の契約は保存しない`PublicPersonality`で、本人が採用後に保存・承認する。
 Sonnetは選定済みだがlive adapter/提案生成/回数制限/費用記録は#18の残件。
+
+
+## #24 Web設定画面の接続
+
+Webの交流設定・ブロックは正式OpenAPI生成クライアントを利用する。
+previewも正式settings routerを再利用し、Patchの厳密型・null/未知項目拒否・認証定義を共有する。
+ブロック/解除の204をJSONとして読まず、BFFも空本文を返す。APIエラーのrequest_idとRetry-Afterを保持する。
+画面は確認Dialogの成功応答後だけ設定を更新し、ブロック後は会話を再取得する。
+## #26 Discord本人連携の実装
+
+`apps/api/src/alter_api/discord_routes.py`と`backend/alter_domain/src/alter_domain/discord_link.py`・`discord_oauth.py`で実装した。operationIdは #52 のpreview契約から`preview_`を外した`get_discord_connection`・`disconnect_discord`・`start_discord_link`・`complete_discord_link`・`list_discord_guilds`。応答は`Cache-Control: no-store`。
+
+- 開始: すでに連携済みなら409。32バイト乱数のstateを返し、DBには SHA-256 の16進ハッシュだけを10分の期限付きで保存する。認可URLのscopeは`identify`だけ。期限切れ・使用済みのstateは発行時に掃除し、1人の未使用stateは新しい5件まで残す。`DISCORD_CLIENT_ID`・`DISCORD_CLIENT_SECRET`・`DISCORD_REDIRECT_URI`のどれかが未設定なら503でstateを作らない。
+- 完了: stateを行ロックして照合する。存在しない・期限切れ・使用済みは400`OAUTH_STATE_INVALID`。別の本人のstateは消費せずに400。本人のstateは結果にかかわらず削除し（使い捨て）、失敗の応答もコミットする。本人がすでに連携済みならコード交換せずに409。Discordがコードを拒否したら400`OAUTH_STATE_INVALID`、その Discord ユーザーが別の本人と連携済みなら409`CONFLICT`。Discordに到達できないときだけ503で巻き戻す。
+- トークン: Discordのアクセストークンは`/users/@me`でIDを取得するためだけに使い、取得後に失効APIを呼んで破棄する。DB・応答・ログ・監査に保存しない。
+- 解除: 連携がなくても204（冪等）。未使用stateは連携の有無にかかわらず削除する（開始→解除→元のstateで完了、を通さない）。連携を`revoked_at`で失効し、本人あての`pending`のDMを`cancelled`にする。本人のAIのギルド別公開同意も取り消し、そのAIが参加する会話の`pending`の投稿を`cancelled`にする（送信中・送信済みは変えない）。再連携しても同意は自動で戻さず、公開し直すにはDiscordで`/agent publish`が必要。招待の失効・削除要求（#30）でも`invitations.cancel_pending_deliveries`で同じ範囲（未送信のDM・投稿とギルド別同意）を取り消す。
+- ギルド一覧: 本人のAIが同意した（取り消したものも含む）ギルドと、有効な投稿先を返す。ギルド名・チャンネル名は`discord_guilds.name`・`discord_channels.name`（Botが記録する表示用の名前）。
+- 監査: `discord.link_start`・`discord.link`・`discord.link_failed`（理由だけ）・`discord.unlink`（取り消し件数だけ）。Discord ID・state・コードは残さない。
+- Webからギルドの投稿先を設定するAPIはMVPでは公開しない（Botの`/server setup`、#27）。
+
+
+
+#24では設定OFF・ブロックの未配信投稿取消も接続する。交流OFFまたはDiscord全体公開OFFで
+本人AIが参加する会話の`discord_deliveries.status=pending`をcancelledにし、ブロックでは
+対象ペアのpending投稿だけを取り消す。送信中/送信済み・無関係な会話・ギルド別同意を変更しない。
+同じトランザクションの設定/ブロック監査に`cancelled_posts`件数を記録し、相手IDは残さない。
