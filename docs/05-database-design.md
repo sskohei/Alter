@@ -157,3 +157,12 @@ UTC日次のsuggestion行数で失敗も含め3回を検査。金額の正本は
 プロセス停止後も自動で再実行/予約解放しない。#36で照合後に状態と台帳を確定する。
 メタデータの保持は費用台帳と同じ12か月とし、#30のパージで完了行を清掃する。
 新規migrationは`20261114130000_llm_runs.sql`。戻すときは未完実行を照合してから表を削除する。
+
+## #20 Worker実行記録
+
+background_jobsに`lease_token uuid`を追加。
+`llm_invocations(conversation_id,turn_no,status,created_at)`は会話/turn複合PK、
+`conversation_events(conversation_id,kind,created_at)`は会話/kind複合PK。
+双方とも会話削除でCASCADE、RLS default deny。本文・秘密は持たない。
+rollbackはWorker停止後に2表DROPとlease_token列DROP（呼出の不明状態/完了eventを失うため運用照合必須）。
+

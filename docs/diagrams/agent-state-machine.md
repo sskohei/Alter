@@ -8,7 +8,7 @@ stateDiagram-v2
   running --> running: 発言保存
   running --> retry_wait: 一時障害
   retry_wait --> running: 再取得
-  retry_wait --> failed: 3回失敗
+  running --> failed: 最大3回の再試行後も失敗
   running --> completed: 終了・上限
   running --> cancelled: 双方の設定を再確認し停止
   running --> failed: 恒久エラー
