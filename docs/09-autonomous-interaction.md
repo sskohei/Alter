@@ -61,4 +61,13 @@ savepoint内で一括作成する。片側/全体の予算不足は全体を戻�
 会話開始時の各参加者の`discord_publish`を`conversation_participants.discord_consent`へ保存する。
 Discord公開不同意は非公開交流を妨げない。配送処理（#28/#74）が完了時と投稿直前に
 双方の現在の公開設定・ギルド別同意・チャンネル設定・安全性を再確認し、配送可否を決める。
-OFF/ブロックによるqueued取消後の残予約解放は#20の終了処理へ引き渡す。
+OFF/ブロックによるqueued取消後も、#20のWorkerが未使用予約とcancelled eventを一度だけ精算する。
+
+
+## Worker実装（#20）
+
+独立入口と`LLMExecution.conversation_turn`を接続済み。最大8発言/5分/should_end/費用上限で終了し、
+各外部呼出の前に承認版と双方の同意を再確認する。生成済みで安全判定だけが失敗した場合は
+同ターンを有料で再生成しない。状態・完了event・Web通知を最終発言と同時に保存する。
+要約/記憶は#22、Discord outbox/配信は#28の範囲とする。
+再claim・クラッシュ・結果不明時の動作は[Worker実行契約](08-ai-agent-architecture.md#20-workerの実装)を参照。

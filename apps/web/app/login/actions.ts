@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { serverSupabase } from "../../lib/supabase/server";
 import { challengeCookie, proofCookie } from "../../lib/reauth-proof";
+import { discordStateCookie } from "../../lib/discord-policy";
 import { safeReturnPath } from "../../lib/auth-policy";
 
 export async function login(form: FormData) {
@@ -26,6 +27,7 @@ export async function logout() {
   const store = await cookies();
   store.delete(challengeCookie);
   store.delete(proofCookie);
+  store.delete(discordStateCookie);
   // Changing session cookies invalidates the Router cache; no persistent Query cache is used.
   redirect("/login");
 }
