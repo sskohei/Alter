@@ -7,6 +7,7 @@ import uvicorn
 from alter_domain import agents
 from alter_domain.auth_admin import SupabaseAuthAdmin
 from alter_domain.db import create_db_engine
+from alter_domain.discord_oauth import DiscordOAuthClient
 from alter_domain.icons import IconStorage, IconStorageUnavailable, InvalidIcon
 from alter_domain.settings import Settings
 from fastapi import APIRouter, FastAPI
@@ -18,6 +19,7 @@ from alter_api.activity_routes import router as activity_router
 from alter_api.agent_routes import router as agent_router
 from alter_api.auth import JwtVerifier
 from alter_api.deletion_routes import router as deletion_router
+from alter_api.discord_routes import router as discord_router
 from alter_api.errors import (
     REQUEST_ID_HEADER,
     ErrorResponse,
@@ -45,6 +47,7 @@ def create_api_v1_router() -> APIRouter:
     router.include_router(agent_router)
     router.include_router(activity_router)
     router.include_router(deletion_router)
+    router.include_router(discord_router)
     return router
 
 
@@ -102,6 +105,7 @@ def create_app(
     app.state.auth_admin = SupabaseAuthAdmin(settings, client)
     app.state.icon_storage = IconStorage(settings, client)
     app.state.jwt_verifier = JwtVerifier(settings, client)
+    app.state.discord_oauth = DiscordOAuthClient(settings, client)
 
     install_error_handlers(app)
 

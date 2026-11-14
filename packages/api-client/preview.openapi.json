@@ -620,6 +620,48 @@
         "title": "DiscordConnection",
         "type": "object"
       },
+      "DiscordLinkComplete": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 256,
+            "minLength": 16,
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "state"
+        ],
+        "title": "DiscordLinkComplete",
+        "type": "object"
+      },
+      "DiscordLinkStart": {
+        "properties": {
+          "state_expires_at": {
+            "format": "date-time",
+            "title": "State Expires At",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "state_expires_at"
+        ],
+        "title": "DiscordLinkStart",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -633,6 +675,7 @@
               "METHOD_NOT_ALLOWED",
               "CONFLICT",
               "VALIDATION_ERROR",
+              "OAUTH_STATE_INVALID",
               "RATE_LIMITED",
               "AUTHORIZATION_UNAVAILABLE",
               "SERVICE_UNAVAILABLE",
@@ -3028,8 +3071,95 @@
       }
     },
     "/api/v1/discord/connection": {
+      "delete": {
+        "operationId": "disconnect_discord",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Discord \u9023\u643a\u3092\u89e3\u9664\u3059\u308b\uff08\u672a\u9001\u4fe1\u306e DM\u30fb\u6295\u7a3f\u3068\u30ae\u30eb\u30c9\u5225\u540c\u610f\u3082\u53d6\u308a\u6d88\u3059\u3002\u51aa\u7b49\uff09",
+        "tags": [
+          "discord"
+        ]
+      },
       "get": {
-        "operationId": "preview_get_discord_connection",
+        "operationId": "get_discord_connection",
         "responses": {
           "200": {
             "content": {
@@ -3114,15 +3244,18 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Discord Connection"
+        "summary": "Discord \u9023\u643a\u306e\u72b6\u614b\uff08\u30c8\u30fc\u30af\u30f3\u306f\u8fd4\u3055\u306a\u3044\uff09",
+        "tags": [
+          "discord"
+        ]
       }
     },
     "/api/v1/discord/guilds": {
       "get": {
-        "operationId": "preview_list_discord_guilds",
+        "operationId": "list_discord_guilds",
         "responses": {
           "200": {
             "content": {
@@ -3131,7 +3264,7 @@
                   "items": {
                     "$ref": "#/components/schemas/Guild"
                   },
-                  "title": "Response Preview List Discord Guilds",
+                  "title": "Response List Discord Guilds",
                   "type": "array"
                 }
               }
@@ -3211,10 +3344,225 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "SupabaseBearer": []
           }
         ],
-        "summary": "Guilds"
+        "summary": "\u672c\u4eba\u306e AI \u304c\u30ae\u30eb\u30c9\u5225\u516c\u958b\u306b\u540c\u610f\u3057\u305f\u30ae\u30eb\u30c9\u3068\u6295\u7a3f\u5148",
+        "tags": [
+          "discord"
+        ]
+      }
+    },
+    "/api/v1/discord/link/complete": {
+      "post": {
+        "operationId": "complete_discord_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscordLinkComplete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "state \u307e\u305f\u306f\u30b3\u30fc\u30c9\u304c\u7121\u52b9\uff08\u3084\u308a\u76f4\u3057\uff09"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Discord \u306e\u8a8d\u53ef\u30b3\u30fc\u30c9\u3067\u9023\u643a\u3092\u5b8c\u4e86\u3059\u308b\uff08state \u306f\u672c\u4eba\u30fb10 \u5206\u4ee5\u5185\u30fb1 \u56de\u3060\u3051\uff09",
+        "tags": [
+          "discord"
+        ]
+      }
+    },
+    "/api/v1/discord/link/start": {
+      "post": {
+        "operationId": "start_discord_link",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordLinkStart"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u9023\u643a\u3092\u958b\u59cb\u3059\u308b\uff0810 \u5206\u30fb\u4f7f\u3044\u6368\u3066\u306e state \u3068 Discord \u306e\u8a8d\u53ef URL\uff09",
+        "tags": [
+          "discord"
+        ]
       }
     },
     "/api/v1/notifications": {

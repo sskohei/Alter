@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { interactionBudgetSchema, type BudgetValues } from "../lib/interaction-budget";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ApiError, unwrap, type components } from "@alter/api-client";
-import { activityApi, browserApi } from "../lib/api-browser";
+import { activityApi } from "../lib/api-browser";
 import { useRetryAfter } from "../lib/use-retry-after";
 import { useResource } from "../lib/use-resource";
 import type { LlmDisclosure } from "../lib/interaction-policy";
@@ -23,7 +23,7 @@ import {
 } from "./ui/alert-dialog";
 type Settings = components["schemas"]["AgentSettings"];
 type Agent = components["schemas"]["Agent"];
-type Guild = import("@alter/api-client/preview").components["schemas"]["Guild"];
+type Guild = components["schemas"]["Guild"];
 type Intent = {
   kind: "start" | "stop" | "publish" | "unpublish";
   values: BudgetValues;
@@ -53,7 +53,7 @@ export function InteractionSettings({
   const resource = useResource(load);
   const guildLoad = useCallback(
     (signal: AbortSignal) =>
-      browserApi().GET("/api/v1/discord/guilds", { signal }).then(unwrap),
+      activityApi().GET("/api/v1/discord/guilds", { signal }).then(unwrap),
     [],
   );
   const guilds = useResource(guildLoad);

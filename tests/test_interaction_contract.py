@@ -30,7 +30,11 @@ def test_preview_uses_formal_settings_and_block_contracts() -> None:
 
     live = create_app().openapi()
     preview = create_contract_app().openapi()
-    for path in ("/api/v1/agents/{id}/settings", "/api/v1/agents/{id}/blocks/{other_id}"):
+    for path in (
+        "/api/v1/agents/{id}/settings",
+        "/api/v1/agents/{id}/blocks/{other_id}",
+        "/api/v1/discord/guilds",
+    ):
         assert live["paths"][path] == preview["paths"][path]
-    for name in ("AgentSettings", "AgentSettingsPatch"):
+    for name in ("AgentSettings", "AgentSettingsPatch", "Guild"):
         assert live["components"]["schemas"][name] == preview["components"]["schemas"][name]

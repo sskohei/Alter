@@ -387,11 +387,39 @@ def stop_agents_for_owner(conn: Connection, owner_id: uuid.UUID) -> int:
 
 
 def cancel_pending_deliveries(conn: Connection, owner_id: uuid.UUID) -> None:
-    """未配信の取消。対象テーブルを追加する #13 / #26 / #28 でここに処理を足す。
+    """未配信の取消（#26）。失効・削除要求と同じトランザクションで呼ばれることを前提にする。
 
-    失効・削除要求と同じトランザクションで呼ばれることを前提にする。
+    - 本人あての未送信（pending）の DM を取り消す
+    - 本人の AI が参加する会話の未投稿（pending）を取り消す
+    - 本人の AI のギルド別公開同意を取り消す（再開しても自動では戻さない）
+    送信中（sending）・送信済みは変えない。送信中は配信処理（#28）が結果を照合する。
     """
-    del conn, owner_id
+    conn.execute(
+        text(
+            "update public.discord_dm_deliveries d set status = 'cancelled' "
+            "from public.notifications n "
+            "where n.id = d.notification_id and n.profile_id = :owner and d.status = 'pending'"
+        ),
+        {"owner": owner_id},
+    )
+    conn.execute(
+        text(
+            "update public.discord_deliveries d set status = 'cancelled' "
+            "where d.status = 'pending' and exists ("
+            "  select 1 from public.conversation_participants p "
+            "  join public.agents a on a.id = p.agent_id "
+            "  where p.conversation_id = d.conversation_id and a.owner_id = :owner)"
+        ),
+        {"owner": owner_id},
+    )
+    conn.execute(
+        text(
+            "update public.agent_discord_consents set revoked_at = now() "
+            "where revoked_at is null and agent_id in ("
+            "  select id from public.agents where owner_id = :owner)"
+        ),
+        {"owner": owner_id},
+    )
 
 
 def list_invitations(conn: Connection) -> list[InvitationSummary]:
