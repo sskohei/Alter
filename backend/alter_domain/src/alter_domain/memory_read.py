@@ -29,7 +29,9 @@ class Relationship(BaseModel):
     shared_interests: list[str]
     last_met_at: datetime | None
     # Only the caller's block, never a claim that the other participant unblocked them.
-    blocked: bool
+    blocked: bool = Field(
+        description="本人のAIから相手のAIへのブロック。相手からのブロックは含めない。"
+    )
 
 
 def forget(conn: Connection, owner: uuid.UUID, memory_id: uuid.UUID) -> None:

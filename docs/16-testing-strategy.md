@@ -63,3 +63,11 @@ Worker（#20）は`tests/test_worker.py`と`tests/db/test_conversation_db.py`で
 8発言/should_end/5分/予算、停止/ブロック/削除/人格失効、schema/独立判定の拒否、
 未課金再試行/バックオフ/上限と課金済みの再生成禁止、取消予約解放、event/通知の冪等性を含む。
 Sonnet adapterはHTTP Mockで生成/独立判定とcount_tokens後の停止を検証し、実課金はしない。
+
+
+記憶（#22）は`tests/db/test_memory_db.py`で、同時consumer／失敗rollbackと再起動、最大3候補・出典・hash、
+秘密／PII／命令の除外、上位5件・相手・保持期限、次回Workerの実プロンプト、生成中／count_tokens後の本人削除、
+別出典の同じ削除hashの要約抑止、直接SQLの会話パージ後の関係再集計を確認する。
+既存`test_memory_api_db.py`の正式API認可・再送・挿入ガードも維持する。
+`memory_suppression.test.sql`は3表のRLS・ポリシー0件・直接CRUDと全テーブル権限の拒否、
+AI／会話CASCADE・無関係な記録の保持・パージtriggerの権限を検証する。
