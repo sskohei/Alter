@@ -246,3 +246,8 @@ previewも正式settings routerを再利用し、Patchの厳密型・null/未知
 `source_conversation_id`はDBに合わせnullable。`blocked`は本人からのブロックを表す。
 回数は残存する可視completed会話から再計算し、共通興味は双方の承認済み公開人格を使う。
 生成/抽出/Worker consumerは#22の後続実装で、#25の閲覧・削除完了と区別する。
+
+
+#22のWorker生成を#25の正式な記憶・関係性APIへ統合する。`Relationship.blocked`は本人からだけのブロック。
+記憶の出典NULL対応・保持期限・可視性・本人の削除再送は維持し、削除処理は`memory_read`を共用する。
+各ターンへの記憶／要約入力と会話パージ連動は[記憶契約](10-memory-relationship.md)に従う。

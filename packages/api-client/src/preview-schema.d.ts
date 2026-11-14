@@ -913,7 +913,10 @@ export interface components {
         };
         /** Relationship */
         Relationship: {
-            /** Blocked */
+            /**
+             * Blocked
+             * @description 本人のAIから相手のAIへのブロック。相手からのブロックは含めない。
+             */
             blocked: boolean;
             /** Conversation Count */
             conversation_count: number;

@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import Connection, Engine, text
 
-from alter_domain import budget
+from alter_domain import budget, memory
 from alter_domain.llm import (
     LLMResponse,
     PromptMessage,
@@ -105,6 +105,17 @@ class LLMExecution:
         self.global_limit = global_limit
         self.forbidden = forbidden
         self.run_id: UUID | None = None
+        self.memory_snapshot: tuple[UUID, UUID, list[str], str | None] | None = None
+
+    def validate_memory_context(self, conn: Connection) -> None:
+        if self.memory_snapshot is None:
+            return
+        agent, other, memories, summary = self.memory_snapshot
+        if (
+            memory.context(conn, agent, other) != memories
+            or memory.recent_summary(conn, agent, other) != summary
+        ):
+            raise UnsafeOutput("Memory context changed before publication")
 
     def _admit(self, agent: UUID, conversation: UUID | None) -> UUID:
         self.client.require_enabled()
@@ -171,6 +182,7 @@ class LLMExecution:
 
     def _phase(self, run: UUID, agent: UUID, conversation: UUID | None, status: str) -> None:
         with self.transaction() as conn:
+            self.validate_memory_context(conn)
             budget.lock_budget(conn)
             if conversation is not None:
                 _conversation_allowed(conn, agent, conversation)
@@ -316,6 +328,7 @@ class LLMExecution:
                 raise UnsafeOutput("Output failed independent safety review")
             # Recheck access after the final call too; never return output after revocation.
             with self.transaction() as conn:
+                self.validate_memory_context(conn)
                 if conversation is not None:
                     _conversation_allowed(conn, agent, conversation)
             self._finish(run, agent, conversation, "succeeded")
@@ -335,12 +348,21 @@ class LLMExecution:
                 raise UnknownLLMOutcome("Provider outcome is unknown") from None
             raise
 
-    def conversation_turn(
-        self, agent: UUID, conversation: UUID, turns: list[str], memories: list[str] | None = None
-    ) -> Utterance:
+    def conversation_turn(self, agent: UUID, conversation: UUID, turns: list[str]) -> Utterance:
+        self.memory_snapshot = None
         with self.transaction() as conn:
             _conversation_allowed(conn, agent, conversation)
-            messages = approved_prompt(conn, agent, turns, memories)
+            other = conn.execute(
+                text(
+                    "select agent_id from public.conversation_participants "
+                    "where conversation_id=:conv and agent_id<>:agent"
+                ),
+                {"conv": conversation, "agent": agent},
+            ).scalar_one()
+            memories = memory.context(conn, agent, other)
+            summary = memory.recent_summary(conn, agent, other)
+            self.memory_snapshot = agent, other, memories, summary
+            messages = approved_prompt(conn, agent, turns, memories, summary)
         return self.execute(agent, messages, Utterance, conversation=conversation)
 
 
@@ -395,7 +417,11 @@ def _strings(value: object) -> list[str]:
 
 
 def approved_prompt(
-    conn: Connection, agent: UUID, turns: list[str] | None = None, memories: list[str] | None = None
+    conn: Connection,
+    agent: UUID,
+    turns: list[str] | None = None,
+    memories: list[str] | None = None,
+    summary: str | None = None,
 ) -> list[PromptMessage]:
     """Load ONLY the approved public revision. Worker supplies separately authorized quotes."""
     from alter_domain.agents import get_profile
@@ -409,4 +435,4 @@ def approved_prompt(
     profile = get_profile(conn, agent, version)
     if profile.approved_at is None:
         raise UnsafeOutput("An approved profile is required")
-    return build_prompt(profile, turns or [], memories)
+    return build_prompt(profile, turns or [], memories, summary)
