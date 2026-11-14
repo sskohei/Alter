@@ -49,13 +49,13 @@
 | `PATCH /agents/{id}/settings` | 同意/予算/公開変更（operationId: `patch_interaction_settings`） | `AgentSettingsPatch` → `AgentSettings` | 404,409,422 | agent_settings, audit_events | `/settings/interaction` |
 | `PUT /agents/{id}/blocks/{other_id}` | 相手をブロック（operationId: `block_agent`。再送も204） | — → 204 | 404,422 | agent_blocks | `/relationships`, `/conversations` |
 | `DELETE /agents/{id}/blocks/{other_id}` | 解除（operationId: `unblock_agent`。未ブロックでも204） | — → 204 | 404,422 | agent_blocks | `/relationships` |
-| `GET /conversations` | 参加会話一覧 | `cursor,limit` → paged `ConversationSummary` | 401 | conversations, participants | `/conversations` |
-| `GET /conversations/{id}` | 参加会話全文 | — → `ConversationDetail` | 404 | conversations, messages | `/conversations/[id]` |
+| `GET /conversations` | 参加会話一覧（operationId: `list_conversations`） | `cursor,limit` → paged `ConversationSummary` | 401,422 | conversations, participants | `/conversations` |
+| `GET /conversations/{id}` | 参加会話全文（operationId: `get_conversation`） | — → `ConversationDetail` | 404 | conversations, messages | `/conversations/[id]` |
 | `GET /memories` | 自分の記憶 | `agent_id,cursor` → paged `Memory` | 404 | memories | `/memories` |
 | `DELETE /memories/{id}` | 自分の記憶を削除 | — → 204 | 404 | memories, audit_events | `/memories` |
 | `GET /relationships` | 自分の交流相手 | `cursor` → paged `Relationship` | 401 | agent_relationships | `/relationships` |
-| `GET /notifications` | 本人通知 | `cursor,unread?` → paged `Notification` | 401 | notifications | `/notifications` |
-| `PATCH /notifications/{id}/read` | 本人通知既読 | — → `Notification` | 404 | notifications | `/notifications` |
+| `GET /notifications` | 本人通知（operationId: `list_notifications`） | `cursor,limit,unread?` → paged `Notification` | 401,422 | notifications | `/notifications` |
+| `PATCH /notifications/{id}/read` | 本人通知既読（operationId: `read_notification`。再送しても最初の既読日時） | — → `Notification` | 404 | notifications | `/notifications` |
 | `GET /discord/connection` | 連携状態 | — → `DiscordConnection` | 401 | discord_connections | `/settings/discord` |
 | `POST /discord/link/start` | state生成、認可URL返却 | — → `url,state_expires_at` | 409 | discord_oauth_states | `/settings/discord` |
 | `POST /discord/link/complete` | OAuth code交換 | `code,state` → `DiscordConnection` | 400,409 | discord_oauth_states, discord_connections | `/auth/discord/callback` |
@@ -73,7 +73,7 @@
 
 ## 開発基盤の運用エンドポイント
 
-上記の業務APIは`GET/PATCH /users/me`と #16 の交流設定・ブロック・通知設定を除き未実装。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
+上記の業務APIは`GET/PATCH /users/me`、#15の人格/アイコン、#16の交流設定・ブロック・通知設定、#21の会話・通知を実装済み。その他は将来契約。ほかに`GET /health`（`/api/v1`外、認証不要、operationId: `get_health`）を提供する。Pydantic `Health`の応答は`{status:"ok",service:"api",mode:"mock"|"live"}`。これはHTTPプロセスの生存確認であり、DB/Authのreadinessを保証しない。FastAPIから生成したOpenAPIとTypeScript型は`packages/api-client/`に管理する。
 
 ## 実装済みの共通基盤（#7 前半）
 
@@ -104,9 +104,76 @@ Issue #8のMockは同じuserルーターとモデルを再利用する。`/__moc
 ## #16 交流設定・ブロック・通知設定の実装
 
 - `PATCH /agents/{id}/settings`は1項目以上・null不可・未知項目は422（#48 のpreview契約と同じ）。真偽値・整数・金額は型を厳密に検査し、`"yes"`や`"0.1"`のような文字列は422。
-- 予算はUSDで0以上・小数6桁まで。`daily_budget_usd`は運営設定`AGENT_DAILY_BUDGET_MAX_USD`（APIの環境変数、既定1.00）以下、`max_session_usd`は保存後の`daily_budget_usd`以下でなければ422。日次予算を下げるときは`max_session_usd`も同時に下げる。
+- 予算はUSDで0以上・小数6桁まで。`daily_budget_usd`は運営設定`AGENT_DAILY_BUDGET_MAX_USD`（APIの環境変数、既定1.00）以下、`max_session_usd`は保存後の`daily_budget_usd`以下でなければ422。この上限の確認は、予算項目を変更するときと同意をONにするときだけ行い、運営が上限を下げたあとでもOFF（同意の撤回）や頻度の変更は既存予算の修正なしに受け付ける。金額は1,000,000 USDを超える値も422（500にしない）。日次予算を下げるときは`max_session_usd`も同時に下げる。
 - `autonomy_enabled`と`discord_publish`をONにできるのは、承認済みで`status='active'`のAIだけ（下書き・停止中は409）。自律交流のONは同意文面の版`ALTER_CONSENT_VERSION`（APIの環境変数）が設定されているときだけで、未設定なら409（送信先LLM未決定の間はONにさせない）。Discordのギルド別同意・管理者設定は配信時に別途確認する（#26/#28）。
-- 自律交流をOFFにすると、そのAIが参加する`queued`の会話とジョブ（`queued`/`retry_wait`）を同じトランザクションで`cancelled`にする。実行中の会話はWorkerが発言前の再確認で止める。取り消した会話の予約解放は終了処理（#19/#20）で行う。`discord_publish`のOFFで止める未配信は配信表を追加する #28 で接続する。
-- ブロックは本人のAIから相手のAIへの片側の記録。自分自身は422、存在しない・削除済みの相手は404。新しくブロックしたときは、その相手との`queued`の会話とジョブを取り消す。解除はブロックしていなくても204。
+- 自律交流をOFFにすると、そのAIが参加する`queued`の会話とジョブ（`queued`/`retry_wait`）を同じトランザクションで`cancelled`にする。会話が`queued`でも、Workerがジョブをすでに取得済み（`running`）なら取り消さない（会話とジョブを行ロックしてから判断する）。取り消した会話の未使用予約の解放は、#59 の共通解放処理を使う別PRで接続する（予約を作る #60 より前に入れる）。実行中の会話はWorkerが発言前の再確認で止める。取り消した会話の予約解放は終了処理（#19/#20）で行う。`discord_publish`のOFFで止める未配信は配信表を追加する #28 で接続する。
+- ブロックは本人のAIから相手のAIへの片側の記録。ブロック・解除の最初に自分と相手のAIをIDの昇順で行ロックし、相互ブロックが同時に来てもデッドロックしない。自分自身は422、存在しない・削除済みの相手は404。新しくブロックしたときは、その相手との`queued`の会話とジョブを取り消す。解除はブロックしていなくても204。
 - 変更があったときだけ`audit_events`へ記録する（`agent_settings.update`/`agent.block`/`agent.unblock`/`preferences.update`）。メタデータは変更した項目名、同意系のON/OFF、自律交流ON時の同意文面の版、取り消した会話の件数だけで、ブロックした相手のIDは入れない。
 - 他人のAIの`{id}`は存在を隠して404。招待・停止/削除の確認は共通認可（`BusinessConnection`）で行う。
+
+## #15 人格APIの実装
+
+`GET /agents/me`、作成/名前更新、人格取得/新規版/承認/privateを実装。
+`RevisionInput.expected_version`は必須（最新下書き版との不一致は409）。承認は最新の版だけを許可し、
+同じ最新版が承認済みなら追加更新せず現在の`Agent`を200で返す。新版作成後の旧版承認は409。
+承認APIは`Idempotency-Key`を契約に含めず、キー別の過去応答は保存しない。
+初回承認成功時に、同じDBトランザクションで`profiles.onboarded_at`をサーバー時刻で設定する。
+作成・下書き保存ではNULL、再送・再承認では初回日時を維持し、承認失敗では記録しない。
+承認では交流・Discord公開をONにしない。
+`GET /agents/{id}/profile`は版指定なしなら最新の版（承認状態を問わない）を返す。
+任意の`?version=N`（整数、1以上）で特定版を取得でき、版不存在・他人所有は404、指定不正は422。
+どの版でも非公開欄は含めない。Workerは承認版を使用する。
+作成の`Idempotency-Key`は本人・操作ごとに分離し、`api_idempotency`へ201の成功応答と入力HMAC・鍵版を保存する。
+成功から24時間以内の同一キー・同一入力は保存済み応答を201で返し、本文不一致は409。
+再送しても期限は延長しない。期限後は保存済み応答を返さず、新規作成として検証するため、
+既存AIがあれば409（1人1体の制約は維持）。清掃の実行有無でこの挙動は変わらない。
+HMACは暗号化鍵から独立した32byte鍵を使う。`API_IDEMPOTENCY_HMAC_KEYS`は
+版番号→Base64鍵のJSON、`API_IDEMPOTENCY_HMAC_ACTIVE_VERSION`（既定1）は新規記録の鍵版。
+再送は記録の鍵版で照合するため、暗号化鍵の交換やHMACの現行版切替で過去の再送を壊さない。
+照合後の再送には暗号化鍵を要求しない。必要なHMAC鍵の未設定・不正・旧版欠落は503で、書込は行わない。
+ヘッダーなしの作成ではHMAC鍵を要求しない。
+交換時は新旧のHMAC鍵を全APIインスタンスへ配布してから現行版を切替え、旧版の最終作成成功から24時間経過後に旧鍵を外す。
+同じ鍵版の値は上書きしない。再送保証・保持契約は[DB設計](05-database-design.md)を参照。
+privateはAES-256-GCM（32byte鍵、ランダムnonce、agent/versionをAAD）で保存、応答はno-store。
+鍵不備は503。人格暗号化は現在V1鍵のみで、鍵交換CLI/復元訓練は#36の運用受け入れで確認する。
+業務APIはliveでのみDBを利用し、毎リクエストのAuth管理照会と招待/プロフィールロックを通す。
+Mockでも認可は迂回せず503。`GET/PATCH /users/me`（#66）および交流/通知設定（#69）のルーターも同時に登録する。
+
+## #15 アイコンのAPIと所有権（2026-11-14）
+
+`POST /api/v1/agent-icons`（operationId: `upload_agent_icon`）は本人の招待/停止状態を検証し、
+Content-Type `image/png` / `image/jpeg` / `image/webp`の**画像バイナリ本文**を受け付ける。
+multipartや任意URLは受け付けない。入力/再エンコード後とも最大2 MiB、縦横各2048pxまで。
+MIMEと実形式の一致・完全なデコード・単一フレームを検査し、PNGへ再エンコードして
+EXIF/GPS/コメント/末尾の異種データを除去する。SVG/GIF/破損/サイズ超過は422。
+成功時は201 `{icon_path: "<本人UUID>/<サーバー採番UUID>.png"}`。
+他人のprefix・未登録パス・private用途bucket・外部URLを`icon_path`へ指定すると422。
+認証/招待拒否時は画像を保存しない。Storage資格情報不備/障害/timeoutは秘密なしの503。
+
+アップロードは専用private bucket `agent-icons`へimmutableに書き込み、API専用
+`agent_icon_uploads`に本人・検証済みMIME/サイズ/hashを記録する。ブラウザは直接CRUDできない。
+私的ファイル用の`profile-private` bucketも非公開で、アイコンAPIはこのbucketを署名しない。
+アイコンの公開用途には**300秒の署名URL**を使い、無期限のpublic URLは発行しない。
+選択済みの検証済みアイコンだけが`Agent.icon_url`に入り、生パス/私的ファイルURLは返さない。
+
+`POST /agents`の`icon_path?`でアップロード済み画像を選べる。
+`PATCH /agents/{id}`は`name?`/`icon_path?`の1項目以上を受け付け、name:nullは422。
+icon_pathの省略は維持、nullは解除、非nullは検証済みの本人画像への変更。
+他人所有のAIはStorage検証前に404。人格revisionではアイコンを変更せずPATCHを使う。
+既存のアイコンは本人のGET/更新/承認応答で署名URLを再発行する。
+作成Idempotency-Keyの保存応答には署名tokenを保存せず、同じ入力の再送時は
+元のアイコンの短期URLを更新する（id/人格等の作成結果は維持）。
+
+解除/招待失効後の新規署名は拒否するが、発行済みURLは最大300秒残る。
+画像UI/ファイル選択は#17側の画面実装、APIの画像検証は本Issueの範囲。
+
+## #21 会話一覧・詳細とWeb通知の実装
+
+- 一覧・詳細は本人のAIが参加している会話だけ。参加していない会話の`{id}`は存在を隠して404。並びは作成日時の新しい順（同時刻はID順）で、cursorは不透明な文字列（不正は422）。
+- 参加者の利用者が削除要求済み（`profiles.deleted_at`）またはAIが削除済みの会話は、要求時点から双方の一覧・詳細・通知から外す（進行中の`deletion_requests`は #30 で同じ条件に加える）。
+- `messages`は`moderation_status='allowed'`の発言だけを`turn_no`順に返し、モデレーション状態・トークン数は返さない。`participants`は参加順、`partner`は自分以外の参加者のAI。
+- `cost_usd`（#47 で合意）: 本人のAI・この会話・`usage_records.kind='charge'`の`actual_usd`の合計。予約（reserve）・解放（release）と相手のAIの費用は含めない。会話が`queued`/`running`の間は確定前として`null`、`completed`/`failed`/`cancelled`では合計（課金なしは0）。`relationship_change`は現時点では常に`null`。
+- `Notification.body`は表示用の文字列で、APIが`kind`から組み立てる。DBの`notifications.body`（JSON）や会話本文・相手の非公開情報は返さない。現在の`kind`は`conversation.completed`（「〇〇との交流が完了しました。」）。未知の種類は汎用文言にする。
+- `PATCH /notifications/{id}/read`は`read_at`を`coalesce(read_at, now())`で更新し、再送しても最初の既読日時を保つ。他人の通知は404。
+- 完了トランザクション用に`alter_domain.activity.notify_conversation_completed(conn, conversation_id)`を用意した。Workerが会話を`completed`にするのと同じトランザクションで呼ぶ（#20）。`completed`の会話だけが対象で、`dedupe_key='conversation.completed:<会話ID>'`により再実行しても1件。Web通知OFF・削除要求済みの利用者・削除済みAIには作らず、`body`は空のJSONにして会話本文を複製しない。
+- 会話・通知は作成から90日（docs/15・docs/23の保持期間）を過ぎた時点で一覧から外し、ID指定・既読は404にする。行の削除は日次パージ（#30）が行い、それまでもAPIからは見せない。

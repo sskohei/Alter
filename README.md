@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-07（フロント先行実装のDraft）。`docs/`が実装契約で、開発用Monorepo雛形とIssue #3のCI・PR品質ゲートに加え、#8/#9/#17のフロント先行実装を追加。実業務API/確定デザインは依存待ちで、[Mock・実接続の区別と起動手順](docs/24-frontend-development.md)を参照。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
+更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。実OAuth/Storageの公開受け入れ・本番Worker接続は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
 
 ## ローカル開発（最初に実行）
 
@@ -123,3 +123,21 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`と`GET/PATCH 
 ## MVPの成立条件
 
 招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
+
+## Claude Sonnet 5.5の採用（Issue #14）
+
+10人MVPはClaude直接APIの`claude-sonnet-5-5`を正式採用。
+共通の採用設定・単価は`alter_domain.llm_selection`、評価CLIもこの設定を使用する。
+`uv run --package alter-domain alter-llm-evaluate`は外部通信なしのdry-run。
+実評価はroot `.env`の`ANTHROPIC_API_KEY`と明示的な`--live`でのみ有効になる。
+[限定評価](evaluations/llm/sonnet-review-2026-11-13.md)・
+[評価手順](evaluations/llm/README.md)・[選定/保持条件](docs/26-llm-candidate-review.md)を参照。
+残りの品質受け入れは#37、本番Workerのadapter・moderation・費用予約の接続は#18の範囲。
+
+## アイコンAPI（#15）
+
+`POST /api/v1/agent-icons`へPNG/JPEG/WebPのバイナリを送ると、検証済みの本人用`icon_path`を返す。
+作成時または`PATCH /agents/{id}`で指定でき、GET等では300秒の`icon_url`だけを返す。
+入力/正規化後とも2 MiB以下・2048px以下・単一フレーム。実画像をデコード/PNG再エンコードし、
+EXIF/GPS等のメタデータを削除する。専用のprivate bucketとAPI専用Storageキーを使う。
+[API契約](docs/07-api-design.md)・[Storage設定](docs/14-deployment-infrastructure.md)を参照。

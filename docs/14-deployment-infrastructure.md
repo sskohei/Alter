@@ -44,7 +44,7 @@ BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制�
 | Web | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_API_URL` | 公開可。秘密を`NEXT_PUBLIC_`へ置かない |
 | Web server | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | SSRクライアント。公開可能な値だがサーバー設定にも保持 |
 | API | `ALTER_ENVIRONMENT`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `WEB_URL`, `CORS_ORIGINS`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `PROFILE_ENCRYPTION_KEY_V1` | DB/OAuth/暗号鍵はRender Secret。`CORS_ORIGINS`はCSVで明示 |
-| Worker | `DATABASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `JOB_LEASE_SECONDS` | LLMキーをWebに渡さない |
+| Worker | `DATABASE_URL`, `ANTHROPIC_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `JOB_LEASE_SECONDS` | LLMキーをWebに渡さない |
 | Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはRender Secret |
 | Cron | `DATABASE_URL`, `SCHEDULER_BATCH_SIZE` | バッチ上限を設ける |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
@@ -89,3 +89,29 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 送信先LLMが決まり同意文面を確定したら、同じ環境で次の3つを同時に設定する。Webの`ALTER_LLM_NAME`と`ALTER_LLM_DATA_POLICY_URL`（同意画面に表示）、APIの`ALTER_CONSENT_VERSION`（監査に記録する文面の版）。どれかが空の間は自律交流をONにできない（WebはONボタンを出さず、APIは409）。片方だけ設定すると「ONボタンは押せるがAPIが409」になるため、Preview/Productionそれぞれでそろえてから公開する。文面を変えたら版も更新する。
 
 費用と無料枠は [費用試算](20-cost-estimation.md)。
+
+### Claude Sonnetの採用設定（#14、PR #57レビュー対応）
+
+Workerと明示的な評価CLIの秘密キー名は`ANTHROPIC_API_KEY`。
+旧名`LLM_API_KEY`は使用しない。`LLM_MODEL=claude-sonnet-5-5`を指定し、
+キーをWeb/Vercel/`NEXT_PUBLIC_*`へ渡さない。
+Workerの実接続は#18のadapter・moderation・費用予約の接続後に有効化する。
+
+Webの`ALTER_LLM_NAME`には`Claude Sonnet 5.5（Anthropic直接API）`を表示名として使う。
+`ALTER_LLM_DATA_POLICY_URL`には確認済みの商用API向け保持説明
+（https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data）を指定する。
+これは学習へのopt-inやZDRの設定ではない。APIの`ALTER_CONSENT_VERSION`はdocs/23の同意文面を
+確定してから同時に設定する。今回の修正では値を自動設定せず、空の場合のON拒否を維持する。
+
+### アイコンStorage（#15）
+
+migrationでprivate bucket `agent-icons`（PNGのみ/2 MiB）と`profile-private`を作成する。
+APIにのみ`SUPABASE_STORAGE_SECRET_KEY`を設定する。Auth管理用キーをコードで流用しない。
+未設定でもアイコンなしの人格APIは動作し、アップロード/署名のみ503になる。
+キーはAPIのStorage操作に使えるプロジェクトSecretまたはservice_roleキーを秘密管理から設定する。
+モデル/LLM用キーとは無関係。Web・配信JS・Worker・Botへ渡さない。
+
+Previewではテスト画像でアップロード→作成時指定→取得→PATCH置換/解除を確認し、他人のprefix/
+未登録パス/私的bucket/SVG/破損/超過画像が拒否されることを確認する。
+署名URLの有効期限は300秒。Storage APIはローカル/CIではHTTP Mockで検証し、
+実環境のStorage接続・キー権限の確認は#37の公開受け入れに記録する。

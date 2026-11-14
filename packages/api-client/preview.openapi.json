@@ -19,6 +19,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -70,6 +81,17 @@
             "maxItems": 20,
             "title": "Hobbies",
             "type": "array"
+          },
+          "icon_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
@@ -155,17 +177,36 @@
         "type": "object"
       },
       "AgentPatch": {
+        "additionalProperties": false,
         "properties": {
+          "icon_path": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
+          },
           "name": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           }
         },
-        "required": [
-          "name"
-        ],
         "title": "AgentPatch",
         "type": "object"
       },
@@ -958,6 +999,17 @@
             "maxItems": 20,
             "title": "Hobbies",
             "type": "array"
+          },
+          "icon_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
