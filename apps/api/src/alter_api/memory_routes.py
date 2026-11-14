@@ -57,6 +57,10 @@ def list_memories(
                 "(select 1 from public.memory_source_suppressions s "
                 "where s.agent_id=m.agent_id and "
                 "s.source_conversation_id=m.source_conversation_id) "
+                "and not exists (select 1 from public.conversation_participants hidden "
+                "join public.agents ha on ha.id=hidden.agent_id "
+                "join public.profiles hu on hu.id=ha.owner_id where hidden.conversation_id=c.id "
+                "and (hu.deleted_at is not null or ha.status='deleted')) "
                 + cursor_clause
                 + "order by m.created_at desc,m.id desc limit :limit"
             ),
@@ -122,8 +126,7 @@ def list_relationships(
                 "select other.id as other_agent_id,other.name as other_agent_name,"
                 "r.conversation_count,r.shared_interests,r.last_met_at,exists "
                 "(select 1 from public.agent_blocks b where "
-                "(b.blocker_agent_id=a.id and b.blocked_agent_id=other.id) or "
-                "(b.blocker_agent_id=other.id and b.blocked_agent_id=a.id)) as blocked "
+                "b.blocker_agent_id=a.id and b.blocked_agent_id=other.id) as blocked "
                 "from public.agents a join public.agent_relationships r "
                 "on (r.agent_low_id=a.id or r.agent_high_id=a.id) "
                 "join public.agents other on other.id=case when r.agent_low_id=a.id "

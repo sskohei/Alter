@@ -8,7 +8,7 @@ import unicodedata
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import Connection, Engine, text
 
 from alter_domain.agents import AgentNotFound
@@ -31,7 +31,9 @@ class Relationship(BaseModel):
     conversation_count: int
     shared_interests: list[str]
     last_met_at: datetime | None
-    blocked: bool
+    blocked: bool = Field(
+        description="本人のAIから相手のAIへのブロック。相手からのブロックは含めない。"
+    )
 
 
 def dedupe(value: str) -> str:
