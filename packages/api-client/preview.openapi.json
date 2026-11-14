@@ -550,6 +550,7 @@
               "METHOD_NOT_ALLOWED",
               "CONFLICT",
               "VALIDATION_ERROR",
+              "OAUTH_STATE_INVALID",
               "RATE_LIMITED",
               "AUTHORIZATION_UNAVAILABLE",
               "SERVICE_UNAVAILABLE",

@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # 自律交流 ON の同意文面の版（docs/23）。未設定なら ON にできない（送信先 LLM 未決定を含む）
     alter_consent_version: str = ""
 
+    # Discord 本人連携（#26）。シークレットは API だけに置く（docs/14）。未設定なら連携 API は 503
+    discord_client_id: str = ""
+    discord_client_secret: str = ""
+    discord_redirect_uri: str = ""
+
     @field_validator("cors_origins")
     @classmethod
     def _reject_wildcard_origin(cls, value: str) -> str:
