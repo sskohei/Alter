@@ -36,6 +36,10 @@ def eligible_agents(conn: Connection) -> list[RowMapping]:
                 "and s.frequency_per_day>0 and p.approved_at is not null "
                 "and exists(select 1 from public.invitation_identities ii "
                 "where ii.invitation_id=i.id) "
+                "and not exists(select 1 from public.deletion_requests d "
+                "where d.profile_id=u.id) "
+                "and not exists(select 1 from public.llm_runs r where r.agent_id=a.id "
+                "and r.status in ('reserved','generating','generated','moderating','unknown')) "
                 "order by a.id"
             )
         ).mappings()
@@ -78,6 +82,9 @@ def pair_allowed(
                     "join public.conversations c on c.id=p.conversation_id where p.agent_id=:id "
                     "and c.created_at >= date_trunc('day',"
                     "cast(:now as timestamptz) at time zone 'UTC') "
+                    "at time zone 'UTC' "
+                    "and c.created_at < (date_trunc('day', "
+                    "cast(:now as timestamptz) at time zone 'UTC') + interval '1 day') "
                     "at time zone 'UTC'"
                 ),
                 {"id": aid, "now": now},
