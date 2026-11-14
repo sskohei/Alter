@@ -24,6 +24,7 @@ from sqlalchemy import Connection, Engine
 
 from alter_discord_bot import delivery
 from alter_discord_bot.permissions import REQUIRED_CHANNEL_PERMISSIONS, bot_can_post
+from alter_discord_bot.rest import DiscordRest
 
 __all__ = ["REQUIRED_CHANNEL_PERMISSIONS", "AlterBot", "bot_can_post", "intents", "run"]
 
@@ -48,12 +49,21 @@ def _guild(interaction: discord.Interaction) -> cmd.GuildContext | None:
 
 
 class AlterBot(discord.Client):
-    def __init__(self, settings: Settings, engine: Engine, *, deliver: bool = False) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        engine: Engine,
+        *,
+        deliver: bool = False,
+        rest: DiscordRest | None = None,
+    ) -> None:
         super().__init__(intents=intents())
         self.settings = settings
         self.engine = engine
         self.web_url = settings.alter_web_url.rstrip("/")
         self.deliver = deliver
+        # 投稿・DM の書き込みは内部で再送しないクライアントで送る（#28）
+        self.rest = rest or DiscordRest(settings.discord_bot_token.get_secret_value())
         self.delivery_task: asyncio.Task[None] | None = None
         self.tree = app_commands.CommandTree(self)
         register_commands(self.tree, self)
@@ -70,6 +80,7 @@ class AlterBot(discord.Client):
     async def close(self) -> None:
         if self.delivery_task is not None:
             self.delivery_task.cancel()
+        await self.rest.close()
         await super().close()
 
     async def in_transaction(self, work: Callable[[Connection], T]) -> T:
