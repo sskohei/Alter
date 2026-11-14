@@ -164,10 +164,14 @@ class SonnetClient:
                 raise UnsafeOutput("Input exceeds the token bound")
             try:
                 data = json.loads(body["messages"][0]["content"])
+                if data.get("quoted_summary"):
+                    data["quoted_summary"] = None
+                    body["messages"][0]["content"] = json.dumps(data, ensure_ascii=False)
+                    continue
                 history = data.get("quoted_memories") or data.get("quoted_turns")
                 if not isinstance(history, list) or not history:
                     raise ValueError
-                history.pop(0)
+                history.pop(-1 if data.get("quoted_memories") else 0)
                 body["messages"][0]["content"] = json.dumps(data, ensure_ascii=False)
             except (ValueError, TypeError, AttributeError):
                 raise UnsafeOutput("Input exceeds the token bound") from None

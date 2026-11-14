@@ -169,13 +169,14 @@ def test_context_trim_preserves_profile_system_and_schema():
 
     def handler(req):
         bodies.append(json.loads(req.content))
-        return httpx.Response(200, json={"input_tokens": 2500 if len(bodies) < 3 else 100})
+        return httpx.Response(200, json={"input_tokens": 2500 if len(bodies) < 4 else 100})
 
-    messages = build_prompt(ProfileInput(**PROFILE), ["old turn"], ["old memory"])
+    messages = build_prompt(ProfileInput(**PROFILE), ["old turn"], ["old memory"], "old summary")
     original = messages[1].content
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         SonnetClient(configured(), http).prepare(messages, Utterance)
     data = json.loads(bodies[-1]["messages"][0]["content"])
+    assert data["quoted_summary"] is None
     assert data["quoted_memories"] == [] and data["quoted_turns"] == []
     assert data["approved_profile"]["personality"] == "穏やか"
     assert bodies[0]["system"] == bodies[-1]["system"]

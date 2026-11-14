@@ -249,6 +249,10 @@ previewも正式settings routerを再利用し、Patchの厳密型・null/未知
 
 ### 稼働準備確認（#34）
 
-`GET /ready`は認証不要。liveかつcheckoutが必要とするDB全migrationが適用済みすれば200（Health型）、
+`GET /ready`は認証不要。liveかつcheckoutが必要とするDB全migrationが適用済みなら200（Health型）、
 それ以外は503共通エラー。no-storeとしDB接続詳細を返さない。
 `/health`は引き続きDBに依存しない生存確認。OAuth/LLM/Discordの実疎通は別の受け入れで確認する。
+
+#22のWorker生成を#25の正式な記憶・関係性APIへ統合する。`Relationship.blocked`は本人からだけのブロック。
+記憶の出典NULL対応・保持期限・可視性・本人の削除再送は維持し、削除処理は`memory_read`を共用する。
+各ターンへの記憶／要約入力と会話パージ連動は[記憶契約](10-memory-relationship.md)に従う。

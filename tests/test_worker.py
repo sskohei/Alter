@@ -70,10 +70,13 @@ def test_live_entrypoint_runs_independently_and_stops_on_signal(monkeypatch):
         assert kwargs["stopped"].is_set()
         return True
 
+    enrich = Mock(return_value=0)
+    monkeypatch.setattr("alter_worker.main.enrich_pending", enrich)
     run = Mock(side_effect=process)
     monkeypatch.setattr("alter_worker.main.run_one", run)
     main()
     run.assert_called_once()
+    enrich.assert_called_once_with(engine, limit=1, forbidden=("test-only",))
     engine.dispose.assert_called_once()
     http.__exit__.assert_called_once()
 
