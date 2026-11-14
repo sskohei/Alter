@@ -98,3 +98,11 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 複合PKは`owner_id,operation,key_hash`、profiles削除でCASCADE、RLS default deny。
 作成応答（私的欄なし）と入力HMACのみ保持する。削除時は本人の記録も削除する。
 rollbackは`DROP TABLE public.api_idempotency`だが再送結果を失うためAPIを止めて実施する。
+
+### 費用予約と削除の追加制約（#18、2026-11-14）
+
+`20261114030000_budget_deletion_guard.sql`により、残予約のある会話/AIは物理削除を拒否する。
+#30は新規呼出停止・結果照合後、固定費用advisory lock→`budget.release_for_deletion`→DELETEを
+同一トランザクションで行う。会話削除は両参加者の予約、AI削除は会話なしの予約も解放する。
+課金結果不明なら予約を保持して削除を保留する。確定費用の匿名化/12か月保持は維持する。
+既存のSET NULL/匿名化DDLは変更しない。詳細は[AI処理](08-ai-agent-architecture.md)を参照。

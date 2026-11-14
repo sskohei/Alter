@@ -6,7 +6,7 @@ Amounts must be worst-case bounds (including provider retries), not expected ave
 
 from datetime import datetime
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import Connection, text
 
@@ -143,8 +143,11 @@ def reserve(
         ),
         {"id": agent},
     ).one()
+    session_total = (
+        session_exposure(conn, agent, conversation) if conversation is not None else Decimal(0)
+    )
     if (
-        usd > settings.max_session_usd
+        session_total + usd > settings.max_session_usd
         or exposure(conn, agent=agent, now=now) + usd > settings.daily_budget_usd
         or exposure(conn, now=now) + usd > global_limit
     ):
@@ -163,6 +166,63 @@ def held(conn: Connection, agent: UUID, conversation: UUID) -> Decimal:
             {"agent": agent, "conv": conversation},
         ).scalar_one()
     )
+
+
+def session_exposure(conn: Connection, agent: UUID, conversation: UUID) -> Decimal:
+    """All-time session charges plus holds, including previous UTC days."""
+    return held(conn, agent, conversation) + Decimal(
+        conn.execute(
+            text(
+                "select coalesce(sum(actual_usd),0) from public.usage_records "
+                "where agent_id=:agent and conversation_id=:conv and kind='charge'"
+            ),
+            {"agent": agent, "conv": conversation},
+        ).scalar_one()
+    )
+
+
+def release_for_deletion(
+    conn: Connection, *, agent: UUID | None = None, conversation: UUID | None = None
+) -> None:
+    """Release reconciled holds BEFORE deletion in the same transaction.
+
+    Caller must stop workers and reconcile in-flight/unknown provider outcomes first.
+    Conversation deletion covers both participants; agent deletion covers holds without
+    a conversation too. With both filters only their intersection is released.
+    Take the budget lock before agent/setting locks, as for all ledger writers.
+    """
+    if agent is None and conversation is None:
+        raise ValueError("A deletion target is required")
+    lock_budget(conn)
+    rows = conn.execute(
+        text(
+            "select agent_id,conversation_id,provider,model, "
+            "sum(case when kind='reserve' then estimated_usd "
+            "when kind='release' then -estimated_usd else 0 end) as remaining "
+            "from public.usage_records where agent_id is not null "
+            "and (cast(:agent as uuid) is null or agent_id=:agent) "
+            "and (cast(:conv as uuid) is null or conversation_id=:conv) "
+            "group by agent_id,conversation_id,provider,model "
+            "having sum(case when kind='reserve' then estimated_usd "
+            "when kind='release' then -estimated_usd else 0 end)>0"
+        ),
+        {"agent": agent, "conv": conversation},
+    ).all()
+    for row in rows:
+        record(
+            conn,
+            row.agent_id,
+            row.conversation_id,
+            ModelPrice(
+                provider=row.provider,
+                model=row.model,
+                input_per_million=Decimal(0),
+                output_per_million=Decimal(0),
+            ),
+            "release",
+            f"deletion-release:{uuid4()}",
+            row.remaining,
+        )
 
 
 def consume(
