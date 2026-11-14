@@ -56,7 +56,7 @@ Web本人連携はDiscord OAuth2 `identify`で行い、Bot導入OAuthとは別�
 
 共通ドメイン`backend/alter_domain/src/alter_domain/discord_delivery.py`（DBだけ）と、Botの送信ループ`apps/discord_bot/src/alter_discord_bot/delivery.py`で実装した。CIはDiscordに接続せず、ドメインをDBで、送信ループを偽のDiscordで確認する。
 
-- 作成: 会話の完了トランザクションで、`activity.notify_conversation_completed`のあとに`discord_delivery.enqueue_after_completion`を呼ぶ（Worker #19/#61が接続する）。投稿先は1会話につき1つで、条件を満たす投稿先が1つなら`pending`で1件、2つ以上（両者が複数のギルドに同意している）ならどれにも送らず候補を`needs_review`（`ambiguous_target`）で残し、運営・管理者が選ぶ（docs/09）。取り出し時に候補が2つ以上に増えていた場合も同じく保留する。DMは完了通知1件につき1件。再実行しても増えず、取り消し済みの行は復活させない。投稿先を変えたあとは、新しい投稿先への行を別に作れる。
+- 作成: 会話の完了トランザクションで、`activity.notify_conversation_completed`のあとに`discord_delivery.enqueue_after_completion`を呼ぶ（Worker の完了処理`conversation.finish`が、会話を`completed`にするのと同じトランザクションで呼ぶ）。投稿先は1会話につき1つで、条件を満たす投稿先が1つなら`pending`で1件、2つ以上（両者が複数のギルドに同意している）ならどれにも送らず候補を`needs_review`（`ambiguous_target`）で残し、運営・管理者が選ぶ（docs/09）。取り出し時に候補が2つ以上に増えていた場合も同じく保留する。DMは完了通知1件につき1件。再実行しても増えず、取り消し済みの行は復活させない。投稿先を変えたあとは、新しい投稿先への行を別に作れる。
 - 投稿の条件（作成時と取り出し時の両方で確認）: 会話が完了・Webで見える範囲（90日・削除要求なし・削除済みAIなし）、投稿先とギルドが有効、参加者2人とも「会話開始時のDiscord公開の同意（`conversation_participants.discord_consent`）・AIの全体設定ON・稼働中のAI・削除要求なし・有効な招待・有効な連携・そのギルドへの有効な同意」、どちらもブロックしていない。満たさなくなった行は`cancelled`（`last_error='not_eligible'`）。
 - DMの条件: 本人がDM通知ON・削除要求なし・有効な招待・有効な連携（作成時と同じDiscordユーザー）、通知が90日以内で会話が見える範囲。DMは完了通知に結び付くため、Web通知をOFFにしている人には作らない。本文は固定文言と会話詳細のリンクだけ。
 - 取り出し: `for update skip locked`で1件だけロックし、条件を確認し直して`sending`にしてコミットしてから送る。確認し直しの読み取りでは同意・連携の行をロックしない（連携解除などは「連携→同意→配信」の順でロックするため、配信のあとに同意をロックすると交差する）。同時に解除された場合、先に`sending`になった行は送信を続け、解除側は`pending`だけを取り消す。
@@ -66,3 +66,4 @@ Web本人連携はDiscord OAuth2 `identify`で行い、Bot導入OAuthとは別�
 - 取り消し: DM通知のOFFで本人あての未送信DMを同じトランザクションで取り消す。AIの全体設定（`discord_publish`）・自律交流のOFFとブロックでの未投稿の取り消しは、#24（PR #48）の`interaction_settings.cancel_pending_posts`がそのまま担う。連携解除・停止・削除要求・ギルド別同意のOFF・投稿先変更・ギルド離脱は#26/#27の処理で取り消す。
 - 送信ループ: Botの接続後に5秒ごと、止まった送信中の回収のあと投稿とDMをそれぞれ最大5件送る。`--sync-commands`のときは動かさない。
 - `needs_review`の照合: 管理者が`discord_thread_id`（保存済みなら）でスレッドを確認する。再送や取消の運営CLIは#36で検討する。
+- アカウント削除（#30）: パージが会話を消す前に、投稿済みスレッドのIDだけを`discord_cleanup_tasks`へ退避する。Botは送信ループでスレッドの削除を試し、結果を`deleted`・`forbidden`（「スレッドの管理」権限がない）・`not_found`・`failed`（再試行の打ち切り）で記録する。削除は重複しないので、結果が分からない失敗は再試行する。MVPのBotは「スレッドの管理」権限を求めないため、多くは`forbidden`になる。sskoheiが結果を確認し、必要ならギルド管理者に削除を依頼する（Discord投稿の完全な回収は保証しない）。
