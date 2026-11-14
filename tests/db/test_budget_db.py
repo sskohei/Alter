@@ -82,6 +82,7 @@ def test_session_limit_includes_multiple_holds_and_previous_day_charges(engine, 
         from alter_domain.budget import release_for_deletion
 
         release_for_deletion(conn, conversation=conv)
+        conn.execute(text("delete from public.conversations where id=:id"), {"id": conv})
 
 
 def test_parallel_reservations_respect_combined_session_limit(engine, ai_pair):

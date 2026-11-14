@@ -39,13 +39,22 @@ stateDiagram-v2
 
 一時障害は最大3回、指数バックオフ（例: 30秒、2分、10分）にジッターを加える。検証失敗・権限消失・予算不足は再試行しない。`turn_no`一意制約とジョブleaseで多重実行を抑え、開始直前と各ターン前に双方の設定を確認する。AI発言生成にLLM APIを非同期I/Oで呼ぶ間、DBトランザクションは開きっぱなしにしない。予算は事前に最大見積額を予約し、実績で調整する。詳細は [交流](09-autonomous-interaction.md)、[テスト](16-testing-strategy.md)。
 
+## 採用モデル（2026-11-13、#14）
+
+Anthropic直接APIの`claude-sonnet-5-5`を正式採用し、共通設定を`alter_domain.llm_selection`へ置く。
+API version `2026-10-21`、adaptive thinking / effort low、入力3072 / 出力512 tokens上限。
+出力はthinkingを含み、temperature等は送信しない。評価CLIも同じ設定を参照する。
+本番adapterは#18で接続し、本人同意/予算/公開判定の条件を引き続き確認する。
+最大token数の各呼出は既存の会話費用枠に必ず収まるわけではなく、残枠不足なら停止する。
+[選定根拠](26-llm-candidate-review.md)・[費用見積](20-cost-estimation.md)を参照。
+
 ## #18 実装とliveゲート
 
 `llm.LLMClient`/`FakeLLM`/`checked_generate`と`budget`を追加。
 人格は`ProfileInput`の明示投影、発言/記憶はuser内の引用JSONで、systemへ連結しない。
 schemaはextra禁止/厳密bool、PIIと既知秘密の出力検査を行う。
 BaselineModeratorはメール/電話の最低限の検査であり、供給元の安全性審査・moderationの代替ではない。
-実供給元adapterは#14の実評価後に接続する。それまではLLM外部呼出なし。
+モデル選定は#14で完了済み。本番adapterの接続まではLLM外部呼出なし。
 任意提案APIは所有権検証後に503を返し、手動作成を継続できる契約のみ提供する。
 提案の利用回数制限・費用記録・人格提案生成は供給元接続時の残件。
 
@@ -68,7 +77,7 @@ UTC日付を越えても会話の実費は消えず、consumeによる予約解�
 3. `release_for_deletion(conn, conversation=id)`または`release_for_deletion(conn, agent=id)`を呼ぶ。対象の残予約だけをprovider/model別にreleaseとして追記する。再実行しても解放済み残額は増えない。
 4. 会話→AIの既定順で削除する。共有会話の削除では会話ごとの解放も呼び、相手の予約を残さない。失敗時はreleaseも削除もrollbackする。
 
-`20261114030000_budget_deletion_guard.sql`は残予約を持つ会話/AIのDELETEを23514で拒否する。
+`20261114040000_budget_deletion_guard.sql`は残予約を持つ会話/AIのDELETEを23514で拒否する。
 自動releaseは行わず、SET NULL/匿名化前の解放漏れと、結果不明の予約が失われることを防ぐ。
 確定chargeは#56の匿名化/12か月保持を維持し、AI削除後も全体の日次費用に含める。
 既に参照を失った過去の未解放予約は自動補正しない。導入済み環境では#36で履歴を照合する。

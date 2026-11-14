@@ -1,8 +1,8 @@
-"""Expose the optional suggestion contract; fail closed until a provider passes #14."""
+"""Expose the optional suggestion contract; fail closed until the live adapter is connected."""
 
 from uuid import UUID
 
-from alter_domain.agent_models import ProfileRevision
+from alter_domain.agent_models import ProfileInput
 from alter_domain.agents import owned
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,11 +24,11 @@ class SuggestionInput(BaseModel):
 
 @router.post(
     "/agents/{agent_id}/profile/suggest",
-    response_model=ProfileRevision,
+    response_model=ProfileInput,
     operation_id="suggest_agent_profile",
 )
 def suggest(
     agent_id: UUID, data: SuggestionInput, conn: BusinessConnection, principal: CurrentPrincipal
-) -> ProfileRevision:
+) -> ProfileInput:
     owned(conn, principal.sub, agent_id)
-    raise ApiError(503, "SERVICE_UNAVAILABLE", "LLM provider has not passed evaluation")
+    raise ApiError(503, "SERVICE_UNAVAILABLE", "LLM suggestions are unavailable")
