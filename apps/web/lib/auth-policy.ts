@@ -7,6 +7,7 @@ export function accessMessage(code: string) {
   const messages: Record<string, string> = {
     INVITATION_REQUIRED: "招待が確認できません。招待元へお問い合わせください。",
     ACCOUNT_INACTIVE: "アカウントは停止中、または削除手続き中です。招待時の私的な連絡先へお問い合わせください。",
+    SERVICE_UNAVAILABLE: "サービスを一時的に利用できません。時間をおいて再試行してください。",
     AUTHORIZATION_UNAVAILABLE: "利用資格を確認できませんでした。時間をおいて再試行してください。",
     oauth: "ログインを完了できませんでした。キャンセルした場合も、もう一度お試しください。",
     expired: "ログインの有効期限が切れました。もう一度ログインしてください。",

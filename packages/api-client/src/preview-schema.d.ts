@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/__mock/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Profiles */
+        get: operations["preview_list_synthetic_profiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -63,11 +80,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Block */
-        put: operations["preview_block_agent"];
+        /** 相手の AI をブロックする（再送しても同じ結果） */
+        put: operations["block_agent"];
         post?: never;
-        /** Unblock */
-        delete: operations["preview_unblock_agent"];
+        /** ブロックを解除する（ブロックしていなくても 204） */
+        delete: operations["unblock_agent"];
         options?: never;
         head?: never;
         patch?: never;
@@ -165,15 +182,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Settings */
-        get: operations["preview_get_interaction_settings"];
+        /** 自分の AI の交流設定を取得する */
+        get: operations["get_interaction_settings"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Patch Settings */
-        patch: operations["preview_patch_interaction_settings"];
+        /** 自律交流・頻度・予算・Discord 公開の設定を変更する */
+        patch: operations["patch_interaction_settings"];
         trace?: never;
     };
     "/api/v1/conversations": {
@@ -183,8 +200,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Conversations */
-        get: operations["preview_list_conversations"];
+        /** 自分の AI が参加した会話の一覧（新しい順） */
+        get: operations["list_conversations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -200,8 +217,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Conversation */
-        get: operations["preview_get_conversation"];
+        /** 自分の AI が参加した会話の全文 */
+        get: operations["get_conversation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -217,11 +234,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Discord Connection */
-        get: operations["preview_get_discord_connection"];
+        /** Discord 連携の状態（トークンは返さない） */
+        get: operations["get_discord_connection"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Discord 連携を解除する（未送信の DM・投稿とギルド別同意も取り消す。冪等） */
+        delete: operations["disconnect_discord"];
         options?: never;
         head?: never;
         patch?: never;
@@ -234,10 +252,44 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Guilds */
-        get: operations["preview_list_discord_guilds"];
+        /** 本人の AI がギルド別公開に同意したギルドと投稿先 */
+        get: operations["list_discord_guilds"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discord/link/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discord の認可コードで連携を完了する（state は本人・10 分以内・1 回だけ） */
+        post: operations["complete_discord_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discord/link/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 連携を開始する（10 分・使い捨ての state と Discord の認可 URL） */
+        post: operations["start_discord_link"];
         delete?: never;
         options?: never;
         head?: never;
@@ -251,8 +303,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Memories */
-        get: operations["preview_list_memories"];
+        /** List Memories */
+        get: operations["list_memories"];
         put?: never;
         post?: never;
         delete?: never;
@@ -272,7 +324,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** Delete Memory */
-        delete: operations["preview_delete_memory"];
+        delete: operations["delete_memory"];
         options?: never;
         head?: never;
         patch?: never;
@@ -285,8 +337,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Notifications */
-        get: operations["preview_list_notifications"];
+        /** 自分への通知の一覧（新しい順） */
+        get: operations["list_notifications"];
         put?: never;
         post?: never;
         delete?: never;
@@ -308,8 +360,26 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Read Notification */
-        patch: operations["preview_read_notification"];
+        /** 通知を既読にする（再送しても最初の既読日時のまま） */
+        patch: operations["read_notification"];
+        trace?: never;
+    };
+    "/api/v1/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 通知設定を取得する */
+        get: operations["get_preferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 通知設定を変更する */
+        patch: operations["patch_preferences"];
         trace?: never;
     };
     "/api/v1/relationships": {
@@ -319,8 +389,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Relationships */
-        get: operations["preview_list_relationships"];
+        /** List Relationships */
+        get: operations["list_relationships"];
         put?: never;
         post?: never;
         delete?: never;
@@ -336,15 +406,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get User */
-        get: operations["preview_get_current_user"];
+        /** 招待・有効状態を確認して自分のプロフィールを作成/取得する */
+        get: operations["get_current_user"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Patch User */
-        patch: operations["preview_patch_current_user"];
+        /** 自分の表示名を変更する */
+        patch: operations["patch_current_user"];
         trace?: never;
     };
 }
@@ -360,6 +430,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Icon Url */
+            icon_url?: string | null;
             /**
              * Id
              * Format: uuid
@@ -378,6 +450,8 @@ export interface components {
         AgentDraftInput: {
             /** Hobbies */
             hobbies?: string[];
+            /** Icon Path */
+            icon_path?: string | null;
             /** Interaction Policy */
             interaction_policy: string;
             /** Interests */
@@ -406,8 +480,10 @@ export interface components {
         };
         /** AgentPatch */
         AgentPatch: {
+            /** Icon Path */
+            icon_path?: string | null;
             /** Name */
-            name: string;
+            name?: string | null;
         };
         /** AgentReference */
         AgentReference: {
@@ -466,7 +542,7 @@ export interface components {
         ConversationDetail: {
             /**
              * Cost Usd
-             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。usage_records の kind='charge' の actual_usd の合計。queued/running の間は確定前として null、終了後は合計（課金なしは 0）。
              */
             cost_usd?: number | null;
             /**
@@ -518,18 +594,11 @@ export interface components {
             /** Turn No */
             turn_no: number;
         };
-        /** ConversationPage */
-        ConversationPage: {
-            /** Items */
-            items: components["schemas"]["ConversationSummary"][];
-            /** Next Cursor */
-            next_cursor: string | null;
-        };
         /** ConversationSummary */
         ConversationSummary: {
             /**
              * Cost Usd
-             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。
+             * @description 本人のAIのこの会話における確定費用（USD）。相手の費用は含まない。usage_records の kind='charge' の actual_usd の合計。queued/running の間は確定前として null、終了後は合計（課金なしは 0）。
              */
             cost_usd?: number | null;
             /**
@@ -562,13 +631,30 @@ export interface components {
             /** Discord User Id */
             discord_user_id: string | null;
         };
+        /** DiscordLinkComplete */
+        DiscordLinkComplete: {
+            /** Code */
+            code: string;
+            /** State */
+            state: string;
+        };
+        /** DiscordLinkStart */
+        DiscordLinkStart: {
+            /**
+             * State Expires At
+             * Format: date-time
+             */
+            state_expires_at: string;
+            /** Url */
+            url: string;
+        };
         /** ErrorBody */
         ErrorBody: {
             /**
              * Code
              * @enum {string}
              */
-            code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVITATION_REQUIRED" | "ACCOUNT_INACTIVE" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "CONFLICT" | "VALIDATION_ERROR" | "RATE_LIMITED" | "AUTHORIZATION_UNAVAILABLE" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
+            code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVITATION_REQUIRED" | "ACCOUNT_INACTIVE" | "REAUTHENTICATION_REQUIRED" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "CONFLICT" | "VALIDATION_ERROR" | "OAUTH_STATE_INVALID" | "RATE_LIMITED" | "AUTHORIZATION_UNAVAILABLE" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
             /** Message */
             message: string;
             /** Request Id */
@@ -611,21 +697,20 @@ export interface components {
             importance: number;
             /** Source Conversation Id */
             source_conversation_id: string | null;
-            /** Status */
-            status?: string | null;
+            /**
+             * Status
+             * @constant
+             */
+            status: "active";
             /** Text */
             text: string;
         };
-        /** MemoryPage */
-        MemoryPage: {
-            /** Items */
-            items: components["schemas"]["Memory"][];
-            /** Next Cursor */
-            next_cursor: string | null;
-        };
         /** Notification */
         Notification: {
-            /** Body */
+            /**
+             * Body
+             * @description 表示用の文字列。会話本文や相手の非公開情報は含めない
+             */
             body: string;
             /** Conversation Id */
             conversation_id?: string | null;
@@ -639,17 +724,55 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Kind */
+            /**
+             * Kind
+             * @description 現在は conversation.completed。未知の種類は汎用表示にする
+             */
             kind: string;
             /** Read At */
             read_at: string | null;
         };
-        /** NotificationPage */
-        NotificationPage: {
+        /** Page[ConversationSummary] */
+        Page_ConversationSummary_: {
+            /** Items */
+            items: components["schemas"]["ConversationSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Page[Memory] */
+        Page_Memory_: {
+            /** Items */
+            items: components["schemas"]["Memory"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Page[Notification] */
+        Page_Notification_: {
             /** Items */
             items: components["schemas"]["Notification"][];
             /** Next Cursor */
-            next_cursor: string | null;
+            next_cursor?: string | null;
+        };
+        /** Page[Relationship] */
+        Page_Relationship_: {
+            /** Items */
+            items: components["schemas"]["Relationship"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Preferences */
+        Preferences: {
+            /** Discord Dm Notifications */
+            discord_dm_notifications: boolean;
+            /** Web Notifications */
+            web_notifications: boolean;
+        };
+        /** PreferencesPatch */
+        PreferencesPatch: {
+            /** Discord Dm Notifications */
+            discord_dm_notifications?: boolean | null;
+            /** Web Notifications */
+            web_notifications?: boolean | null;
         };
         /** PrivateInfo */
         PrivateInfo: {
@@ -677,9 +800,19 @@ export interface components {
             /** Web Notifications */
             web_notifications: boolean;
         };
+        /** ProfilePage */
+        ProfilePage: {
+            /** Items */
+            items: components["schemas"]["Profile"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** ProfilePatch */
         ProfilePatch: {
-            /** Display Name */
+            /**
+             * Display Name
+             * @description 前後の空白を除いて 1〜80 文字。空白だけ・制御文字は 422
+             */
             display_name: string;
         };
         /** ProfileRevision */
@@ -750,19 +883,14 @@ export interface components {
             /** Shared Interests */
             shared_interests: string[];
         };
-        /** RelationshipPage */
-        RelationshipPage: {
-            /** Items */
-            items: components["schemas"]["Relationship"][];
-            /** Next Cursor */
-            next_cursor: string | null;
-        };
         /** RevisionInput */
         RevisionInput: {
             /** Expected Version */
             expected_version: number;
             /** Hobbies */
             hobbies?: string[];
+            /** Icon Path */
+            icon_path?: string | null;
             /** Interaction Policy */
             interaction_policy: string;
             /** Interests */
@@ -805,6 +933,92 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    preview_list_synthetic_profiles: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfilePage"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     preview_create_agent: {
         parameters: {
             query?: never;
@@ -1064,7 +1278,7 @@ export interface operations {
             };
         };
     };
-    preview_block_agent: {
+    block_agent: {
         parameters: {
             query?: never;
             header?: never;
@@ -1148,7 +1362,7 @@ export interface operations {
             };
         };
     };
-    preview_unblock_agent: {
+    unblock_agent: {
         parameters: {
             query?: never;
             header?: never;
@@ -1671,7 +1885,7 @@ export interface operations {
             };
         };
     };
-    preview_get_interaction_settings: {
+    get_interaction_settings: {
         parameters: {
             query?: never;
             header?: never;
@@ -1756,7 +1970,7 @@ export interface operations {
             };
         };
     };
-    preview_patch_interaction_settings: {
+    patch_interaction_settings: {
         parameters: {
             query?: never;
             header?: never;
@@ -1845,11 +2059,11 @@ export interface operations {
             };
         };
     };
-    preview_list_conversations: {
+    list_conversations: {
         parameters: {
             query?: {
-                cursor?: string | null;
                 limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -1863,7 +2077,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationPage"];
+                    "application/json": components["schemas"]["Page_ConversationSummary_"];
                 };
             };
             /** @description Unauthorized */
@@ -1931,7 +2145,7 @@ export interface operations {
             };
         };
     };
-    preview_get_conversation: {
+    get_conversation: {
         parameters: {
             query?: never;
             header?: never;
@@ -2016,7 +2230,7 @@ export interface operations {
             };
         };
     };
-    preview_get_discord_connection: {
+    get_discord_connection: {
         parameters: {
             query?: never;
             header?: never;
@@ -2099,7 +2313,88 @@ export interface operations {
             };
         };
     };
-    preview_list_discord_guilds: {
+    disconnect_discord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_discord_guilds: {
         parameters: {
             query?: never;
             header?: never;
@@ -2182,18 +2477,18 @@ export interface operations {
             };
         };
     };
-    preview_list_memories: {
+    complete_discord_link: {
         parameters: {
-            query: {
-                agent_id: string;
-                cursor?: string | null;
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscordLinkComplete"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -2201,7 +2496,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemoryPage"];
+                    "application/json": components["schemas"]["DiscordConnection"];
+                };
+            };
+            /** @description state またはコードが無効（やり直し） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -2269,7 +2573,177 @@ export interface operations {
             };
         };
     };
-    preview_delete_memory: {
+    start_discord_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscordLinkStart"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_memories: {
+        parameters: {
+            query: {
+                agent_id: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_Memory_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_memory: {
         parameters: {
             query?: never;
             header?: never;
@@ -2352,12 +2826,13 @@ export interface operations {
             };
         };
     };
-    preview_list_notifications: {
+    list_notifications: {
         parameters: {
             query?: {
-                cursor?: string | null;
-                limit?: number;
+                /** @description true で未読だけ、false で既読だけ */
                 unread?: boolean | null;
+                limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -2371,7 +2846,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotificationPage"];
+                    "application/json": components["schemas"]["Page_Notification_"];
                 };
             };
             /** @description Unauthorized */
@@ -2439,7 +2914,7 @@ export interface operations {
             };
         };
     };
-    preview_read_notification: {
+    read_notification: {
         parameters: {
             query?: never;
             header?: never;
@@ -2524,12 +2999,9 @@ export interface operations {
             };
         };
     };
-    preview_list_relationships: {
+    get_preferences: {
         parameters: {
-            query?: {
-                cursor?: string | null;
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -2542,7 +3014,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RelationshipPage"];
+                    "application/json": components["schemas"]["Preferences"];
                 };
             };
             /** @description Unauthorized */
@@ -2610,7 +3082,180 @@ export interface operations {
             };
         };
     };
-    preview_get_current_user: {
+    patch_preferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferencesPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_relationships: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_Relationship_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_current_user: {
         parameters: {
             query?: never;
             header?: never;
@@ -2693,7 +3338,7 @@ export interface operations {
             };
         };
     };
-    preview_patch_current_user: {
+    patch_current_user: {
         parameters: {
             query?: never;
             header?: never;

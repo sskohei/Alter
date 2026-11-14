@@ -1,4 +1,4 @@
-import type { components } from "@alter/api-client/preview";
+import type { components } from "@alter/api-client";
 export type Conversation = components["schemas"]["ConversationSummary"];
 export type Detail = components["schemas"]["ConversationDetail"];
 export type Notification = components["schemas"]["Notification"];

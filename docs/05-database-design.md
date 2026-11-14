@@ -24,16 +24,16 @@ DDLの正本は`supabase/migrations/*.sql`。時刻は`TIMESTAMPTZ` UTC、IDは`
 | `agent_blocks` ブロック | `blocker_agent_id uuid! FK agents(id)`, `blocked_agent_id uuid! FK agents(id)` | 複合PK、自己ブロック禁止 | どちらか削除でCASCADE |
 | `notifications` Web通知 | `id uuid! PK`, `profile_id uuid! FK profiles(id)`, `kind varchar(32)!`, `conversation_id uuid? FK conversations(id)`, `body jsonb!`, `read_at timestamptz?`, `dedupe_key text!` | `UNIQUE(profile_id,dedupe_key)`、`(profile_id,created_at DESC)` | 90日。会話削除時関連通知削除 |
 | `discord_connections` 本人連携 | `id uuid! PK`, `profile_id uuid! FK profiles(id)`, `discord_user_id text!`, `connected_at timestamptz!`, `revoked_at timestamptz?` | 有効行に`UNIQUE(profile_id)`・`UNIQUE(discord_user_id)`部分索引 | 解除時失効・トークン削除、監査用非秘密メタデータ30日 |
-| `discord_oauth_states` OAuth CSRF防止 | `id uuid! PK`, `profile_id uuid! FK profiles(id)`, `state_hash text!`, `expires_at timestamptz!`, `used_at timestamptz?` | `UNIQUE(state_hash)`、`expires_at`索引 | 使用後即削除、未使用も10分で削除 |
-| `discord_guilds` ギルド | `id text! PK`, `admin_discord_user_id text!`, `enabled bool!`, `created_at timestamptz!`, `updated_at timestamptz!` | 管理者ID索引。Bot離脱時`enabled=false` | 離脱時無効化、配送履歴の保持終了後に削除（最大90日） |
-| `discord_channels` 許可チャンネル | `id text! PK`, `guild_id text! FK discord_guilds(id)`, `enabled bool!`, `configured_by text!`, `created_at timestamptz!` | 有効行の`guild_id`部分UNIQUE（MVPは1ギルド1投稿先） | 配信履歴保持中は削除せず無効化 |
+| `discord_oauth_states` OAuth CSRF防止 | `id uuid! PK`, `profile_id uuid! FK profiles(id)`, `state_hash text!`（SHA-256の16進）, `expires_at timestamptz!`, `used_at timestamptz?` | `UNIQUE(state_hash)`、`expires_at`索引 | 使用後即削除、未使用も10分で削除 |
+| `discord_guilds` ギルド | `id text! PK`, `name varchar(100)?`, `admin_discord_user_id text!`, `enabled bool!`, `created_at timestamptz!`, `updated_at timestamptz!` | 管理者ID索引。Bot離脱時`enabled=false` | 離脱時無効化、配送履歴の保持終了後に削除（最大90日） |
+| `discord_channels` 許可チャンネル | `id text! PK`, `guild_id text! FK discord_guilds(id)`, `name varchar(100)?`, `enabled bool!`, `configured_by text!`, `created_at timestamptz!` | 有効行の`guild_id`部分UNIQUE（MVPは1ギルド1投稿先） | 配信履歴保持中は削除せず無効化 |
 | `agent_discord_consents` ギルド別公開同意 | `agent_id uuid! FK agents(id)`, `guild_id text! FK discord_guilds(id)`, `consented_at timestamptz!`, `revoked_at timestamptz?` | 複合PK `(agent_id,guild_id)`、有効行索引 | AIまたはギルド削除でCASCADE。解除後は未配信取消 |
 | `discord_deliveries` 投稿outbox | `id uuid! PK`, `conversation_id uuid! FK conversations(id)`, `channel_id text! FK discord_channels(id)`, `status varchar(16)!`, `discord_thread_id text?`, `discord_message_id text?`, `attempts smallint!`, `next_attempt_at timestamptz!`, `last_error text?` | `UNIQUE(conversation_id,channel_id)`、`(status,next_attempt_at)` | 会話削除でCASCADE。投稿済みIDは会話保持期間と同じ |
 | `discord_dm_deliveries` 個別通知outbox | `id uuid! PK`, `notification_id uuid! FK notifications(id)`, `discord_user_id text!`, `status varchar(16)!`, `discord_message_id text?`, `attempts smallint!`, `next_attempt_at timestamptz!` | `UNIQUE(notification_id)`、`(status,next_attempt_at)` | 通知削除でCASCADE。最大90日 |
 | `usage_records` 費用台帳 | `id uuid! PK`, `agent_id uuid? FK agents(id)`（新規記録は必須。NULLはAI削除後の匿名化済み記録だけ）, `conversation_id uuid? FK conversations(id)`, `provider text!`, `model text!`, `input_tokens int!`, `output_tokens int!`, `estimated_usd numeric(12,6)!`, `actual_usd numeric(12,6)?`, `kind varchar(16)!`, `idempotency_key text!` | `UNIQUE(idempotency_key)`、`(agent_id,created_at)`、`(created_at)`、`kind IN (reserve,charge,release)` | 12か月保持後集計・削除。AI削除では匿名化して保持 |
 | `background_jobs` 永続ジョブ | `id uuid! PK`, `kind varchar(32)!`, `dedupe_key text!`, `payload jsonb!`, `status varchar(16)!`, `run_at timestamptz!`, `lease_until timestamptz?`, `attempts smallint!`, `last_error text?`, `updated_at timestamptz!` | `UNIQUE(kind,dedupe_key)`、`(status,run_at)` | 完了後30日、失敗後90日 |
 | `audit_events` 監査 | `id uuid! PK`, `actor_profile_id uuid?`, `action varchar(64)!`, `resource_type text!`, `resource_id text!`, `metadata jsonb!` | `(actor_profile_id,created_at DESC)` | 180日、秘密本文・トークン禁止 |
-| `deletion_requests` 削除追跡 | `id uuid! PK`, `profile_id uuid!`, `status varchar(16)!`, `requested_at timestamptz!`, `completed_at timestamptz?`, `error_code text?` | `UNIQUE(profile_id)`（進行中） | 完了後30日、PIIなしで集計 |
+| `deletion_requests` 削除追跡 | `id uuid! PK`, `profile_id uuid!`（FKなし。Auth削除後も追跡）, `status varchar(16)!`, `requested_at timestamptz!`, `completed_at timestamptz?`, `error_code text?`, `updated_at timestamptz!` | `UNIQUE(profile_id) WHERE status IN (pending,running)`、`status IN (pending,running,completed,failed)`、completedと`completed_at`の整合CHECK、`error_code`は固定コード形式 | 完了後30日、PIIなしで集計 |
 
 `conversations.job_id`のFKは循環参照を避けて`background_jobs(id)`へ後付け。`background_jobs.status`は`queued,running,retry_wait,completed,failed,cancelled`、`discord_deliveries`と`discord_dm_deliveries`のstatusは`pending,sending,sent,needs_review,cancelled`に制限する。全テキスト長・配列件数はAPIとCHECKで制限する。`private_info`はAPIで暗号化してからDBへ保存し、復号は本人の編集要求だけに限定する。画像はSupabase Storageのprivate bucketに置き、公開用アイコンだけ署名URLまたは公開bucketへ複製する。
 
@@ -91,3 +91,50 @@ API/Worker/BotはSupabaseの接続プーラーを使う。短いトランザク�
 - 削除: まず新規交流と配信を停止し、対象会話→記憶→通知→AI→プロフィール→Authユーザーの順で削除する。外部Discord投稿の削除試行は別ジョブで記録する。会話CASCADE前に配送IDを本文なしで削除ジョブへ引き渡す。要求時から関連会話・派生記憶/通知を双方の参照対象外とし、招待失効後にAuthを削除する。保持期限と30日以内パージ・匿名化・復元時の扱いは[運用契約](23-invitation-consent-operations.md)に従う。
 
 [ER図](diagrams/er-diagram.md)・[認可設計](06-authentication-authorization.md)を参照。
+
+## #15 API冪等性
+
+`api_idempotency(owner_id,operation,key_hash,request_hash,hmac_key_version,response,created_at)`を追加。
+複合PKは`owner_id,operation,key_hash`、profiles削除でCASCADE、RLS default deny。
+作成応答（私的欄なし）と入力HMAC・正の鍵版を保持する。本文は保持しない。
+成功時の`created_at`から24時間を再送保証期間とし、再送で期限は延長しない。
+期限後はAPIの再送照合対象から外す。#30で`created_at <= now() - interval '24 hours'`の行を
+日次削除する（通常の物理保持は最大48時間。清掃失敗中も再送保証は延長しない）。
+`created_at`に清掃用索引を設ける。プロフィール削除時は期限によらずCASCADEで削除する。
+HMAC鍵版ごとの独立した鍵をAPIのSecretで管理し、旧版を最後に使用した作成成功から24時間は保持する。
+rollbackは`DROP TABLE public.api_idempotency`だが再送結果を失うためAPIを止めて実施する。
+
+## アイコンStorageと検証済みアップロード（#15）
+
+正本は`20261114020000_agent_icons.sql`。`agent-icons`と`profile-private`はともにprivate。
+前者は再エンコード済みの表示用PNG（2 MiBまで）のみ、後者は私的ファイル用でアイコンAPIの対象外。
+`storage.objects`のrestrictive policyはこの2 bucketへのanon/authenticated直接CRUDを拒否し、
+他bucket向けの広いpermissive policyが追加されても上書き/差替えを許可しない。
+署名URLによる読取は期限300秒のbearerアクセスであり、RLSを通す通常読取とは区別する。
+
+`agent_icon_uploads(path PK, owner_id FK profiles CASCADE, content_type, size_bytes, sha256, created_at)`
+はAPIのみが書く検証済みregistry。RLS有効・browser policyなし・anon/authenticated権限なし。
+所有権はこのowner_idと本人prefixで検証し、Storageのservice-role所有者フィールドを本人認可に使わない。
+`agents.icon_path`はregistryへのFK（削除時SET NULL）で、未登録パスを保存しない。
+
+StorageとPostgresは分散トランザクションではない。Storage成功後のDB失敗/応答不明では
+非公開の未使用objectが残り得る。#30はアカウント削除時に両bucketの本人prefix（registry未登録を含む）を
+Storage APIでパージし、未参照/未登録のアップロードは24時間超で清掃する。生のStorageメタデータの
+SQL削除だけでblobを消したと扱わない。置換後の旧objectも同じ未参照清掃に含める。
+rollbackはAPI停止→agents_icon_upload_fk解除→registryをDROP、Storage APIでobjectを消してから
+空bucketを削除。既存アイコンの参照/署名URLが失われるので、通常は前方修正を選ぶ。
+
+
+## #25 記憶の削除抑止と挿入ガード
+
+`20261111110000_memory_suppression.sql`は#22/PR #62と同じ3表（memory_tombstones、
+memory_source_suppressions、memory_completions）を先行導入する。本文は保持せず、本人AI/出典/キーだけ。
+全表RLS/default deny、anon/authenticatedの直接CRUD不可、AI/出典削除でCASCADE。
+`20261114050000_memory_insertion_guard.sql`は本人AI行のロックで候補挿入と削除を直列化し、
+抑止済み候補のINSERTを破棄する。UPDATEは所属/本文/出典/キー/作成日の変更を拒否する。
+状態/重要度の更新では行→AIの逆順ロックを取らず、削除とのデッドロックを避ける。
+
+巻戻しはアプリを前版へ戻し、抑止表/ガードは残すのを基本とする。完全なDDL巻戻しが必要なら
+API/Workerを停止し、抑止キーを保持・照合して削除済み候補の再抽出を禁止してから、
+memories_guard_candidateとguard_memory_candidate()、追加3表の順で除去する。
+抑止記録を破棄した状態で旧Workerを再開しない。出典のCASCADE削除は既存memories FKを使う。

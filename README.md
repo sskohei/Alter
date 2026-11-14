@@ -1,6 +1,6 @@
 # Alter
 
-更新日: 2026-11-07（フロント先行実装のDraft）。`docs/`が実装契約で、開発用Monorepo雛形とIssue #3のCI・PR品質ゲートに加え、#8/#9/#17/#23/#24/#25のフロント先行実装を追加。実業務API/確定デザインは依存待ちで、[Mock・実接続の区別と起動手順](docs/24-frontend-development.md)を参照。10人の招待制MVPを最初の受け入れ目標とする。金額・外部API仕様は各文書の出典と確認日を参照し、着手時に再確認する。
+更新日: 2026-11-14。`docs/`が実装契約。JWT/招待認可、ユーザー・交流設定・人格版/承認・アイコンのAPIとフロント先行画面を実装した。実OAuth/Storageの公開受け入れ・本番Worker接続は残件。[Mockと実接続](docs/24-frontend-development.md)を区別し、10人の招待制MVPを最初の受け入れ目標とする。
 
 ## ローカル開発（最初に実行）
 
@@ -60,11 +60,14 @@ uv run --package alter-discord-bot alter-bot     # 既定は無効、正常終�
 uv run --package alter-scheduler alter-scheduler # Cron: 1回実行して終了
 ```
 
-Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIに業務エンドポイントはまだない。
+Webの`/development`の「APIの接続を確認」で生成TypeScriptクライアント経由の接続を確認できる。`/health`は生存確認専用で、DB接続・Authの準備完了は意味しない。APIは招待認可付きの`GET/PATCH /api/v1/users/me`を提供する。人格APIは未実装。
+`/development/mock`では合成データでプロフィール・ページング・エラーを確認できる。
 
 ### Mockと無効化
 
-既定の`ALTER_MODE=mock`ではDB更新、LLM、Discordへの外部通信は行わない。API/Web/各入口はSupabase停止中でも起動確認できる。API/各独立プロセスは初期接続確認用のMock。Web用のAuth・業務APIの合成Mockと、未合意のpreview契約は[フロント開発手順](docs/24-frontend-development.md)を参照する。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
+既定の`ALTER_MODE=mock`ではWorker/Cron/BotのLLM・Discord処理は合成動作となる。APIの`/health`とWebはSupabase停止中でも起動確認できる。本人プロフィールAPI（`GET/PATCH /api/v1/users/me`）はmockモードではJWT検証を通過しても共通認可処理で503 `SERVICE_UNAVAILABLE`を返し、招待確認・DB接続へ進まない。
+
+本人プロフィールの実APIを呼ぶには`ALTER_MODE=live`とローカルSupabaseが必要。有効なJWT・招待とDB接続の設定を用意し、`ALTER_MODE=live uv run --package alter-api alter-api`でAPIを起動する。外部接続なしで確認するときは[合成Mock](docs/24-frontend-development.md)を使う。Worker/Cronの`live`処理は未実装なので明示的にエラー終了する。
 
 ```bash
 uv run --package alter-worker alter-worker --once
@@ -105,7 +108,7 @@ ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/p
 
 GitHub Actionsの必須チェックは`CI required`。Python/Web/API生成差分/空Supabase migration/secret scanningの検査範囲は[テスト戦略](docs/16-testing-strategy.md)、`MainRule`の承認・保護設定は[Git運用](docs/22-git-workflow.md)を参照。
 
-OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生成し、業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
+OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`と`GET/PATCH /api/v1/users/me`を生成し、その他の業務APIの将来契約は[API設計](docs/07-api-design.md)に記載する。ローカルキー・Dockerデータ・`.env`・`.next`・`.venv`はGit管理しない。lockfileは両方管理する。
 
 ## 読む順序
 
@@ -120,3 +123,21 @@ OpenAPIの正本はFastAPI/Pydantic。現時点では`GET /health`のみを生�
 ## MVPの成立条件
 
 招待した約10人がGoogle/GitHubでログインし、本人が承認した人格と交流設定でAI分身を作成できる。サーバー側の定期処理が両者の同意・予算・ブロックを確認し、2体の会話を生成して保存する。参加者はWebで会話を閲覧でき、明示的に許可したセッションだけが設定済みDiscordチャンネルへ投稿される。ブラウザを閉じても動き、失敗後の再試行で二重会話や二重投稿を生まない。
+
+## Claude Sonnet 5.5の採用（Issue #14）
+
+10人MVPはClaude直接APIの`claude-sonnet-5-5`を正式採用。
+共通の採用設定・単価は`alter_domain.llm_selection`、評価CLIもこの設定を使用する。
+`uv run --package alter-domain alter-llm-evaluate`は外部通信なしのdry-run。
+実評価はroot `.env`の`ANTHROPIC_API_KEY`と明示的な`--live`でのみ有効になる。
+[限定評価](evaluations/llm/sonnet-review-2026-11-13.md)・
+[評価手順](evaluations/llm/README.md)・[選定/保持条件](docs/26-llm-candidate-review.md)を参照。
+残りの品質受け入れは#37、本番Workerのadapter・moderation・費用予約の接続は#18の範囲。
+
+## アイコンAPI（#15）
+
+`POST /api/v1/agent-icons`へPNG/JPEG/WebPのバイナリを送ると、検証済みの本人用`icon_path`を返す。
+作成時または`PATCH /agents/{id}`で指定でき、GET等では300秒の`icon_url`だけを返す。
+入力/正規化後とも2 MiB以下・2048px以下・単一フレーム。実画像をデコード/PNG再エンコードし、
+EXIF/GPS等のメタデータを削除する。専用のprivate bucketとAPI専用Storageキーを使う。
+[API契約](docs/07-api-design.md)・[Storage設定](docs/14-deployment-infrastructure.md)を参照。

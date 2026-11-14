@@ -4,13 +4,22 @@ from typing import Any, Literal
 
 import httpx
 import uvicorn
+from alter_domain import agents
+from alter_domain.auth_admin import SupabaseAuthAdmin
+from alter_domain.db import create_db_engine
+from alter_domain.discord_oauth import DiscordOAuthClient
+from alter_domain.icons import IconStorage, IconStorageUnavailable, InvalidIcon
 from alter_domain.settings import Settings
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
 
+from alter_api.activity_routes import router as activity_router
+from alter_api.agent_routes import router as agent_router
 from alter_api.auth import JwtVerifier
+from alter_api.deletion_routes import router as deletion_router
+from alter_api.discord_routes import router as discord_router
 from alter_api.errors import (
     REQUEST_ID_HEADER,
     ErrorResponse,
@@ -18,6 +27,9 @@ from alter_api.errors import (
     install_error_handlers,
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
+from alter_api.memory_routes import router as memory_router
+from alter_api.settings_routes import router as settings_router
+from alter_api.users import router as users_router
 
 API_V1_PREFIX = "/api/v1"
 
@@ -30,7 +42,15 @@ class Health(BaseModel):
 
 def create_api_v1_router() -> APIRouter:
     """業務 API のルーター。各 Issue のエンドポイントはここへ追加する。"""
-    return APIRouter(prefix=API_V1_PREFIX)
+    router = APIRouter(prefix=API_V1_PREFIX)
+    router.include_router(users_router)
+    router.include_router(settings_router)
+    router.include_router(agent_router)
+    router.include_router(activity_router)
+    router.include_router(deletion_router)
+    router.include_router(discord_router)
+    router.include_router(memory_router)
+    return router
 
 
 def _add_shared_components(app: FastAPI) -> None:
@@ -68,14 +88,53 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
+        app.state.db_engine.dispose()
         if owns_client:
             client.close()
 
-    app = FastAPI(title="Alter API", version="0.1.0", lifespan=lifespan)
+    # 本番は Swagger UI / ReDoc を閉じる。/openapi.json はスモーク確認と型生成のため公開する
+    # （API の形だけで秘密は含まない）。
+    docs_enabled = settings.api_docs_enabled
+    app = FastAPI(
+        title="Alter API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+    )
     app.state.settings = settings
+    app.state.db_engine = create_db_engine(settings)
+    app.state.auth_admin = SupabaseAuthAdmin(settings, client)
+    app.state.icon_storage = IconStorage(settings, client)
     app.state.jwt_verifier = JwtVerifier(settings, client)
+    app.state.discord_oauth = DiscordOAuthClient(settings, client)
 
     install_error_handlers(app)
+
+    async def agent_not_found(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 404, "NOT_FOUND", "Agent not found")
+
+    async def agent_conflict(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 409, "CONFLICT", "Agent version or creation conflict")
+
+    async def invalid_icon(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 422, "VALIDATION_ERROR", "Invalid icon")
+
+    async def unavailable_icon(request: Any, exc: Exception) -> Any:
+        from alter_api.errors import error_response
+
+        return error_response(request, 503, "SERVICE_UNAVAILABLE", "Icon storage is unavailable")
+
+    app.add_exception_handler(InvalidIcon, invalid_icon)
+    app.add_exception_handler(IconStorageUnavailable, unavailable_icon)
+    app.add_exception_handler(agents.AgentNotFound, agent_not_found)
+    app.add_exception_handler(agents.AgentConflict, agent_conflict)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
