@@ -30,6 +30,7 @@ from alter_api.errors import (
 )
 from alter_api.idempotency import IDEMPOTENCY_KEY_HEADER
 from alter_api.memory_routes import router as memory_router
+from alter_api.rate_limit import RateLimiter
 from alter_api.readiness import database_ready
 from alter_api.settings_routes import router as settings_router
 from alter_api.suggestion_routes import router as suggestion_router
@@ -113,6 +114,7 @@ def create_app(
     app.state.icon_storage = IconStorage(settings, client)
     app.state.llm_client = SonnetClient(settings, client)
     app.state.jwt_verifier = JwtVerifier(settings, client)
+    app.state.rate_limiter = RateLimiter()
     app.state.discord_oauth = DiscordOAuthClient(settings, client)
 
     install_error_handlers(app)
