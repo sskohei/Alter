@@ -111,6 +111,21 @@ def _postable_channels(conn: Connection, conversation_id: uuid.UUID) -> list[str
     )
 
 
+def _competing_channels(conn: Connection, conversation_id: uuid.UUID) -> list[str]:
+    """取り出し時の重複確認用。選ばれなかった（``not_chosen``）投稿先を除く。"""
+    excluded = set(
+        conn.execute(
+            text(
+                "select channel_id from public.discord_deliveries "
+                "where conversation_id = :c and status = 'cancelled' "
+                "and last_error = 'not_chosen'"
+            ),
+            {"c": conversation_id},
+        ).scalars()
+    )
+    return [ch for ch in _postable_channels(conn, conversation_id) if ch not in excluded]
+
+
 def enqueue_conversation_posts(conn: Connection, conversation_id: uuid.UUID) -> int:
     """完了した会話の投稿行を作る（再実行しても増えない）。作った行の件数を返す。
 
@@ -229,8 +244,9 @@ def claim_next_post(conn: Connection) -> PostJob | None:
         if ok is None:
             _set_post(conn, row.id, "cancelled", "not_eligible")
             continue
-        if len(_postable_channels(conn, row.conversation_id)) > 1:
+        if len(_competing_channels(conn, row.conversation_id)) > 1:
             # 作成後に別のギルドでも条件がそろった。どこへ送るか決まらないので保留する
+            # （運営・管理者が選ばなかった投稿先 not_chosen は数えない。#36 ops.choose_target）
             _set_post(conn, row.id, "needs_review", "ambiguous_target")
             continue
         lines = tuple(
