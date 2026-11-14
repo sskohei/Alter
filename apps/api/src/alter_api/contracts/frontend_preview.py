@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from alter_api.activity_routes import router as activity_router
+from alter_api.deletion_routes import router as deletion_router
 from alter_api.discord_routes import router as discord_router
 from alter_api.errors import ErrorResponse
 from alter_api.memory_routes import router as memory_router
@@ -82,6 +83,7 @@ def create_contract_app() -> FastAPI:
     app.include_router(settings_router, prefix="/api/v1")
     app.include_router(discord_router, prefix="/api/v1")
     app.include_router(memory_router, prefix="/api/v1")
+    app.include_router(deletion_router, prefix="/api/v1")
     preview_router = APIRouter(dependencies=[Depends(HTTPBearer())])
 
     @preview_router.get(
