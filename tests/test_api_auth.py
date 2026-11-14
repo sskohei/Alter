@@ -443,3 +443,21 @@ def _app_with_clock(fake: FakeSupabase, clock: Callable[[], float]) -> FastAPI:
         _settings(), httpx.Client(transport=httpx.MockTransport(fake.handler)), clock=clock
     )
     return app
+
+
+def test_amr_is_carried_to_principal(
+    fake: FakeSupabase, ec_key: ec.EllipticCurvePrivateKey
+) -> None:
+    """削除要求の再認証確認（#30）のため、署名検証済みの ``amr`` を Principal に渡す。"""
+    app = _app(fake)
+
+    @app.get("/api/v1/_test/amr")
+    def amr(principal: CurrentPrincipal) -> list[list[Any]]:
+        return [list(m) for m in principal.auth_methods]
+
+    token = _sign(ec_key, amr=[{"method": "oauth", "timestamp": 1700000000}, {"bad": 1}])
+    response = TestClient(app).get(
+        "/api/v1/_test/amr", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    assert response.json() == [["oauth", 1700000000]]

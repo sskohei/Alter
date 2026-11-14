@@ -472,7 +472,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVITATION_REQUIRED" | "ACCOUNT_INACTIVE" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "CONFLICT" | "VALIDATION_ERROR" | "RATE_LIMITED" | "AUTHORIZATION_UNAVAILABLE" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
+            code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVITATION_REQUIRED" | "ACCOUNT_INACTIVE" | "REAUTHENTICATION_REQUIRED" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "CONFLICT" | "VALIDATION_ERROR" | "RATE_LIMITED" | "AUTHORIZATION_UNAVAILABLE" | "SERVICE_UNAVAILABLE" | "INTERNAL_ERROR";
             /** Message */
             message: string;
             /** Request Id */

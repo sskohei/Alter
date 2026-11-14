@@ -36,7 +36,8 @@
 |---|---|---|---|---|---|
 | `GET /users/me` | 招待・有効状態を確認して自分を作成/取得（operationId: `get_current_user`） | — → `Profile` | 401,403,503 | profiles | `/onboarding`, `/settings/account` |
 | `PATCH /users/me` | 本人情報更新（operationId: `patch_current_user`） | `display_name` → `Profile` | 401,403,422,503 | profiles | `/settings/account` |
-| `POST /users/me/deletion` | 本人の削除要求 | `confirm:true` → `202 DeletionRequest` | 409 | deletion_requests, agents | `/settings/account` |
+| `POST /users/me/deletion` | 本人の削除要求 | `confirm:true` → `202 DeletionRequest` | 403 `REAUTHENTICATION_REQUIRED` | deletion_requests, agents | `/settings/account` |
+| `GET /users/me/deletion` | 本人の削除状況 | — → `DeletionRequest` | 404 | deletion_requests | `/deletion-status` |
 | `GET /agents/me` | 自分のAI取得 | — → `Agent`または404 | 404 | agents, agent_settings | `/dashboard`, `/agent` |
 | `POST /agents` | 下書き作成 | `AgentDraftInput` → `201 Agent` | 409,422 | agents, agent_profiles | `/agent/new` |
 | `PATCH /agents/{id}` | 名前/アイコン更新 | `name?,icon_path?` → `Agent` | 403,422 | agents | `/agent/edit` |
@@ -170,10 +171,24 @@ icon_pathの省略は維持、nullは解除、非nullは検証済みの本人画
 ## #21 会話一覧・詳細とWeb通知の実装
 
 - 一覧・詳細は本人のAIが参加している会話だけ。参加していない会話の`{id}`は存在を隠して404。並びは作成日時の新しい順（同時刻はID順）で、cursorは不透明な文字列（不正は422）。
-- 参加者の利用者が削除要求済み（`profiles.deleted_at`）またはAIが削除済みの会話は、要求時点から双方の一覧・詳細・通知から外す（進行中の`deletion_requests`は #30 で同じ条件に加える）。
+- 参加者の利用者が削除要求済み（`profiles.deleted_at`）またはAIが削除済みの会話は、要求時点から双方の一覧・詳細・通知から外す（#30 の削除要求は同じトランザクションで`profiles.deleted_at`を記録するため、この条件で要求時点から外れる）。
 - `messages`は`moderation_status='allowed'`の発言だけを`turn_no`順に返し、モデレーション状態・トークン数は返さない。`participants`は参加順、`partner`は自分以外の参加者のAI。
 - `cost_usd`（#47 で合意）: 本人のAI・この会話・`usage_records.kind='charge'`の`actual_usd`の合計。予約（reserve）・解放（release）と相手のAIの費用は含めない。会話が`queued`/`running`の間は確定前として`null`、`completed`/`failed`/`cancelled`では合計（課金なしは0）。`relationship_change`は現時点では常に`null`。
 - `Notification.body`は表示用の文字列で、APIが`kind`から組み立てる。DBの`notifications.body`（JSON）や会話本文・相手の非公開情報は返さない。現在の`kind`は`conversation.completed`（「〇〇との交流が完了しました。」）。未知の種類は汎用文言にする。
 - `PATCH /notifications/{id}/read`は`read_at`を`coalesce(read_at, now())`で更新し、再送しても最初の既読日時を保つ。他人の通知は404。
 - 完了トランザクション用に`alter_domain.activity.notify_conversation_completed(conn, conversation_id)`を用意した。Workerが会話を`completed`にするのと同じトランザクションで呼ぶ（#20）。`completed`の会話だけが対象で、`dedupe_key='conversation.completed:<会話ID>'`により再実行しても1件。Web通知OFF・削除要求済みの利用者・削除済みAIには作らず、`body`は空のJSONにして会話本文を複製しない。
 - 会話・通知は作成から90日（docs/15・docs/23の保持期間）を過ぎた時点で一覧から外し、ID指定・既読は404にする。行の削除は日次パージ（#30）が行い、それまでもAPIからは見せない。
+
+## #30 前半 アカウント削除の受付と即時停止
+
+`apps/api/src/alter_api/deletion_routes.py`と`backend/alter_domain/src/alter_domain/account_deletion.py`で実装した。operationIdは #51 のpreview契約から`preview_`を外した`request_deletion`・`get_own_deletion`。応答は`Cache-Control: no-store`。
+
+- 再認証: `POST`はJWTの`amr`に5分以内（時計のずれ30秒まで）の`oauth`が必要。なければ403`REAUTHENTICATION_REQUIRED`で何も変えない。トークンの更新では`amr`の時刻は変わらないため、古いログインは通らない（#51 の再認証画面と同じ5分）。
+- 本文は`{confirm:true}`だけ（ほかの値・未知項目は422）。`Idempotency-Key`は任意で受け付けるが、削除要求は利用者ごとに1件のため、キーがなくても重複しない。受付済みの再送は再認証なしで同じ要求を202で返す。
+- 招待外は403`INVITATION_REQUIRED`、運営が失効済みは403`ACCOUNT_INACTIVE`（本人からは削除要求できない。運営が対応）。
+- 受付は1トランザクション: `profiles.deleted_at`の記録、AIの自律交流OFFと`paused`、未開始（queued）の交流とジョブの取消（Worker取得済みは取り消さない）、未配信の取消、招待の失効、`deletion_requests`（pending）の作成、非同期パージ用ジョブ`account.purge`（`dedupe_key='account.purge:<要求ID>'`）の投入、監査（要求IDと停止・取消件数だけ。表示名などは残さない）。途中で失敗したら全部戻して503。
+- 以後の業務APIは403`ACCOUNT_INACTIVE`。共有会話・通知は`profiles.deleted_at`により相手の画面からも外れる（#21）。
+- `GET`は本人JWTだけで確認できる（削除要求後は共通認可が403のため、招待の確認をしない）。本人の最新の要求のID・状態・日時だけを返し、なければ404。
+- `deletion_requests`は Auth 削除後も完了を追えるよう`profiles`へのFKを持たない。進行中（pending/running）は利用者ごとに1件、`error_code`は短い固定コードだけ。
+- 実際の削除（会話→記憶→通知→AI→プロフィール→Auth）、Discord投稿の削除試行、30日以内のパージ・匿名化は #30 後半（#22・#28 の後）で`account.purge`ジョブとして実装する。
+
