@@ -72,13 +72,18 @@ class AlterBot(discord.Client):
     async def respond(
         self, interaction: discord.Interaction, work: Callable[[Connection], cmd.Reply]
     ) -> None:
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        name = interaction.command.name if interaction.command else "?"
         try:
-            reply = await self.in_transaction(work)
-        except Exception:  # noqa: BLE001 - 本文や内部情報を利用者へ出さない
-            logger.exception("command failed: %s", interaction.command and interaction.command.name)
-            reply = cmd.Reply("処理できませんでした。時間をおいてもう一度お試しください。")
-        await interaction.followup.send(reply.text, ephemeral=reply.ephemeral)
+            await interaction.response.defer(ephemeral=True, thinking=True)
+            try:
+                reply = await self.in_transaction(work)
+            except Exception:  # noqa: BLE001 - 本文や内部情報を利用者へ出さない
+                logger.exception("command failed: %s", name)
+                reply = cmd.Reply("処理できませんでした。時間をおいてもう一度お試しください。")
+            await interaction.followup.send(reply.for_discord(), ephemeral=reply.ephemeral)
+        except discord.HTTPException:
+            # 応答の送信自体に失敗した（期限切れ・通信断など）。処理結果は DB に確定済み
+            logger.exception("failed to send reply: %s", name)
 
     async def on_guild_remove(self, guild: discord.Guild) -> None:
         await self.in_transaction(lambda conn: cmd.guild_removed(conn, str(guild.id)))
@@ -151,7 +156,10 @@ def register_commands(tree: app_commands.CommandTree[AlterBot], bot: AlterBot) -
     @agent.command(name="dashboard", description="Alter の Web ダッシュボード")
     async def dashboard(interaction: discord.Interaction) -> None:
         reply = cmd.dashboard(bot.web_url)
-        await interaction.response.send_message(reply.text, ephemeral=reply.ephemeral)
+        try:
+            await interaction.response.send_message(reply.for_discord(), ephemeral=reply.ephemeral)
+        except discord.HTTPException:
+            logger.exception("failed to send reply: dashboard")
 
     @server.command(name="setup", description="交流を投稿するチャンネルを設定する")
     @app_commands.describe(channel="投稿先のテキストチャンネル")

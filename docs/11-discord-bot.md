@@ -40,7 +40,8 @@ Web本人連携はDiscord OAuth2 `identify`で行い、Bot導入OAuthとは別�
 - 起動: `DISCORD_ENABLED=false`なら即終了、`ALTER_MODE=mock`ならDiscordに接続しない待機プロセス、`live`で`DISCORD_BOT_TOKEN`を使ってGatewayへ接続する。再接続はdiscord.pyの自動再接続、SIGTERM/SIGINTで接続を閉じて終了する。DBは同期SQLAlchemyを`asyncio.to_thread`で呼ぶ。
 - コマンド登録: `alter-bot --sync-commands`をデプロイ時に1回だけ実行する（ログインして同期し、Gatewayには接続せず終了）。通常起動では同期しない。
 - Intentsは`guilds`だけ。Message Content・メンバー一覧・プレゼンスは要求せず、過去メッセージを読まない。招待URLの権限はView Channel、Send Messages、Create Public Threads、Send Messages in Threadsだけ。
-- 応答はすべてephemeral。DB処理の前にdeferする。例外は内容を出さず「処理できませんでした」と返し、ログに残す。
+- 応答はすべてephemeral。DB処理の前にdeferする。例外は内容を出さず「処理できませんでした」と返し、ログに残す。本文はDiscordの上限（2,000文字）に収め、`/agent profile`は各欄を300文字までにしてWebへのリンクを添える。応答の送信自体の失敗もログに残す。
+- 排他制御: 更新するコマンド（publish・pause・resume）は、招待→プロフィール→連携の順（共通認可・削除要求・連携解除と同じ順）で行ロックしてから本人を確かめ直す。publishと`/server setup`は同じギルド行をロックし、投稿先の確認から同意の記録までを直列にする（変更途中の古い投稿先への同意や、連携解除後の同意を残さない）。publishの同意の応答には、同意した投稿先の名前を出す。
 - 本人の解決: Discordのuser IDから有効な`discord_connections`を引き、プロフィールの削除要求なし・招待`active`の場合だけ操作できる。それ以外は未連携と同じ案内（`/settings/discord`へのリンク）。
 - `/agent status`: AIの状態、自律交流ON/OFFと頻度、今日（UTC）の予算の残り（確定した`charge`だけを差し引く）、Discord公開の全体設定。次回予定はScheduler（#19）の後で足す。
 - `/agent profile`: 本人のAIの承認済み人格のうち、性格・興味・趣味・話し方・共有してよい情報だけ。価値観・交流方針・制約・非公開欄は出さない。MVPでは他人のAIは出さない（`agent`に他の名前を指定すると「見つかりません」）。

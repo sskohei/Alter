@@ -25,12 +25,24 @@ from alter_domain import interaction_settings as settings_domain
 
 HISTORY_DEFAULT = 5
 HISTORY_MAX = 10
+# Discord のメッセージ本文の上限（文字）。超える分は省略する
+DISCORD_MESSAGE_LIMIT = 2000
+PROFILE_FIELD_LIMIT = 300
+
+
+def clip(value: str, limit: int) -> str:
+    """``limit`` 文字に収める（超えたら末尾を「…」にする）。"""
+    return value if len(value) <= limit else value[: limit - 1] + "…"
 
 
 @dataclass(frozen=True)
 class Reply:
     text: str
     ephemeral: bool = True
+
+    def for_discord(self) -> str:
+        """Discord の本文上限（2,000 文字）に収めた文字列。"""
+        return clip(self.text, DISCORD_MESSAGE_LIMIT)
 
 
 @dataclass(frozen=True)
@@ -62,8 +74,13 @@ def _not_linked(web_url: str) -> Reply:
     )
 
 
-def resolve_member(conn: Connection, member: Member) -> Linked | None:
-    """有効な連携・有効な招待・削除要求なしの本人だけを返す。"""
+def resolve_member(conn: Connection, member: Member, *, lock: bool = False) -> Linked | None:
+    """有効な連携・有効な招待・削除要求なしの本人だけを返す。
+
+    ``lock=True`` は更新するコマンド用。招待 → プロフィール → 連携の順（共通認可・削除要求・
+    連携解除と同じ順）で行ロックしてから確かめ直す。確認から更新までの間に連携解除・招待失効・
+    削除要求が割り込んで、解除後に同意だけが残る、ということを防ぐ。
+    """
     row = conn.execute(
         text(
             "select c.profile_id, a.id as agent_id, a.name as agent_name "
@@ -77,6 +94,25 @@ def resolve_member(conn: Connection, member: Member) -> Linked | None:
     ).first()
     if row is None:
         return None
+    if lock:
+        invitation = conn.execute(
+            text("select status from public.invitations where auth_user_id = :p for share"),
+            {"p": row.profile_id},
+        ).scalar_one_or_none()
+        deleted = conn.execute(
+            text("select deleted_at is not null from public.profiles where id = :p for share"),
+            {"p": row.profile_id},
+        ).scalar_one_or_none()
+        still_linked = conn.execute(
+            text(
+                "select 1 from public.discord_connections "
+                "where discord_user_id = :d and profile_id = :p and revoked_at is null "
+                "for update"
+            ),
+            {"d": member.discord_user_id, "p": row.profile_id},
+        ).first()
+        if invitation != "active" or deleted is not False or still_linked is None:
+            return None
     return Linked(row.profile_id, row.agent_id, row.agent_name)
 
 
@@ -156,13 +192,15 @@ def profile(conn: Connection, member: Member, agent_name: str | None, *, web_url
     ).first()
     if row is None:
         return Reply("承認済みの人格がまだありません。Web で確認・承認してください。")
+    limit = PROFILE_FIELD_LIMIT
     lines = [
         f"AI: {linked.agent_name}",
-        f"性格: {row.personality}",
-        f"興味: {'、'.join(row.interests) or 'なし'}",
-        f"趣味: {'、'.join(row.hobbies) or 'なし'}",
-        f"話し方: {row.speaking_style}",
-        f"共有してよい情報: {row.shareable_info or 'なし'}",
+        f"性格: {clip(row.personality, limit)}",
+        f"興味: {clip('、'.join(row.interests) or 'なし', limit)}",
+        f"趣味: {clip('、'.join(row.hobbies) or 'なし', limit)}",
+        f"話し方: {clip(row.speaking_style, limit)}",
+        f"共有してよい情報: {clip(row.shareable_info or 'なし', limit)}",
+        f"全体は Web で確認できます: {web_url}/agent",
     ]
     return Reply("\n".join(lines))
 
@@ -230,7 +268,7 @@ def set_autonomy(
     consent_version: str,
 ) -> Reply:
     """Web の交流設定と同じドメイン処理で ON/OFF する（同意・承認・予算の確認も同じ）。"""
-    linked = resolve_member(conn, member)
+    linked = resolve_member(conn, member, lock=True)
     if linked is None:
         return _not_linked(web_url)
     if linked.agent_id is None:
@@ -279,11 +317,17 @@ def publish(
     """そのギルドだけの公開同意を記録・取消する。"""
     if guild is None:
         return Reply("このコマンドは公開したいサーバーの中で実行してください。")
-    linked = resolve_member(conn, member)
+    linked = resolve_member(conn, member, lock=True)
     if linked is None:
         return _not_linked(web_url)
     if linked.agent_id is None:
         return Reply("まだ AI が作成されていません。")
+    # /server setup（投稿先の変更と同意の取消）と同じギルド行をロックし、投稿先の確認から
+    # 同意の記録までを直列にする。変更の途中に、古い投稿先を見た同意が後から残ることを防ぐ
+    conn.execute(
+        text("select 1 from public.discord_guilds where id = :g for update"),
+        {"g": guild.guild_id},
+    )
     target = conn.execute(
         text(
             "select g.name as guild_name, ch.name as channel_name "
@@ -347,7 +391,8 @@ def publish(
         else f"\nWeb の全体設定（Discord 公開）が OFF のため、まだ投稿されません: "
         f"{web_url}/settings/interaction"
     )
-    return Reply("このサーバーでの公開に同意しました。" + note)
+    where = f"「{target.guild_name or 'このサーバー'}」の #{target.channel_name or '投稿先'}"
+    return Reply(f"{where} への公開に同意しました。" + note)
 
 
 # -- /server setup・Bot の離脱 ---------------------------------------------------------------
@@ -376,6 +421,7 @@ def server_setup(
             "Bot がそのチャンネルに投稿できません。閲覧・メッセージ送信・公開スレッドの作成・"
             "スレッド内での送信を Bot に許可してください。"
         )
+    # ギルド行を最初にロックする（/agent publish と同じ行。投稿先の変更と同意を直列にする）
     conn.execute(
         text(
             "insert into public.discord_guilds (id, name, admin_discord_user_id) "

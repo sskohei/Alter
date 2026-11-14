@@ -1,5 +1,7 @@
 """#27: Discord Bot コマンドの共通ドメイン処理の DB 統合テスト（Discord には接続しない）。"""
 
+import threading
+import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -7,6 +9,7 @@ from decimal import Decimal
 
 import pytest
 from alter_domain import discord_commands as cmd
+from alter_domain import discord_link
 from alter_domain import invitations as inv
 from alter_domain.auth_admin import AuthIdentity, AuthUser
 from sqlalchemy import Connection, Engine, text
@@ -449,3 +452,135 @@ def test_guild_removed_disables_and_cancels(engine: Engine, pair: tuple[Person, 
     assert (
         "/server setup" in run(engine, cmd.publish, me.member, GUILD, True, True, web_url=WEB).text
     )
+
+
+# -- レビュー指摘への回帰テスト（#73） -------------------------------------------------------
+
+
+def _active_consents(engine: Engine, agent: uuid.UUID) -> int:
+    with engine.connect() as conn:
+        return int(
+            conn.execute(
+                text(
+                    "select count(*) from public.agent_discord_consents "
+                    "where agent_id = :a and revoked_at is null"
+                ),
+                {"a": agent},
+            ).scalar_one()
+        )
+
+
+def test_channel_change_waits_for_in_flight_publish(
+    engine: Engine, pair: tuple[Person, Person]
+) -> None:
+    """publish（古い投稿先を確認して同意）の途中で投稿先が変わっても、同意は残らない。"""
+    me, _ = pair
+    run(engine, cmd.server_setup, ADMIN, GUILD, OK_TARGET)
+    moved = cmd.SetupTarget(CHANNEL_2, "新しい場所", invoker_can_manage=True, bot_can_post=True)
+    done = threading.Event()
+
+    publish_conn = engine.connect()
+    tx = publish_conn.begin()
+    reply = cmd.publish(publish_conn, me.member, GUILD, True, True, web_url=WEB)
+    assert "#ai交流" in reply.text  # まだコミットしていない（古い投稿先への同意）
+
+    def change() -> None:
+        run(engine, cmd.server_setup, ADMIN, GUILD, moved)
+        done.set()
+
+    worker = threading.Thread(target=change)
+    worker.start()
+    # 投稿先の変更は、publish のトランザクションが終わるまで待つ
+    assert not done.wait(0.5)
+    tx.commit()
+    publish_conn.close()
+    worker.join(5)
+    assert done.is_set()
+    # 変更が後から実行され、古い投稿先への同意を取り消している
+    assert _active_consents(engine, me.agent) == 0
+
+
+def test_publish_waits_for_channel_change_and_names_new_target(
+    engine: Engine, pair: tuple[Person, Person]
+) -> None:
+    me, _ = pair
+    run(engine, cmd.server_setup, ADMIN, GUILD, OK_TARGET)
+    moved = cmd.SetupTarget(CHANNEL_2, "新しい場所", invoker_can_manage=True, bot_can_post=True)
+    replies: list[str] = []
+
+    setup_conn = engine.connect()
+    tx = setup_conn.begin()
+    cmd.server_setup(setup_conn, ADMIN, GUILD, moved)
+
+    def publish() -> None:
+        replies.append(run(engine, cmd.publish, me.member, GUILD, True, True, web_url=WEB).text)
+
+    worker = threading.Thread(target=publish)
+    worker.start()
+    time.sleep(0.5)
+    assert replies == []  # 変更が終わるまで待つ
+    tx.commit()
+    setup_conn.close()
+    worker.join(5)
+    # 変更後の投稿先を確認したうえでの同意になり、応答にも新しい投稿先を出す
+    assert replies and "#新しい場所" in replies[0]
+
+
+def test_unlink_during_publish_leaves_no_consent(
+    engine: Engine, pair: tuple[Person, Person]
+) -> None:
+    """連携解除（共通認可と同じロック順）が先に進んでいたら、publish は待ってから拒否する。"""
+    me, _ = pair
+    run(engine, cmd.server_setup, ADMIN, GUILD, OK_TARGET)
+    replies: list[str] = []
+
+    unlink_conn = engine.connect()
+    tx = unlink_conn.begin()
+    # API の共通認可と同じく、招待 → プロフィールを行ロックしてから解除する
+    unlink_conn.execute(
+        text("select 1 from public.invitations where auth_user_id = :p for update"),
+        {"p": me.profile},
+    )
+    unlink_conn.execute(
+        text("select 1 from public.profiles where id = :p for update"), {"p": me.profile}
+    )
+    assert discord_link.disconnect(unlink_conn, me.profile)
+
+    def publish() -> None:
+        replies.append(run(engine, cmd.publish, me.member, GUILD, True, True, web_url=WEB).text)
+
+    worker = threading.Thread(target=publish)
+    worker.start()
+    time.sleep(0.5)
+    assert replies == []
+    tx.commit()
+    unlink_conn.close()
+    worker.join(5)
+    assert replies and "連携されていません" in replies[0]
+    # 「連携なし・有効な同意あり」にならない（再連携しても同意は戻らない）
+    assert _active_consents(engine, me.agent) == 0
+
+
+def test_long_profile_fits_discord_limit(engine: Engine, pair: tuple[Person, Person]) -> None:
+    me, _ = pair
+    long = "あ" * 2000
+    tags = ["い" * 50] * 20
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "insert into public.agent_profiles (agent_id, version, personality, values_text, "
+                "interests, hobbies, speaking_style, interaction_policy, shareable_info, "
+                "restrictions, approved_at) "
+                "values (:a, 2, :t, 'v', :tags, :tags, :t, 'i', :t, 'r', now())"
+            ),
+            {"a": me.agent, "t": long, "tags": tags},
+        )
+        conn.execute(
+            text("update public.agents set approved_profile_version = 2 where id = :a"),
+            {"a": me.agent},
+        )
+    reply = run(engine, cmd.profile, me.member, None, web_url=WEB)
+    assert len(reply.for_discord()) <= cmd.DISCORD_MESSAGE_LIMIT
+    assert len(reply.text) <= cmd.DISCORD_MESSAGE_LIMIT
+    assert f"{WEB}/agent" in reply.text  # 全体は Web で見られることを案内する
+    assert len(cmd.Reply("x" * 5000).for_discord()) == cmd.DISCORD_MESSAGE_LIMIT
