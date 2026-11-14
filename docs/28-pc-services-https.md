@@ -44,11 +44,11 @@ sudo systemctl enable --now alter-api@preview.service
 curl --fail http://127.0.0.1:8001/health
 curl --fail http://127.0.0.1:8001/ready
 # readiness成功、環境分離、#33のTLS/probe確認後に続ける
-sudo systemctl enable --now alter-worker@preview.service
-sudo systemctl enable --now alter-bot@preview.service
+sudo systemctl start alter-worker@preview.service
+sudo systemctl start alter-bot@preview.service
 sudo systemctl enable --now alter-tunnel@preview.service
 # 生成対象/費用/課金不明の照合後、最後に定期実行を有効化
-sudo systemctl enable --now alter-scheduler@preview.timer
+sudo systemctl start alter-scheduler@preview.timer
 systemctl list-timers alter-scheduler@preview.timer
 ```
 
@@ -67,7 +67,9 @@ systemdの起動/終了状態とDBの監査・ジョブ状態を使う。API acc
 Schedulerは`OnCalendar=*-*-* *:00/15:00 UTC`、`Persistent=false`で停止枠を再生しない。
 oneshotとflock、DB一意制約で重複を抑止する。直接CLIでOSロックを迂回しない。
 手動実行も`systemctl start alter-scheduler@preview.service`を使う。
-サービスのenableをしていなければtimerは動かない。timerの次回日時と実行終了状態を実機で確認する。
+timerはstartで今回の稼働中だけ動き、enable後はOS起動時にも動く。
+#36の復旧演習承認後にWorker/Bot/serviceとScheduler/timerをenableする。
+timerの次回日時と実行終了状態を実機で確認する。
 
 ## 公開HTTPS経路
 
