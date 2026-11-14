@@ -156,3 +156,6 @@ Previewではテスト画像でアップロード→作成時指定→取得→P
 実環境のStorage接続・キー権限の確認は#37の公開受け入れに記録する。
 
 Webの環境別設定、callback/CORS登録、限定スモークと#35の完了記録は[Webデプロイ手順](25-web-deployment.md)を参照する。
+
+Supabaseの環境別設定・接続検査・migration・バックアップの具体手順と未実施記録は
+[Supabase運用手順](27-supabase-operations.md)を参照する。
