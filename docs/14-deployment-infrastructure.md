@@ -32,7 +32,7 @@ Issue #2で開発用雛形を配置済み。固定バージョン、初回設定
 | Worker | 手元PCの独立プロセス | ジョブループ、並列数1から開始、lease更新と終了シグナル対応 |
 | Bot | 手元PCの独立プロセス | PC稼働中はGateway接続、再接続、コマンド同期は配置時のみ |
 | Scheduler | 手元PCのOS定期実行 | UTC `*/15 * * * *`、1回実行で終了。DB一意制約とOS側の重複起動抑止 |
-| Purge | 手元PCのOS定期実行 | `alter-api-purge`（APIパッケージ）、毎時1回実行で終了。アカウント削除のパージと保持期限の削除（ADR-016）。ジョブはskip lockedとリースで重複起動しても二重に処理しない |
+| Purge | 手元PCのOS定期実行 | `alter-api-purge`（APIパッケージ）、毎時1回実行で終了。アカウント削除のパージと保持期限の削除（ADR-018）。ジョブはskip lockedとリースで重複起動しても二重に処理しない |
 | Ops確認 | 手元PCのOS定期実行 | `alter-ops status`（ドメインパッケージ）、15分ごとに実行して終了。件数と警告コードだけを出し、警告があれば終了コード3で運営者へ知らせる。読み取りのみ（[運用手順書](27-operations-runbook.md)） |
 | DB/Auth | Supabase Free | 本番/Previewは別プロジェクト。RLS、Auth redirect allowlist。バックアップを別途取得 |
 
@@ -76,7 +76,7 @@ Supabase Freeでマネージド自動バックアップは利用できる前提�
 | Worker | `ALTER_MODE=live`, `LLM_ENABLED=true`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MAX_DAILY_COST_USD` | LLMキーをWebに渡さない |
 | Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはPCのBot専用環境ファイル/OS秘密管理 |
 | Scheduler（OS定期実行） | `ALTER_MODE=live`, `SCHEDULER_ENABLED=true`, `DATABASE_URL`, `SCHEDULER_BATCH_SIZE`, `MAX_DAILY_COST_USD` | 15分ごとに`uv run --package alter-scheduler alter-scheduler`を1回実行。LLMキー不要、既定無効 |
-| Purge（OS定期実行） | `ALTER_MODE=live`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_STORAGE_SECRET_KEY` | 毎時`uv run --package alter-api alter-api-purge`を1回実行。管理鍵はAPIと同じPCの専用環境ファイル/OS秘密管理に置き、Scheduler・Worker・Botの環境ファイルに入れない（ADR-016） |
+| Purge（OS定期実行） | `ALTER_MODE=live`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_STORAGE_SECRET_KEY` | 毎時`uv run --package alter-api alter-api-purge`を1回実行。管理鍵はAPIと同じPCの専用環境ファイル/OS秘密管理に置き、Scheduler・Worker・Botの環境ファイルに入れない（ADR-018） |
 | Ops確認（OS定期実行） | `DATABASE_URL`, `MAX_DAILY_COST_USD` | `uv run alter-ops --env production --operator <担当> status`。LLMキー・管理鍵・Bot tokenは不要 |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
 
@@ -93,7 +93,7 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 | `SUPABASE_SECRET_KEY` | `supabase status`のSecret | その環境のSecret Key（PCのAPI専用秘密管理） | その環境のSecret Key（PCのAPI専用秘密管理） |
 | `CORS_ORIGINS` | `http://localhost:3000` | VercelのPreview用`NEXT_PUBLIC_SITE_URL`と完全一致 | VercelのProduction用`NEXT_PUBLIC_SITE_URL`と完全一致 |
 
-`SUPABASE_SECRET_KEY`はAPI/運営CLIだけに置き、Web・Worker・Bot・Cronへ渡さない。パージ用の運営CLI（`alter-api-purge`、ADR-016）はこの「運営CLI」に含まれ、`SUPABASE_STORAGE_SECRET_KEY`とともにAPIと同じ管理下で使う。Schedulerの定期実行には渡さない。`CORS_ORIGINS`に`*`は指定できない（起動時に拒否）。
+`SUPABASE_SECRET_KEY`はAPI/運営CLIだけに置き、Web・Worker・Bot・Cronへ渡さない。パージ用の運営CLI（`alter-api-purge`、ADR-018）はこの「運営CLI」に含まれ、`SUPABASE_STORAGE_SECRET_KEY`とともにAPIと同じ管理下で使う。Schedulerの定期実行には渡さない。`CORS_ORIGINS`に`*`は指定できない（起動時に拒否）。
 
 ### APIドキュメントの公開範囲
 
