@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { browserApi } from "../lib/api-browser";
-import { ApiError } from "@alter/api-client/preview";
+import { activityApi } from "../lib/api-browser";
+import { unwrap } from "@alter/api-client";
+import { useRetryAfter } from "../lib/use-retry-after";
 import { dataErrorMessage } from "./data-state";
 import { Button } from "./ui/button";
 import {
@@ -26,35 +27,34 @@ export function BlockControl({
   initialBlocked?: boolean;
   onChanged?: (blocked: boolean) => void;
 }) {
+  const retry = useRetryAfter();
   const [blocked, setBlocked] = useState(initialBlocked);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [open, setOpen] = useState(false);
   async function change() {
+    if (retry.seconds) return;
     setBusy(true);
     setError(null);
     try {
       const params = { path: { id: ownAgentId, other_id: otherAgentId } };
       const headers = { "Idempotency-Key": crypto.randomUUID() };
       const result = blocked
-        ? await browserApi().DELETE("/api/v1/agents/{id}/blocks/{other_id}", {
+        ? await activityApi().DELETE("/api/v1/agents/{id}/blocks/{other_id}", {
             params,
             headers,
           })
-        : await browserApi().PUT("/api/v1/agents/{id}/blocks/{other_id}", {
+        : await activityApi().PUT("/api/v1/agents/{id}/blocks/{other_id}", {
             params,
             headers,
           });
-      if (!result.response.ok)
-        throw new ApiError(result.response.status, {
-          code: "BLOCK_FAILED",
-          message: "Block operation failed",
-        });
+      await unwrap(result);
       const next = !blocked;
       setBlocked(next);
       onChanged?.(next);
       setOpen(false);
     } catch (cause) {
+      retry.defer(cause);
       setError(cause);
     } finally {
       setBusy(false);
@@ -93,6 +93,7 @@ export function BlockControl({
               : "この相手との新しい交流を止め、未実行の予約・未配信の投稿を取消対象にします。保存済み会話は保持期限まで参加者に表示されます。公開済み投稿の完全回収はできません。"}
           </AlertDialogDescription>
           {!!error && <p role="alert">{dataErrorMessage(error)}</p>}
+          {retry.seconds > 0 && <p role="status">再試行まで{retry.seconds}秒お待ちください。</p>}
           <div className="actions">
             <AlertDialogCancel asChild>
               <Button variant="outline" disabled={busy}>
@@ -101,7 +102,7 @@ export function BlockControl({
             </AlertDialogCancel>
             <AlertDialogAction asChild>
               <Button
-                disabled={busy}
+                disabled={busy || retry.seconds > 0}
                 onClick={(event) => {
                   event.preventDefault();
                   void change();

@@ -11,6 +11,7 @@ function origin(value) {
     const url = new URL(value);
     if (
       url.protocol !== "https:" ||
+      url.origin !== value ||
       url.username ||
       url.password ||
       url.search ||
@@ -41,7 +42,7 @@ export function checkWebEnvironment(env) {
     if (name.startsWith("NEXT_PUBLIC_") && !publicNames.has(name))
       errors.push(`${name}: unexpected public variable`);
     if (
-      /^(SUPABASE_(SECRET_KEY|SERVICE_ROLE_KEY|DB_URL)|DATABASE_URL|DISCORD_(CLIENT_SECRET|BOT_TOKEN)|LLM_API_KEY|PROFILE_ENCRYPTION_KEY.*)$/.test(
+      /^(SUPABASE_(SECRET_KEY|STORAGE_SECRET_KEY|SERVICE_ROLE_KEY|DB_URL)|DATABASE_URL|DISCORD_(CLIENT_SECRET|BOT_TOKEN)|ANTHROPIC_API_KEY|LLM_API_KEY|PROFILE_ENCRYPTION_KEY.*|AGENT_IDEMPOTENCY_HMAC_KEY.*)$/.test(
         name,
       ) &&
       env[name]

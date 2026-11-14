@@ -11,9 +11,16 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   if (!code || request.nextUrl.searchParams.has("error")) return destination("/login?error=oauth");
   try {
-    const { client, supabase } = await serverApi();
+    const { client, apiClient, supabase } = await serverApi();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) return destination("/login?error=oauth");
+    if (safeReturnPath(request.nextUrl.searchParams.get("next")) === "/deletion-status") {
+      // This exception reads only the verified owner's minimal deletion status.
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError || !data.user) return destination("/login?error=expired");
+      await unwrap(await apiClient.GET("/api/v1/users/me/deletion", { cache: "no-store" }));
+      return destination("/deletion-status");
+    }
     let profile;
     try {
       profile = await unwrap(await client.GET("/api/v1/users/me"));

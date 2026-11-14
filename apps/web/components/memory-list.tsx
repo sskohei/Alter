@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useState } from "react";
-import { ApiError, unwrap, type components } from "@alter/api-client/preview";
-import { browserApi } from "../lib/api-browser";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, unwrap, type components } from "@alter/api-client";
+import { activityApi } from "../lib/api-browser";
+import { useRetryAfter } from "../lib/use-retry-after";
 import { useCursor, useResource } from "../lib/use-resource";
 import { dateLabel } from "../lib/activity";
 import { DataState, PageControls, dataErrorMessage } from "./data-state";
@@ -19,12 +20,14 @@ import {
 type Memory = components["schemas"]["Memory"];
 export function MemoryList() {
   const page = useCursor();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const retry = useRetryAfter();
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState("");
   const load = useCallback(
     async (signal: AbortSignal) => {
-      const api = browserApi();
+      const api = activityApi();
       let agent;
       try {
         agent = await unwrap(await api.GET("/api/v1/agents/me", { signal }));
@@ -49,9 +52,10 @@ export function MemoryList() {
     [page.cursor],
   );
   const resource = useResource(load);
+  useEffect(() => { if (pending) heading.current?.focus(); }, [pending]);
   async function remove(memory: Memory) {
     const snapshot = resource.data;
-    if (!snapshot) return;
+    if (!snapshot || pending || retry.seconds) return;
     setPending(memory.id);
     setError(null);
     setMessage("");
@@ -61,23 +65,23 @@ export function MemoryList() {
             ...data,
             memories: {
               ...data.memories,
-              items: data.memories.items.filter((m) => m.id !== memory.id),
+              items: data.memories.items.filter((m) =>
+                m.id !== memory.id && (!memory.source_conversation_id ||
+                  m.source_conversation_id !== memory.source_conversation_id)),
             },
           }
         : data,
     );
     try {
-      const result = await browserApi().DELETE("/api/v1/memories/{id}", {
+      const result = await activityApi().DELETE("/api/v1/memories/{id}", {
         params: { path: { id: memory.id } },
         headers: { "Idempotency-Key": crypto.randomUUID() },
       });
-      if (!result.response.ok)
-        throw new ApiError(result.response.status, {
-          code: "DELETE_FAILED",
-          message: "Could not delete memory",
-        });
+      await unwrap(result);
+      resource.refresh();
       setMessage("記憶を削除しました。");
     } catch (cause) {
+      retry.defer(cause);
       if (cause instanceof ApiError && [401, 403, 404].includes(cause.status)) {
         if (cause.status !== 404)
           resource.update((data) =>
@@ -94,11 +98,12 @@ export function MemoryList() {
   }
   return (
     <>
-      <h1>AI分身の記憶</h1>
+      <h1 ref={heading} tabIndex={-1}>AI分身の記憶</h1>
       <p>
         会話から抽出した記憶候補です。本人の確定した事実とは限りません。出典と内容を確認し、不要な候補を削除できます。
       </p>
       <DataState {...resource} retry={resource.refresh} />
+      {retry.seconds > 0 && <p role="status">再試行まで{retry.seconds}秒お待ちください。</p>}
       {message && <p role="status">{message}</p>}
       {pending && <p role="status">記憶を削除中…</p>}
       {!!error && (
@@ -128,14 +133,14 @@ export function MemoryList() {
               <MemoryCard
                 key={memory.id}
                 memory={memory}
-                busy={pending !== null}
+                busy={pending !== null || retry.seconds > 0}
                 remove={() => void remove(memory)}
               />
             ))
           )}
           <PageControls
             {...page}
-            disabled={pending !== null}
+            disabled={pending !== null || retry.seconds > 0}
             nextCursor={resource.data.memories.next_cursor}
           />
         </>
@@ -183,6 +188,7 @@ function MemoryCard({
             </AlertDialogTitle>
             <AlertDialogDescription>
               この候補を削除して、今後の交流で使う記憶から外します。元に戻せません。出典の会話は保持されます。
+              {memory.source_conversation_id && " 同じ出典から作られたあなたの他の記憶候補も削除し、この出典からの再抽出を止めます。相手の記憶は変更しません。"}
             </AlertDialogDescription>
             <p>{memory.text}</p>
             <div className="actions">

@@ -1,15 +1,17 @@
 "use client";
 import { createPreviewClient, ApiError } from "@alter/api-client/preview";
+import { createApiClient } from "@alter/api-client";
 import { accessMessage } from "./auth-policy";
-export function browserApi() {
-  return createPreviewClient("", async (input, init) => {
-    const response = await fetch(input, { ...init, cache: "no-store" });
-    // Full navigation intentionally destroys all user-specific in-memory state.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    if (response.status === 401) window.location.assign("/login?error=expired");
-    return response;
-  });
-}
+const browserFetch: typeof fetch = async (input, init) => {
+  const response = await fetch(input, { ...init, cache: "no-store" });
+  // Full navigation intentionally destroys all user-specific in-memory state.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  if (response.status === 401) window.location.assign("/login?error=expired");
+  return response;
+};
+export const browserApi = () => createPreviewClient("", browserFetch);
+export const liveApi = () => createApiClient("", browserFetch);
+export const activityApi = liveApi;
 export function operationMessage(cause: unknown) {
   if (!(cause instanceof ApiError))
     return "接続できませんでした。入力を保持しています。再試行してください。";

@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
         ],
       },
+      ...[
+        "/auth/callback",
+        "/auth/reauth/callback",
+        "/auth/discord/callback",
+      ].map((source) => ({
+        source,
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      })),
     ];
   },
 };

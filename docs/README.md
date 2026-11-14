@@ -4,4 +4,6 @@
 
 [招待・同意・運用契約](23-invitation-consent-operations.md)はIssue #4で確定した対象者・招待判定・表示文案・責任者・公開必須ゲートと実装時の受け入れケース。
 
-[フロント先行実装とMock](24-frontend-development.md)は#8/#9/#17/#23/#24/#25の依存、レビュー用契約、ローカル起動・合成データと実接続の区別。
+[フロント先行実装とMock](24-frontend-development.md)は#8/#9/#17の依存、レビュー用契約、ローカル起動・合成データと実接続の区別。
+
+[Webデプロイと受け入れ](25-web-deployment.md)は#35のVercel環境設定・callback/CORS・スモークと実環境の完了条件。
