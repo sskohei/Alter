@@ -6,6 +6,7 @@
 - DB は同期の SQLAlchemy を ``asyncio.to_thread`` で呼ぶ（イベントループを止めない）
 - 再接続は discord.py の自動再接続に任せる。SIGTERM で接続を閉じて終了する
 - 権限（管理権限・Bot の投稿権限）は Discord 側の値を実行時に確認し、ドメイン処理へ渡す
+- 会話投稿と DM 通知は ``delivery`` の送信ループが DB の outbox から送る（#28）
 """
 
 import asyncio
@@ -21,26 +22,20 @@ from alter_domain.settings import Settings
 from discord import app_commands
 from sqlalchemy import Connection, Engine
 
+from alter_discord_bot import delivery
+from alter_discord_bot.permissions import REQUIRED_CHANNEL_PERMISSIONS, bot_can_post
+from alter_discord_bot.rest import DiscordRest
+
+__all__ = ["REQUIRED_CHANNEL_PERMISSIONS", "AlterBot", "bot_can_post", "intents", "run"]
+
 logger = logging.getLogger("alter_discord_bot")
 T = TypeVar("T")
-
-# Bot が投稿先チャンネルで必要な権限（docs/11）
-REQUIRED_CHANNEL_PERMISSIONS = (
-    "view_channel",
-    "send_messages",
-    "create_public_threads",
-    "send_messages_in_threads",
-)
 
 
 def intents() -> discord.Intents:
     value = discord.Intents.none()
     value.guilds = True
     return value
-
-
-def bot_can_post(permissions: discord.Permissions) -> bool:
-    return all(getattr(permissions, name) for name in REQUIRED_CHANNEL_PERMISSIONS)
 
 
 def _member(interaction: discord.Interaction) -> cmd.Member:
@@ -54,13 +49,39 @@ def _guild(interaction: discord.Interaction) -> cmd.GuildContext | None:
 
 
 class AlterBot(discord.Client):
-    def __init__(self, settings: Settings, engine: Engine) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        engine: Engine,
+        *,
+        deliver: bool = False,
+        rest: DiscordRest | None = None,
+    ) -> None:
         super().__init__(intents=intents())
         self.settings = settings
         self.engine = engine
         self.web_url = settings.alter_web_url.rstrip("/")
+        self.deliver = deliver
+        # 投稿・DM の書き込みは内部で再送しないクライアントで送る（#28）
+        self.rest = rest or DiscordRest(settings.discord_bot_token.get_secret_value())
+        self.delivery_task: asyncio.Task[None] | None = None
         self.tree = app_commands.CommandTree(self)
         register_commands(self.tree, self)
+
+    async def setup_hook(self) -> None:
+        # 投稿・DM の送信ループ（#28）。コマンド同期だけのときは動かさない
+        if self.deliver:
+            self.delivery_task = asyncio.create_task(self._deliver_when_ready())
+
+    async def _deliver_when_ready(self) -> None:
+        await self.wait_until_ready()
+        await delivery.run_loop(self)
+
+    async def close(self) -> None:
+        if self.delivery_task is not None:
+            self.delivery_task.cancel()
+        await self.rest.close()
+        await super().close()
 
     async def in_transaction(self, work: Callable[[Connection], T]) -> T:
         def run() -> T:
@@ -197,7 +218,7 @@ async def run(settings: Settings, *, sync_commands: bool) -> None:
     if not token:
         raise SystemExit("DISCORD_BOT_TOKEN is required in live mode")
     engine = create_db_engine(settings)
-    bot = AlterBot(settings, engine)
+    bot = AlterBot(settings, engine, deliver=not sync_commands)
 
     if sync_commands:
         # デプロイ時だけ: ログインしてコマンドを同期し、Gateway には接続せずに終了する

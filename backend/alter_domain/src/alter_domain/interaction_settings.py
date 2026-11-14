@@ -15,6 +15,8 @@ from typing import Any
 
 from sqlalchemy import Connection, Row, text
 
+from alter_domain import discord_delivery
+
 USD_STEP = Decimal("0.000001")
 # 入力として受け付ける金額の上限。運営上限よりも十分大きく、桁あふれ（500）を防ぐ
 USD_INPUT_MAX = Decimal("1000000")
@@ -411,5 +413,10 @@ def update_preferences(
     ).one()
     metadata: dict[str, Any] = {"changed": changed, "result": "success"}
     metadata.update({k: merged[k] for k in changed})
+    if current.discord_dm_notifications and not merged["discord_dm_notifications"]:
+        # DM 通知の OFF: 未送信の DM を取り消す（#28）
+        cancelled_dms = discord_delivery.cancel_pending_dms_for_profile(conn, owner)
+        if cancelled_dms:
+            metadata["cancelled_discord_dms"] = cancelled_dms
     _audit(conn, owner, "preferences.update", "profile", str(owner), metadata)
     return PreferencesRecord(row.web_notifications, row.discord_dm_notifications)
