@@ -1,67 +1,61 @@
-import base64
-import hashlib
-import uuid
-from datetime import datetime
-from typing import Annotated
+"""Owned memory browsing/deletion and current relationship counts (#25, PR #62 contract)."""
 
-from alter_domain import agents, memory
+import base64
+from typing import Annotated, Any
+from uuid import UUID
+
+from alter_domain import agents, memory_read
+from alter_domain.activity import _VISIBLE_CONVERSATION, InvalidCursor, decode_cursor, encode_cursor
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 
+from alter_api.activity_routes import _invalid_cursor
 from alter_api.auth import CurrentPrincipal
 from alter_api.business import BusinessConnection
-from alter_api.errors import ApiError, ErrorResponse
-from alter_api.idempotency import idempotency_key
+from alter_api.errors import ErrorResponse
 from alter_api.pagination import Page, PageParams, page_params
 
 router = APIRouter(
-    tags=["memory"], responses={c: {"model": ErrorResponse} for c in (401, 403, 404, 409, 422, 503)}
+    tags=["memory"],
+    responses={status: {"model": ErrorResponse} for status in (401, 403, 404, 409, 422, 429, 503)},
 )
 Paging = Annotated[PageParams, Depends(page_params)]
-Key = Annotated[str | None, Depends(idempotency_key)]
 
 
-def encode_cursor(created: datetime, identifier: uuid.UUID) -> str:
-    return base64.urlsafe_b64encode(f"{created.isoformat()}|{identifier}".encode()).decode()
-
-
-def decode_cursor(value: str) -> tuple[datetime, uuid.UUID]:
-    try:
-        decoded = base64.b64decode(value, altchars=b"-_", validate=True).decode()
-        timestamp, identifier = decoded.split("|")
-        date = datetime.fromisoformat(timestamp)
-        if date.tzinfo is None:
-            raise ValueError()
-        return date, uuid.UUID(identifier)
-    except (ValueError, UnicodeError):
-        raise ApiError(422, "VALIDATION_ERROR", "Invalid cursor") from None
-
-
-@router.get("/memories", response_model=Page[memory.Memory], operation_id="list_memories")
+@router.get("/memories", response_model=Page[memory_read.Memory], operation_id="list_memories")
 def list_memories(
-    agent_id: uuid.UUID, page: Paging, conn: BusinessConnection, principal: CurrentPrincipal
-) -> Page[memory.Memory]:
+    agent_id: UUID,
+    page: Paging,
+    principal: CurrentPrincipal,
+    conn: BusinessConnection,
+    response: Response,
+) -> Page[memory_read.Memory]:
     agents.owned(conn, principal.sub, agent_id)
-    cursor_clause = ""
-    params: dict[str, object] = {"agent": agent_id, "limit": page.limit + 1}
+    response.headers["Cache-Control"] = "no-store"
+    params: dict[str, Any] = {"agent": agent_id, "limit": page.limit + 1}
+    after = ""
     if page.cursor:
-        params["created"], params["id"] = decode_cursor(page.cursor)
-        cursor_clause = " and (m.created_at,m.id)<(:created,:id) "
+        try:
+            params["created"], params["after"] = decode_cursor(page.cursor)
+        except InvalidCursor:
+            raise _invalid_cursor() from None
+        after = " and (m.created_at,m.id)<(:created,:after) "
     rows = (
         conn.execute(
             text(
-                "select m.* from public.memories m "
-                "join public.conversations c on c.id=m.source_conversation_id and "
-                "c.status='completed' "
-                "where m.agent_id=:agent and m.status='active' and not exists "
-                "(select 1 from public.memory_source_suppressions s "
+                "select m.* from public.memories m left join public.conversations c "
+                "on c.id=m.source_conversation_id where m.agent_id=:agent and m.status='active' "
+                "and m.created_at>now()-interval '180 days' "
+                "and not exists(select 1 from public.memory_tombstones t "
+                "where t.agent_id=m.agent_id and t.dedupe_key=m.dedupe_key) "
+                "and not exists(select 1 from public.memory_source_suppressions s "
                 "where s.agent_id=m.agent_id and "
                 "s.source_conversation_id=m.source_conversation_id) "
-                "and not exists (select 1 from public.conversation_participants hidden "
-                "join public.agents ha on ha.id=hidden.agent_id "
-                "join public.profiles hu on hu.id=ha.owner_id where hidden.conversation_id=c.id "
-                "and (hu.deleted_at is not null or ha.status='deleted')) "
-                + cursor_clause
+                "and (m.source_conversation_id is null or (c.status='completed' and "
+                + _VISIBLE_CONVERSATION
+                + " and exists(select 1 from public.conversation_participants p "
+                "where p.conversation_id=c.id and p.agent_id=m.agent_id))) "
+                + after
                 + "order by m.created_at desc,m.id desc limit :limit"
             ),
             params,
@@ -69,78 +63,85 @@ def list_memories(
         .mappings()
         .all()
     )
-    items = [memory.Memory.model_validate(dict(row)) for row in rows[: page.limit]]
+    items = [memory_read.Memory.model_validate(dict(row)) for row in rows[: page.limit]]
     cursor = encode_cursor(items[-1].created_at, items[-1].id) if len(rows) > page.limit else None
     return Page(items=items, next_cursor=cursor)
 
 
-@router.delete("/memories/{memory_id}", status_code=204, operation_id="delete_memory")
-def delete_memory(
-    memory_id: uuid.UUID, conn: BusinessConnection, principal: CurrentPrincipal, key: Key
-) -> Response:
-    key_hash = hashlib.sha256(key.encode()).hexdigest() if key else None
-    if key_hash:
-        old = conn.execute(
-            text(
-                "select request_hash from public.api_idempotency "
-                "where owner_id=:owner and operation='memory.delete' and key_hash=:key"
-            ),
-            {"owner": principal.sub, "key": key_hash},
-        ).scalar_one_or_none()
-        if old is not None:
-            if old != str(memory_id):
-                raise agents.AgentConflict()
-            return Response(status_code=204)
-    memory.forget(conn, principal.sub, memory_id)
-    if key_hash:
-        conn.execute(
-            text(
-                "insert into public.api_idempotency "
-                "(owner_id,operation,key_hash,request_hash,response) "
-                "values (:owner,'memory.delete',:key,:id,'{}')"
-            ),
-            {"owner": principal.sub, "key": key_hash, "id": str(memory_id)},
-        )
-    return Response(status_code=204)
+@router.delete("/memories/{id}", status_code=204, operation_id="delete_memory")
+def delete_memory(id: UUID, principal: CurrentPrincipal, conn: BusinessConnection) -> Response:
+    memory_read.forget(conn, principal.sub, id)
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
 @router.get(
-    "/relationships", response_model=Page[memory.Relationship], operation_id="list_relationships"
+    "/relationships",
+    response_model=Page[memory_read.Relationship],
+    operation_id="list_relationships",
 )
 def list_relationships(
-    page: Paging, conn: BusinessConnection, principal: CurrentPrincipal
-) -> Page[memory.Relationship]:
-    params: dict[str, object] = {"owner": principal.sub, "limit": page.limit + 1}
-    clause = ""
+    page: Paging,
+    principal: CurrentPrincipal,
+    conn: BusinessConnection,
+    response: Response,
+) -> Page[memory_read.Relationship]:
+    response.headers["Cache-Control"] = "no-store"
+    params: dict[str, Any] = {"owner": principal.sub, "limit": page.limit + 1}
+    after = ""
     if page.cursor:
         try:
-            params["after"] = uuid.UUID(
+            params["after"] = UUID(
                 base64.b64decode(page.cursor, altchars=b"-_", validate=True).decode()
             )
         except (ValueError, UnicodeError):
-            raise ApiError(422, "VALIDATION_ERROR", "Invalid cursor") from None
-        clause = " and other.id>:after "
+            raise _invalid_cursor() from None
+        after = " and other.id>:after "
     rows = (
         conn.execute(
             text(
-                "select other.id as other_agent_id,other.name as other_agent_name,"
-                "r.conversation_count,r.shared_interests,r.last_met_at,exists "
-                "(select 1 from public.agent_blocks b where "
-                "b.blocker_agent_id=a.id and b.blocked_agent_id=other.id) as blocked "
-                "from public.agents a join public.agent_relationships r "
-                "on (r.agent_low_id=a.id or r.agent_high_id=a.id) "
-                "join public.agents other on other.id=case when r.agent_low_id=a.id "
-                "then r.agent_high_id else r.agent_low_id end "
+                "with mine as (select * from public.agents where owner_id=:owner and "
+                "status<>'deleted'), "
+                "pairs as (select case when r.agent_low_id=a.id then r.agent_high_id else "
+                "r.agent_low_id end as id "
+                "from mine a join public.agent_relationships r on a.id in "
+                "(r.agent_low_id,r.agent_high_id) "
+                "union select q.agent_id from mine a join public.conversation_participants "
+                "p on p.agent_id=a.id "
+                "join public.conversation_participants q on "
+                "q.conversation_id=p.conversation_id and q.agent_id<>a.id) "
+                "select other.id as other_agent_id,other.name as other_agent_name,counts.n "
+                "as conversation_count, "
+                "counts.last_met as last_met_at,exists(select 1 from public.agent_blocks b "
+                "where b.blocker_agent_id=a.id and b.blocked_agent_id=other.id) as blocked, "
+                "array(select distinct i from unnest(mp.interests) i where i=any(op.interests) "
+                "order by i limit 20) as shared_interests "
+                "from mine a cross join pairs join public.agents other on other.id=pairs.id "
                 "join public.profiles u on u.id=other.owner_id "
-                "where a.owner_id=:owner and a.status<>'deleted' and other.status<>'deleted' "
-                "and u.deleted_at is null " + clause + "order by other.id limit :limit"
+                "left join public.agent_profiles mp on mp.agent_id=a.id and "
+                "mp.version=a.approved_profile_version "
+                "left join public.agent_profiles op on op.agent_id=other.id and "
+                "op.version=other.approved_profile_version "
+                "left join public.agent_relationships r on r.agent_low_id=least(a.id,other.id) "
+                "and r.agent_high_id=greatest(a.id,other.id) "
+                "cross join lateral(select count(*)::int as n,max(c.ended_at) as last_met "
+                "from public.conversations c join public.conversation_participants p on "
+                "p.conversation_id=c.id "
+                "and p.agent_id=a.id join public.conversation_participants q on "
+                "q.conversation_id=c.id "
+                "and q.agent_id=other.id where c.status='completed' and "
+                + _VISIBLE_CONVERSATION
+                + ") counts "
+                "where other.status<>'deleted' and u.deleted_at is null "
+                "and (counts.n>0 or r.conversation_count=0) "
+                + after
+                + "order by other.id limit :limit"
             ),
             params,
         )
         .mappings()
         .all()
     )
-    items = [memory.Relationship.model_validate(dict(row)) for row in rows[: page.limit]]
+    items = [memory_read.Relationship.model_validate(dict(row)) for row in rows[: page.limit]]
     cursor = (
         base64.urlsafe_b64encode(str(items[-1].other_agent_id).encode()).decode()
         if len(rows) > page.limit

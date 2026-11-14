@@ -20,8 +20,15 @@
             "type": "string"
           },
           "icon_url": {
-            "title": "Icon Url",
-            "type": "null"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
           },
           "id": {
             "format": "uuid",
@@ -67,8 +74,17 @@
             "type": "array"
           },
           "icon_path": {
-            "title": "Icon Path",
-            "type": "null"
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
@@ -161,21 +177,181 @@
         "additionalProperties": false,
         "properties": {
           "icon_path": {
-            "title": "Icon Path",
-            "type": "null"
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "name": {
-            "maxLength": 80,
-            "minLength": 1,
-            "pattern": "\\S",
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "AgentPatch",
+        "type": "object"
+      },
+      "AgentReference": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
             "title": "Name",
             "type": "string"
           }
         },
         "required": [
+          "id",
           "name"
         ],
-        "title": "AgentPatch",
+        "title": "AgentReference",
+        "type": "object"
+      },
+      "AgentSettings": {
+        "properties": {
+          "autonomy_enabled": {
+            "title": "Autonomy Enabled",
+            "type": "boolean"
+          },
+          "daily_budget_usd": {
+            "minimum": 0.0,
+            "title": "Daily Budget Usd",
+            "type": "number"
+          },
+          "discord_publish": {
+            "title": "Discord Publish",
+            "type": "boolean"
+          },
+          "frequency_per_day": {
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Frequency Per Day",
+            "type": "integer"
+          },
+          "max_session_usd": {
+            "minimum": 0.0,
+            "title": "Max Session Usd",
+            "type": "number"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "web_visibility": {
+            "const": "participants",
+            "title": "Web Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "autonomy_enabled",
+          "frequency_per_day",
+          "daily_budget_usd",
+          "max_session_usd",
+          "web_visibility",
+          "discord_publish",
+          "updated_at"
+        ],
+        "title": "AgentSettings",
+        "type": "object"
+      },
+      "AgentSettingsPatch": {
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "autonomy_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autonomy Enabled"
+          },
+          "daily_budget_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Budget Usd"
+          },
+          "discord_publish": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discord Publish"
+          },
+          "frequency_per_day": {
+            "anyOf": [
+              {
+                "maximum": 2.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Per Day"
+          },
+          "max_session_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Session Usd"
+          },
+          "web_visibility": {
+            "anyOf": [
+              {
+                "const": "participants",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Visibility"
+          }
+        },
+        "title": "AgentSettingsPatch",
         "type": "object"
       },
       "Approval": {
@@ -193,6 +369,355 @@
         "title": "Approval",
         "type": "object"
       },
+      "ConversationDetail": {
+        "properties": {
+          "cost_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002usage_records \u306e kind='charge' \u306e actual_usd \u306e\u5408\u8a08\u3002queued/running \u306e\u9593\u306f\u78ba\u5b9a\u524d\u3068\u3057\u3066 null\u3001\u7d42\u4e86\u5f8c\u306f\u5408\u8a08\uff08\u8ab2\u91d1\u306a\u3057\u306f 0\uff09\u3002",
+            "title": "Cost Usd"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/AgentReference"
+            },
+            "title": "Participants",
+            "type": "array"
+          },
+          "partner": {
+            "$ref": "#/components/schemas/AgentReference"
+          },
+          "relationship_change": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship Change"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "visibility": {
+            "const": "participants",
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "partner",
+          "started_at",
+          "summary",
+          "visibility",
+          "participants",
+          "messages"
+        ],
+        "title": "ConversationDetail",
+        "type": "object"
+      },
+      "ConversationMessage": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "turn_no": {
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Turn No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "agent_id",
+          "turn_no",
+          "content",
+          "created_at"
+        ],
+        "title": "ConversationMessage",
+        "type": "object"
+      },
+      "ConversationSummary": {
+        "properties": {
+          "cost_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\u672c\u4eba\u306eAI\u306e\u3053\u306e\u4f1a\u8a71\u306b\u304a\u3051\u308b\u78ba\u5b9a\u8cbb\u7528\uff08USD\uff09\u3002\u76f8\u624b\u306e\u8cbb\u7528\u306f\u542b\u307e\u306a\u3044\u3002usage_records \u306e kind='charge' \u306e actual_usd \u306e\u5408\u8a08\u3002queued/running \u306e\u9593\u306f\u78ba\u5b9a\u524d\u3068\u3057\u3066 null\u3001\u7d42\u4e86\u5f8c\u306f\u5408\u8a08\uff08\u8ab2\u91d1\u306a\u3057\u306f 0\uff09\u3002",
+            "title": "Cost Usd"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "partner": {
+            "$ref": "#/components/schemas/AgentReference"
+          },
+          "relationship_change": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship Change"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "visibility": {
+            "const": "participants",
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "partner",
+          "started_at",
+          "summary",
+          "visibility"
+        ],
+        "title": "ConversationSummary",
+        "type": "object"
+      },
+      "DeletionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "title": "DeletionInput",
+        "type": "object"
+      },
+      "DeletionRequest": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requested_at"
+        ],
+        "title": "DeletionRequest",
+        "type": "object"
+      },
+      "DiscordConnection": {
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "discord_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discord User Id"
+          }
+        },
+        "required": [
+          "connected",
+          "discord_user_id"
+        ],
+        "title": "DiscordConnection",
+        "type": "object"
+      },
+      "DiscordLinkComplete": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 256,
+            "minLength": 16,
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "state"
+        ],
+        "title": "DiscordLinkComplete",
+        "type": "object"
+      },
+      "DiscordLinkStart": {
+        "properties": {
+          "state_expires_at": {
+            "format": "date-time",
+            "title": "State Expires At",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "state_expires_at"
+        ],
+        "title": "DiscordLinkStart",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -201,10 +726,12 @@
               "FORBIDDEN",
               "INVITATION_REQUIRED",
               "ACCOUNT_INACTIVE",
+              "REAUTHENTICATION_REQUIRED",
               "NOT_FOUND",
               "METHOD_NOT_ALLOWED",
               "CONFLICT",
               "VALIDATION_ERROR",
+              "OAUTH_STATE_INVALID",
               "RATE_LIMITED",
               "AUTHORIZATION_UNAVAILABLE",
               "SERVICE_UNAVAILABLE",
@@ -242,6 +769,83 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "Guild": {
+        "properties": {
+          "channel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Id"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "consented_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consented At"
+          },
+          "guild_enabled": {
+            "title": "Guild Enabled",
+            "type": "boolean"
+          },
+          "guild_id": {
+            "title": "Guild Id",
+            "type": "string"
+          },
+          "guild_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guild Name"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "required": [
+          "guild_id",
+          "channel_id",
+          "guild_enabled",
+          "consented_at"
+        ],
+        "title": "Guild",
+        "type": "object"
+      },
       "Health": {
         "properties": {
           "mode": {
@@ -271,6 +875,21 @@
         "title": "Health",
         "type": "object"
       },
+      "IconUpload": {
+        "properties": {
+          "icon_path": {
+            "maxLength": 128,
+            "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+            "title": "Icon Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "icon_path"
+        ],
+        "title": "IconUpload",
+        "type": "object"
+      },
       "Memory": {
         "properties": {
           "created_at": {
@@ -284,15 +903,25 @@
             "type": "string"
           },
           "importance": {
+            "maximum": 5.0,
+            "minimum": 1.0,
             "title": "Importance",
             "type": "integer"
           },
           "source_conversation_id": {
-            "format": "uuid",
-            "title": "Source Conversation Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Conversation Id"
           },
           "status": {
+            "const": "active",
             "title": "Status",
             "type": "string"
           },
@@ -310,6 +939,90 @@
           "status"
         ],
         "title": "Memory",
+        "type": "object"
+      },
+      "Notification": {
+        "properties": {
+          "body": {
+            "description": "\u8868\u793a\u7528\u306e\u6587\u5b57\u5217\u3002\u4f1a\u8a71\u672c\u6587\u3084\u76f8\u624b\u306e\u975e\u516c\u958b\u60c5\u5831\u306f\u542b\u3081\u306a\u3044",
+            "title": "Body",
+            "type": "string"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "description": "\u73fe\u5728\u306f conversation.completed\u3002\u672a\u77e5\u306e\u7a2e\u985e\u306f\u6c4e\u7528\u8868\u793a\u306b\u3059\u308b",
+            "title": "Kind",
+            "type": "string"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "body",
+          "created_at",
+          "read_at"
+        ],
+        "title": "Notification",
+        "type": "object"
+      },
+      "Page_ConversationSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ConversationSummary]",
         "type": "object"
       },
       "Page_Memory_": {
@@ -339,6 +1052,33 @@
         "title": "Page[Memory]",
         "type": "object"
       },
+      "Page_Notification_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[Notification]",
+        "type": "object"
+      },
       "Page_Relationship_": {
         "properties": {
           "items": {
@@ -366,6 +1106,54 @@
         "title": "Page[Relationship]",
         "type": "object"
       },
+      "Preferences": {
+        "properties": {
+          "discord_dm_notifications": {
+            "title": "Discord Dm Notifications",
+            "type": "boolean"
+          },
+          "web_notifications": {
+            "title": "Web Notifications",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "web_notifications",
+          "discord_dm_notifications"
+        ],
+        "title": "Preferences",
+        "type": "object"
+      },
+      "PreferencesPatch": {
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "discord_dm_notifications": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discord Dm Notifications"
+          },
+          "web_notifications": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Notifications"
+          }
+        },
+        "title": "PreferencesPatch",
+        "type": "object"
+      },
       "PrivateInfo": {
         "properties": {
           "private_info": {
@@ -377,6 +1165,156 @@
           "private_info"
         ],
         "title": "PrivateInfo",
+        "type": "object"
+      },
+      "Profile": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "discord_dm_notifications": {
+            "title": "Discord Dm Notifications",
+            "type": "boolean"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "onboarded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboarded At"
+          },
+          "web_notifications": {
+            "title": "Web Notifications",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "created_at",
+          "web_notifications",
+          "discord_dm_notifications"
+        ],
+        "title": "Profile",
+        "type": "object"
+      },
+      "ProfileInput": {
+        "additionalProperties": false,
+        "properties": {
+          "hobbies": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Hobbies",
+            "type": "array"
+          },
+          "interaction_policy": {
+            "maxLength": 2000,
+            "title": "Interaction Policy",
+            "type": "string"
+          },
+          "interests": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Interests",
+            "type": "array"
+          },
+          "personality": {
+            "maxLength": 2000,
+            "title": "Personality",
+            "type": "string"
+          },
+          "restrictions": {
+            "maxLength": 2000,
+            "title": "Restrictions",
+            "type": "string"
+          },
+          "shareable_info": {
+            "maxLength": 2000,
+            "title": "Shareable Info",
+            "type": "string"
+          },
+          "speaking_style": {
+            "maxLength": 2000,
+            "title": "Speaking Style",
+            "type": "string"
+          },
+          "strengths": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Strengths",
+            "type": "array"
+          },
+          "values_text": {
+            "maxLength": 2000,
+            "title": "Values Text",
+            "type": "string"
+          },
+          "weaknesses": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Weaknesses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "personality",
+          "values_text",
+          "interests",
+          "speaking_style",
+          "interaction_policy",
+          "shareable_info",
+          "restrictions"
+        ],
+        "title": "ProfileInput",
+        "type": "object"
+      },
+      "ProfilePatch": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "description": "\u524d\u5f8c\u306e\u7a7a\u767d\u3092\u9664\u3044\u3066 1\u301c80 \u6587\u5b57\u3002\u7a7a\u767d\u3060\u3051\u30fb\u5236\u5fa1\u6587\u5b57\u306f 422",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "title": "ProfilePatch",
         "type": "object"
       },
       "ProfileRevision": {
@@ -491,6 +1429,7 @@
             "type": "boolean"
           },
           "conversation_count": {
+            "minimum": 0.0,
             "title": "Conversation Count",
             "type": "integer"
           },
@@ -553,8 +1492,17 @@
             "type": "array"
           },
           "icon_path": {
-            "title": "Icon Path",
-            "type": "null"
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "pattern": "^[0-9a-f-]{36}/[0-9a-f-]{36}\\.png$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Path"
           },
           "interaction_policy": {
             "maxLength": 2000,
@@ -648,13 +1596,14 @@
         "additionalProperties": false,
         "properties": {
           "answers": {
-            "items": {
+            "additionalProperties": {
+              "maxLength": 2000,
               "type": "string"
             },
-            "maxItems": 20,
-            "minItems": 1,
+            "maxProperties": 11,
+            "minProperties": 1,
             "title": "Answers",
-            "type": "array"
+            "type": "object"
           }
         },
         "required": [
@@ -678,6 +1627,115 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/agent-icons": {
+      "post": {
+        "operationId": "upload_agent_icon",
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IconUpload"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Upload Icon",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/api/v1/agents": {
       "post": {
         "operationId": "create_agent",
@@ -1001,6 +2059,23 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
           }
         ],
         "responses": {
@@ -1098,24 +2173,6 @@
               "format": "uuid",
               "title": "Agent Id",
               "type": "string"
-            }
-          },
-          {
-            "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
-              "title": "Idempotency-Key"
             }
           }
         ],
@@ -1448,7 +2505,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileRevision"
+                  "$ref": "#/components/schemas/ProfileInput"
                 }
               }
             },
@@ -1523,6 +2580,1181 @@
         "summary": "Suggest",
         "tags": [
           "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/{id}/blocks/{other_id}": {
+      "delete": {
+        "operationId": "unblock_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "other_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Other Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u30d6\u30ed\u30c3\u30af\u3092\u89e3\u9664\u3059\u308b\uff08\u30d6\u30ed\u30c3\u30af\u3057\u3066\u3044\u306a\u304f\u3066\u3082 204\uff09",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "block_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "other_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Other Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u76f8\u624b\u306e AI \u3092\u30d6\u30ed\u30c3\u30af\u3059\u308b\uff08\u518d\u9001\u3057\u3066\u3082\u540c\u3058\u7d50\u679c\uff09",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/agents/{id}/settings": {
+      "get": {
+        "operationId": "get_interaction_settings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5206\u306e AI \u306e\u4ea4\u6d41\u8a2d\u5b9a\u3092\u53d6\u5f97\u3059\u308b",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_interaction_settings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5f8b\u4ea4\u6d41\u30fb\u983b\u5ea6\u30fb\u4e88\u7b97\u30fbDiscord \u516c\u958b\u306e\u8a2d\u5b9a\u3092\u5909\u66f4\u3059\u308b",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "operationId": "list_conversations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ConversationSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5206\u306e AI \u304c\u53c2\u52a0\u3057\u305f\u4f1a\u8a71\u306e\u4e00\u89a7\uff08\u65b0\u3057\u3044\u9806\uff09",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
+    "/api/v1/conversations/{id}": {
+      "get": {
+        "operationId": "get_conversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5206\u306e AI \u304c\u53c2\u52a0\u3057\u305f\u4f1a\u8a71\u306e\u5168\u6587",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
+    "/api/v1/discord/connection": {
+      "delete": {
+        "operationId": "disconnect_discord",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Discord \u9023\u643a\u3092\u89e3\u9664\u3059\u308b\uff08\u672a\u9001\u4fe1\u306e DM\u30fb\u6295\u7a3f\u3068\u30ae\u30eb\u30c9\u5225\u540c\u610f\u3082\u53d6\u308a\u6d88\u3059\u3002\u51aa\u7b49\uff09",
+        "tags": [
+          "discord"
+        ]
+      },
+      "get": {
+        "operationId": "get_discord_connection",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Discord \u9023\u643a\u306e\u72b6\u614b\uff08\u30c8\u30fc\u30af\u30f3\u306f\u8fd4\u3055\u306a\u3044\uff09",
+        "tags": [
+          "discord"
+        ]
+      }
+    },
+    "/api/v1/discord/guilds": {
+      "get": {
+        "operationId": "list_discord_guilds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Guild"
+                  },
+                  "title": "Response List Discord Guilds",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u672c\u4eba\u306e AI \u304c\u30ae\u30eb\u30c9\u5225\u516c\u958b\u306b\u540c\u610f\u3057\u305f\u30ae\u30eb\u30c9\u3068\u6295\u7a3f\u5148",
+        "tags": [
+          "discord"
+        ]
+      }
+    },
+    "/api/v1/discord/link/complete": {
+      "post": {
+        "operationId": "complete_discord_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscordLinkComplete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "state \u307e\u305f\u306f\u30b3\u30fc\u30c9\u304c\u7121\u52b9\uff08\u3084\u308a\u76f4\u3057\uff09"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Discord \u306e\u8a8d\u53ef\u30b3\u30fc\u30c9\u3067\u9023\u643a\u3092\u5b8c\u4e86\u3059\u308b\uff08state \u306f\u672c\u4eba\u30fb10 \u5206\u4ee5\u5185\u30fb1 \u56de\u3060\u3051\uff09",
+        "tags": [
+          "discord"
+        ]
+      }
+    },
+    "/api/v1/discord/link/start": {
+      "post": {
+        "operationId": "start_discord_link",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordLinkStart"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u9023\u643a\u3092\u958b\u59cb\u3059\u308b\uff0810 \u5206\u30fb\u4f7f\u3044\u6368\u3066\u306e state \u3068 Discord \u306e\u8a8d\u53ef URL\uff09",
+        "tags": [
+          "discord"
         ]
       }
     },
@@ -1632,6 +3864,16 @@
             },
             "description": "Unprocessable Content"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1654,36 +3896,18 @@
         ]
       }
     },
-    "/api/v1/memories/{memory_id}": {
+    "/api/v1/memories/{id}": {
       "delete": {
         "operationId": "delete_memory",
         "parameters": [
           {
             "in": "path",
-            "name": "memory_id",
+            "name": "id",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Memory Id",
+              "title": "Id",
               "type": "string"
-            }
-          },
-          {
-            "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
-              "title": "Idempotency-Key"
             }
           }
         ],
@@ -1741,6 +3965,16 @@
             },
             "description": "Unprocessable Content"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1760,6 +3994,460 @@
         "summary": "Delete Memory",
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "operationId": "list_notifications",
+        "parameters": [
+          {
+            "description": "true \u3067\u672a\u8aad\u3060\u3051\u3001false \u3067\u65e2\u8aad\u3060\u3051",
+            "in": "query",
+            "name": "unread",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true \u3067\u672a\u8aad\u3060\u3051\u3001false \u3067\u65e2\u8aad\u3060\u3051",
+              "title": "Unread"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Notification_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5206\u3078\u306e\u901a\u77e5\u306e\u4e00\u89a7\uff08\u65b0\u3057\u3044\u9806\uff09",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
+    "/api/v1/notifications/{id}/read": {
+      "patch": {
+        "operationId": "read_notification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u901a\u77e5\u3092\u65e2\u8aad\u306b\u3059\u308b\uff08\u518d\u9001\u3057\u3066\u3082\u6700\u521d\u306e\u65e2\u8aad\u65e5\u6642\u306e\u307e\u307e\uff09",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
+    "/api/v1/preferences": {
+      "get": {
+        "operationId": "get_preferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u901a\u77e5\u8a2d\u5b9a\u3092\u53d6\u5f97\u3059\u308b",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u901a\u77e5\u8a2d\u5b9a\u3092\u5909\u66f4\u3059\u308b",
+        "tags": [
+          "settings"
         ]
       }
     },
@@ -1859,6 +4547,16 @@
             },
             "description": "Unprocessable Content"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1878,6 +4576,428 @@
         "summary": "List Relationships",
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/v1/users/me": {
+      "get": {
+        "operationId": "get_current_user",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u62db\u5f85\u30fb\u6709\u52b9\u72b6\u614b\u3092\u78ba\u8a8d\u3057\u3066\u81ea\u5206\u306e\u30d7\u30ed\u30d5\u30a3\u30fc\u30eb\u3092\u4f5c\u6210/\u53d6\u5f97\u3059\u308b",
+        "tags": [
+          "users"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_current_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5206\u306e\u8868\u793a\u540d\u3092\u5909\u66f4\u3059\u308b",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/deletion": {
+      "get": {
+        "operationId": "get_own_deletion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5206\u306e\u524a\u9664\u8981\u6c42\u306e\u72b6\u6cc1\uff08ID\u30fb\u72b6\u614b\u30fb\u65e5\u6642\u3060\u3051\uff09",
+        "tags": [
+          "account"
+        ]
+      },
+      "post": {
+        "operationId": "request_deletion",
+        "parameters": [
+          {
+            "description": "\u518d\u9001\u306e\u8b58\u5225\u7528\uff08\u4efb\u610f\uff09\u3002\u524a\u9664\u8981\u6c42\u306f\u5229\u7528\u8005\u3054\u3068\u306b 1 \u4ef6\u306a\u306e\u3067\u3001\u30ad\u30fc\u304c\u306a\u304f\u3066\u3082\u91cd\u8907\u3057\u306a\u3044",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\u518d\u9001\u306e\u8b58\u5225\u7528\uff08\u4efb\u610f\uff09\u3002\u524a\u9664\u8981\u6c42\u306f\u5229\u7528\u8005\u3054\u3068\u306b 1 \u4ef6\u306a\u306e\u3067\u3001\u30ad\u30fc\u304c\u306a\u304f\u3066\u3082\u91cd\u8907\u3057\u306a\u3044",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u30a2\u30ab\u30a6\u30f3\u30c8\u524a\u9664\u3092\u8981\u6c42\u3059\u308b\uff085 \u5206\u4ee5\u5185\u306e\u518d\u8a8d\u8a3c\u304c\u5fc5\u8981\u3002AI \u3068\u914d\u4fe1\u306f\u3059\u3050\u6b62\u307e\u308b\uff09",
+        "tags": [
+          "account"
         ]
       }
     },

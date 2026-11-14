@@ -39,31 +39,115 @@ stateDiagram-v2
 
 一時障害は最大3回、指数バックオフ（例: 30秒、2分、10分）にジッターを加える。検証失敗・権限消失・予算不足は再試行しない。`turn_no`一意制約とジョブleaseで多重実行を抑え、開始直前と各ターン前に双方の設定を確認する。AI発言生成にLLM APIを非同期I/Oで呼ぶ間、DBトランザクションは開きっぱなしにしない。予算は事前に最大見積額を予約し、実績で調整する。詳細は [交流](09-autonomous-interaction.md)、[テスト](16-testing-strategy.md)。
 
-## #18 実装とliveゲート
+## 採用モデル（2026-11-13、#14）
 
-`llm.LLMClient`/`FakeLLM`/`checked_generate`と`budget`を追加。
-人格は`ProfileInput`の明示投影、発言/記憶はuser内の引用JSONで、systemへ連結しない。
-schemaはextra禁止/厳密bool、PIIと既知秘密の出力検査を行う。
-BaselineModeratorはメール/電話の最低限の検査であり、供給元の安全性審査・moderationの代替ではない。
-実供給元adapterは#14の実評価後に接続する。それまではLLM外部呼出なし。
-任意提案APIは所有権検証後に503を返し、手動作成を継続できる契約のみ提供する。
-提案の利用回数制限・費用記録・人格提案生成は供給元接続時の残件。
+Anthropic直接APIの`claude-sonnet-5-5`を正式採用し、共通設定を`alter_domain.llm_selection`へ置く。
+API version `2026-10-21`、adaptive thinking / effort low、入力3072 / 出力512 tokens上限。
+出力はthinkingを含み、temperature等は送信しない。評価CLIも同じ設定を参照する。
+本番adapterは#18で接続し、本人同意/予算/公開判定の条件を引き続き確認する。
+最大token数の各呼出は既存の会話費用枠に必ず収まるわけではなく、残枠不足なら停止する。
+[選定根拠](26-llm-candidate-review.md)・[費用見積](20-cost-estimation.md)を参照。
 
-台帳は全writerが固定advisory transaction lockを取得後にagent_settingsをロックする。
-残予約は全期間のreserve-release、日次実費はUTC当日のchargeを合計する。
-consumeでは実費chargeと同額releaseを同時追加し、終了時に残予約をreleaseする。
-結果不明の呼出は予約を保持し、自動再試行/自動解放を行わない。運用照合は#36。
-DBトランザクションを閉じてからLLMを呼び、生成結果と台帳の確定は短いトランザクションで行う。
+## #18 LLM境界・費用付き実行
+
+`llm.LLMClient`/`StructuredLLMClient`/`FakeLLM`が交換可能な境界で、
+`sonnet.SonnetClient`が採用済みSonnet 5.5の直接APIを実装する。
+生成はadaptive thinking/effort low、入力3072/出力512（thinking込み）。
+count_tokens＋余裕1024が収まるまで古い引用記憶・履歴だけを削り、人格/system/schemaは維持する。
+収まらなければ生成せず422。型・出力制約・モデルID・usage・cache未使用を検証する。
+
+`llm_execution.LLMExecution`が会話/人格提案に共通の予約・生成・独立安全性判定・課金を担う。
+入力と出力をNFKC正規化したローカルルールでPII/トークン/既知秘密/代表的な注入指示を検査する。
+生成後は別のsystem境界でSonnetによる`allowed:bool`の独立判定を必須にする。
+判定はinput512/output16、余裕128、effort low / `between_tools`（Sonnet 5.5はdisabledを拒否）。
+判定が枠に収まらない・不正schema・拒否なら返却しない。ローカルルールだけで公開しない。
+安全判定は完全な保証ではなく、実品質/誤検知の受け入れは#37で行う。
+
+1回の生成＋判定の最大予約は$0.012448。1体4発言分は
+`llm_selection.session_reservation()`の$0.049792で、既定$0.05に収まる。
+#19はこの全額を両AIへ会話単位で予約する。#20は`conversation_turn`で承認済み公開人格を読み、
+同じ予約をconsumeして新たな予約を積まない。両者のON/承認/有効招待/削除/ブロックを
+開始前・各外部処理前・結果返却前に確認し、1体4回で停止する。
+発言/記憶はuserの引用JSONで、private_info/暗号文/本人IDは選択しない。
+Workerのjob claim・発言保存・再実行制御は#20、引用元の参加者検証は#20/#22が担当する。
+
+`llm_runs`へ本文を含まない実行状態を記録し、DB接続を閉じてから外部APIを呼ぶ。
+予約は先にcommitし、生成/判定の各呼出直前も状態をcommitする。
+既知の実費は、安全性/schema検査失敗や途中失効でもchargeと同額releaseを同時追加する。
+提案終了時は未使用分をrelease。会話の残予約は#20が終了時にrelease_sessionする。
+日次はUTC当日charge＋全期間reserve-release、会話は全期間実費＋残予約で検査する。
+
+タイムアウト/通信途中断/5xx/不正usage/モデル不一致は結果不明として予約を保持し、
+同じAIの新規LLM実行を拒否する。
+`release_session`/`release_for_deletion`も未完/結果不明の状態では解放を拒否する。プロセス停止時の未完状態も同様。自動解放・自動再試行しない。
+429/接続確立前の失敗/明示的な4xx拒否だけ未課金として残額を解放し、Retry-Afterを返す。
+自動再試行は0回（最大3回の上限以内）。利用者による再送も日次回数/予算へ含める。
+1提案の未確定損失は最大予約$0.012448以内の想定で保持し、実際の異常usageは#36で照合する。
+予約見積とAPI上限は供給元が上限を守る前提で、token計数は推定である。
+
+`POST /agents/{id}/profile/suggest`は公開項目のanswers辞書だけを受け付ける。
+辞書キーはname/公開人格項目、値2000文字以下/合計8000文字以下、非公開/未知キーと空回答は422。
+UTC日次3回をDBの固定費用ロック下で検査し、成功/失敗/結果不明の全実行を数える。
+上限後はcount_tokensも生成も呼ばず429。予算不足・未解放の結果不明は503。
+成功応答は公開人格だけで、人格版/承認/交流ONを変更しない。失敗後も手動作成を継続できる。
+Webのpreview入力も同じPydanticを使い、生成クライアントを同期する。
+
+### 費用台帳の削除・会話上限（PR #59レビュー対応、2026-11-14）
+
+`max_session_usd`はAIごと・会話ごとの「全期間の残予約＋確定実費＋追加予約」に適用する。
+UTC日付を越えても会話の実費は消えず、consumeによる予約解放を追加予算と扱わない。
+会話IDなしの単発予約は従来どおり1予約の上限を適用する。
+
+#30の会話/AI削除は次の順序とする。削除対象が会話なら両参加者、AIなら会話なしの予約も扱う。
+
+1. 新規生成を停止し、進行中/課金結果不明の呼出を#36で照合する。結果不明の間は物理削除を保留し、非表示は維持する。
+2. 同一DBトランザクションで、agent/設定行のロック前に`budget.lock_budget(conn)`を取得する。
+3. `release_for_deletion(conn, conversation=id)`または`release_for_deletion(conn, agent=id)`を呼ぶ。対象の残予約だけをprovider/model別にreleaseとして追記する。再実行しても解放済み残額は増えない。
+4. 会話→AIの既定順で削除する。共有会話の削除では会話ごとの解放も呼び、相手の予約を残さない。失敗時はreleaseも削除もrollbackする。
+
+`20261114050000_budget_deletion_guard.sql`は残予約を持つ会話/AIのDELETEを23514で拒否する。
+自動releaseは行わず、SET NULL/匿名化前の解放漏れと、結果不明の予約が失われることを防ぐ。
+確定chargeは#56の匿名化/12か月保持を維持し、AI削除後も全体の日次費用に含める。
+既に参照を失った過去の未解放予約は自動補正しない。導入済み環境では#36で履歴を照合する。
+
+台帳全体の集計方式は10人MVPのまま維持する。P3の未解放予約専用集計への最適化は、実測後に検討する。
 
 ## #20 Workerの実装
 
-`conversation.run_one`は90秒leaseをclaimし、25秒ごとの別接続heartbeatとUUID tokenでfencingする。
-DBトランザクションを閉じた状態でLLMを呼ぶ。発言・費用charge/release・job/会話状態・完了eventは
-短いトランザクションで確定する。失効tokenの更新は拒否する。
+`conversation.run_one`は`kind=conversation.run`をSKIP LOCKEDでclaimし、90秒leaseと
+25秒ごとの別接続heartbeat、UUID tokenでfencingする。独立Workerは
+`ALTER_MODE=live LLM_ENABLED=true`と`ANTHROPIC_API_KEY`でSonnetを利用する。
+既定mockはDB/LLM通信なし。liveでもLLM無効なら正常終了し、キー未設定はclaim前に拒否する。
+
+`LLMExecution.conversation_turn`を使い、生成と独立安全判定を同じセッション予約で精算する。
+外部I/O中はDBトランザクションを保持しない。生成/判定の既知の費用は各応答後に
+charge/releaseと会話費用へ原子的に反映する。lease失効後の応答も費用だけは記録する。
+検査済み発言・turn_no・呼出完了記録と、最終ターンの状態・残予約解放・完了event・
+Web通知は短いトランザクションで確定する。通知設定と既存の重複防止キーを尊重する。
+API/Botが先に取り消した未実行会話も、Workerが予約解放とcancelled eventを一度だけ確定する。
+
 `llm_invocations`に呼出前のstartedを残し、途中クラッシュ後の同ターン再呼出を禁止する。
-TemporaryLLMErrorは「供給元で処理/課金されていないことが分かる失敗」だけ。
-最大3回の再試行、30/120/600秒＋jobから決まるジッター、Retry-After相当の待ち時間を尊重する。
-5分上限は再試行待ちも含む。タイムアウト/結果不明/未知エラーは失敗とし、予約額を照合まで残す。
-unsafe出力も呼出費用は計上するが発言本文は保存しない。停止/同意消失後は追加呼出しない。
-`conversation_events`のcompleted/failed/cancelledは1会話1種1件。#21が通知・Discord候補へ接続する。
-実LLMの課金exactly-onceは保証しない。現在のプロセス入口はLLM_BACKEND=fakeのみ有効。
+保存済みのターン間で停止した場合は、失効leaseの再claim後に次ターンから継続する。
+各段階とSonnetの各HTTPリクエスト直前に、双方のON/招待/削除/ブロック/承認版、
+費用上限、停止シグナル、5分上限、leaseを確認する。最大8発言、should_endでも終了する。
+
+TemporaryLLMErrorは未課金と確認できる失敗だけ。最大3回の再試行、
+30/120/600秒＋jobから決まるジッター、Retry-After相当の待ち時間を尊重する。
+5分上限は再試行待ちも含むため、次回claimで期限超過なら外部呼出せず終了する。
+生成済みで判定だけが一時失敗した場合はfailedとし、有料の再生成を避ける。
+恒久障害/安全性違反はfailed、同意消失/停止はcancelled、時間/予算上限はcompleted。
+unsafe出力の費用は計上するが本文は保存しない。
+
+タイムアウト/結果不明/クラッシュは予約を保持し、#36の照合へ渡す。
+`conversation_events`のcompleted/failed/cancelledは1会話1種1件。#22/#28の非同期処理の接続点とし、
+Discord公開は#28の双方同意・ギルド設定・投稿直前判定に委ねる。
+実LLMの課金exactly-onceは保証しない。実品質と実環境受け入れは#37、本番配備は#34で検証する。
+
+
+## 記憶consumerと次回入力（#22）
+
+Workerは会話処理の前後に完了eventから引用要約・本人視点の最大3候補を抽出し、独立した
+`memory_completions`で再起動と同時実行を冪等化する。追加の有料LLM呼出はない。
+各ターンのLLM実行が相手ごとの上位5候補と直近要約を所有権・保持期限・削除抑止付きで読み、
+count_tokens後／独立安全判定前／保存前にも変更を確認する。
+詳細と削除境界は[記憶契約](10-memory-relationship.md#22の生成次回入力パージ連動)を参照。

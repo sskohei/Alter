@@ -1,0 +1,58 @@
+import type { components } from "./schema";
+
+export type ApiErrorBody = Omit<components["schemas"]["ErrorBody"], "request_id"> & { request_id?: string };
+
+export class ApiError extends Error {
+  constructor(public status: number, public detail: ApiErrorBody, public retryAfterSeconds?: number) {
+    super(detail.message);
+    this.name = "ApiError";
+  }
+}
+
+export type Page<T> = { items: T[]; next_cursor: string | null };
+export function pagination(cursor?: string | null, limit = 20) {
+  return { limit: Number.isFinite(limit) ? Math.max(1, Math.min(50, Math.trunc(limit))) : 20, ...(cursor ? { cursor } : {}) };
+}
+
+export type AuthTransport = {
+  accessToken: () => Promise<string | null>;
+  refreshToken: () => Promise<string | null>;
+  onUnauthenticated: () => void | Promise<void>;
+  fetch?: typeof fetch;
+};
+
+// Use per-request transports on the server: never share a user's credentials.
+// The caller supplies a Request so openapi-fetch retains generated input types.
+export function authenticatedFetch(auth: AuthTransport): typeof fetch {
+  return async (input, init) => {
+    const original = new Request(input, init);
+    const send = async (token: string | null) => {
+      const request = new Request(original.clone(), { cache: "no-store" });
+      // The API assigns request IDs; this header is not allowed by its CORS policy.
+      request.headers.delete("X-Request-ID");
+      request.headers.delete("Authorization");
+      if (token) request.headers.set("Authorization", `Bearer ${token}`);
+      return (auth.fetch ?? globalThis.fetch)(request);
+    };
+    let response = await send(await auth.accessToken());
+    if (response.status === 401) {
+      let token: string | null = null;
+      try { token = await auth.refreshToken(); } catch { /* Refresh failed; return to login. */ }
+      if (token) response = await send(token);
+      if (response.status === 401) await auth.onUnauthenticated();
+    }
+    return response;
+  };
+}
+
+export async function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): Promise<T> {
+  if (result.response.ok) return result.data as T;
+  const error = result.error as { error?: ApiErrorBody } | undefined;
+  const retry = result.response.headers.get("Retry-After");
+  const seconds = retry === null ? NaN : /^\d+$/.test(retry) ? Number(retry) : (Date.parse(retry) - Date.now()) / 1000;
+  throw new ApiError(result.response.status, {
+    code: error?.error?.code ?? "SERVICE_UNAVAILABLE",
+    message: error?.error?.message ?? "通信に失敗しました。もう一度お試しください。",
+    request_id: error?.error?.request_id ?? result.response.headers.get("X-Request-ID") ?? undefined,
+  }, Number.isFinite(seconds) ? Math.max(0, seconds) : undefined);
+}

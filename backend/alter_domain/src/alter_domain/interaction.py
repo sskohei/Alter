@@ -10,7 +10,6 @@ from alter_domain.budget import lock_budget
 
 def lock_interactions(conn: Connection) -> None:
     # MVP <=10 owners: coarse, stable lock order also serializes with invitation revocation.
-    lock_budget(conn)
     for table, key in (
         ("invitations", "id"),
         ("profiles", "id"),
@@ -18,9 +17,11 @@ def lock_interactions(conn: Connection) -> None:
         ("agent_settings", "agent_id"),
     ):
         conn.execute(text(f"select {key} from public.{table} order by {key} for update")).all()
+    # API authorization locks invitations/profiles before entering the budget boundary.
+    lock_budget(conn)
 
 
-def eligible_agents(conn: Connection) -> list[RowMapping]:
+def eligible_agents(conn: Connection, *, active_run: UUID | None = None) -> list[RowMapping]:
     return list(
         conn.execute(
             text(
@@ -36,14 +37,25 @@ def eligible_agents(conn: Connection) -> list[RowMapping]:
                 "and s.frequency_per_day>0 and p.approved_at is not null "
                 "and exists(select 1 from public.invitation_identities ii "
                 "where ii.invitation_id=i.id) "
+                "and not exists(select 1 from public.deletion_requests d "
+                "where d.profile_id=u.id) "
+                "and not exists(select 1 from public.llm_runs r where r.agent_id=a.id "
+                "and r.status in ('reserved','generating','generated','moderating','unknown') "
+                "and (cast(:run as uuid) is null or r.id<>:run)) "
                 "order by a.id"
-            )
+            ),
+            {"run": active_run},
         ).mappings()
     )
 
 
 def pair_allowed(
-    conn: Connection, ids: tuple[UUID, UUID], now: datetime, *, conversation: UUID | None = None
+    conn: Connection,
+    ids: tuple[UUID, UUID],
+    now: datetime,
+    *,
+    conversation: UUID | None = None,
+    active_run: UUID | None = None,
 ) -> bool:
     if ids[0] == ids[1]:
         return False
@@ -56,7 +68,7 @@ def pair_allowed(
         {"a": ids[0], "b": ids[1]},
     ).first():
         return False
-    eligible = {row["id"]: row for row in eligible_agents(conn)}
+    eligible = {row["id"]: row for row in eligible_agents(conn, active_run=active_run)}
     for aid in ids:
         if aid not in eligible:
             return False
@@ -78,6 +90,9 @@ def pair_allowed(
                     "join public.conversations c on c.id=p.conversation_id where p.agent_id=:id "
                     "and c.created_at >= date_trunc('day',"
                     "cast(:now as timestamptz) at time zone 'UTC') "
+                    "at time zone 'UTC' "
+                    "and c.created_at < (date_trunc('day', "
+                    "cast(:now as timestamptz) at time zone 'UTC') + interval '1 day') "
                     "at time zone 'UTC'"
                 ),
                 {"id": aid, "now": now},

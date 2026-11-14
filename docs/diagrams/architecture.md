@@ -6,11 +6,14 @@
 flowchart TB
   Browser[ブラウザ] --> Web[Next.js / Vercel]
   Web --> Auth[Supabase Auth]
-  Web -->|JWT付きHTTPS| API[FastAPI / Render]
+  Web -->|JWT付きHTTPS| HTTPS[公開HTTPS経路]
+  HTTPS --> API[FastAPI / 手元PC]
   API --> DB[(Supabase PostgreSQL)]
-  Cron[Render Cron] --> DB
-  Worker[Render Worker] --> DB
+  Cron[OS定期実行 / 手元PC] --> DB
+  Worker[手元PC Worker] --> DB
   Worker --> LLM[LLM API]
-  Bot[Render Discord Bot] --> DB
+  Bot[手元PC Discord Bot] --> DB
   Bot <--> Discord[Discord Gateway/API]
 ```
+
+WebはVercel Hobby、DB/AuthはSupabase Free。API・Worker・Bot・Schedulerは同じ手元PCで独立実行する。PC停止中はバックエンド全体が停止する。HTTPS経路の選定・疎通確認は #34 で行う。

@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -55,6 +54,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm test:deployment
       - run: pnpm build
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
@@ -81,8 +81,8 @@ jobs:
       - run: pnpm api:generate
       - name: Reject stale OpenAPI and TypeScript schema
         run: |
-          git ls-files --error-unmatch -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts > /dev/null
-          git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts
+          git ls-files --error-unmatch -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts packages/api-client/preview.openapi.json packages/api-client/src/preview-schema.d.ts > /dev/null
+          git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts packages/api-client/preview.openapi.json packages/api-client/src/preview-schema.d.ts
 
   migrations:
     name: Migrations

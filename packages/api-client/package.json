@@ -4,17 +4,24 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./preview": "./src/preview.ts",
+    "./mock": "./src/mock.ts"
   },
   "scripts": {
-    "generate": "openapi-typescript openapi.json -o src/schema.d.ts",
-    "typecheck": "tsc --noEmit"
+    "generate": "openapi-typescript openapi.json -o src/schema.d.ts && openapi-typescript preview.openapi.json -o src/preview-schema.d.ts",
+    "typecheck": "tsc --noEmit",
+    "mock": "tsx mock/server.ts"
   },
   "dependencies": {
     "openapi-fetch": "^0.15.0"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "openapi-typescript": "^7.10.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
 }

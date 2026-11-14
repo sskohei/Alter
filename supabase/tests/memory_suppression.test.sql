@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(81);
+select plan(86);
 
 create temporary table _memory_tables (name text primary key) on commit drop;
 insert into _memory_tables values
@@ -86,5 +86,12 @@ select is((select count(*)::int from public.memory_source_suppressions), 0,
 select is((select conversation_id::text from public.memory_completions),
   '30000000-0000-0000-0000-000000000002', 'agent deletion preserves unrelated completion');
 
+select has_trigger('public','memories','memories_guard_candidate','candidate insertion guard');
+select has_trigger('public','conversations','conversations_recompute_relationship_before_delete',
+  'conversation purge refreshes relationship cache');
+select ok(not has_function_privilege(r.role,
+  'public.recompute_relationship_on_conversation_delete()', 'EXECUTE'),
+  format('%s cannot execute relationship purge trigger function', r.role))
+from (values ('anon'), ('authenticated'), ('service_role')) as r(role);
 select * from finish();
 rollback;

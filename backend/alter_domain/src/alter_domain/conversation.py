@@ -2,27 +2,35 @@
 
 import threading
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from pydantic import ValidationError
 from sqlalchemy import Connection, Engine, text
 
-from alter_domain.agent_models import ProfileInput
-from alter_domain.budget import consume, exposure, held, lock_budget, release_session
+from alter_domain.activity import notify_conversation_completed
+from alter_domain.budget import (
+    BudgetExceeded,
+    UnsettledBudget,
+    exposure,
+    held,
+    lock_budget,
+    release_session,
+    require_settled,
+    session_exposure,
+)
 from alter_domain.interaction import eligible_agents, lock_interactions, pair_allowed
 from alter_domain.llm import (
-    LLMClient,
-    Moderator,
+    StructuredLLMClient,
     TemporaryLLMError,
     UnknownLLMOutcome,
     UnsafeOutput,
-    build_prompt,
 )
-from alter_domain.llm_contract import Utterance
-from alter_domain.memory import context, recent_summary
+from alter_domain.llm_execution import LLMExecution
+from alter_domain.llm_selection import call_reservation
+from alter_domain.sonnet import LLMUnavailable, SonnetClient
 
 
 class LeaseLost(Exception):
@@ -39,12 +47,15 @@ class Lease:
 
 def claim(conn: Connection, now: datetime) -> Lease | None:
     lock_budget(conn)
+    # Conversations reference jobs, so deletion can leave a job without a conversation.
     row = conn.execute(
         text(
-            "select id,attempts from public.background_jobs "
-            "where kind='conversation' and ((status in ('queued','retry_wait') and run_at<=:now) "
-            "or (status='running' and lease_until<=:now)) "
-            "order by run_at,id for update skip locked limit 1"
+            "select j.id,j.attempts,c.id as conversation from public.background_jobs j "
+            "join public.conversations c on c.job_id=j.id "
+            "where j.kind='conversation.run' "
+            "and ((j.status in ('queued','retry_wait') and j.run_at<=:now) "
+            "or (j.status='running' and j.lease_until<=:now)) "
+            "order by j.run_at,j.id for update of j skip locked limit 1"
         ),
         {"now": now},
     ).first()
@@ -58,10 +69,7 @@ def claim(conn: Connection, now: datetime) -> Lease | None:
         ),
         {"id": row.id, "token": token, "until": now + timedelta(seconds=90)},
     )
-    conv = conn.execute(
-        text("select id from public.conversations where job_id=:id"), {"id": row.id}
-    ).scalar_one()
-    return Lease(row.id, token, conv, row.attempts + 1)
+    return Lease(row.id, token, row.conversation, row.attempts + 1)
 
 
 def assert_lease(conn: Connection, lease: Lease, now: datetime) -> None:
@@ -137,7 +145,7 @@ def finish(
     conn: Connection,
     lease: Lease,
     status: str,
-    client: LLMClient,
+    client: StructuredLLMClient,
     now: datetime,
     *,
     retain_hold: bool = False,
@@ -155,6 +163,17 @@ def finish(
         text("update public.conversations set status=:status,ended_at=:now where id=:id"),
         {"status": status, "now": now, "id": lease.conversation},
     )
+    total = conn.execute(
+        text(
+            "select coalesce(sum(actual_usd),0) from public.usage_records "
+            "where conversation_id=:id and kind='charge'"
+        ),
+        {"id": lease.conversation},
+    ).scalar_one()
+    conn.execute(
+        text("update public.conversations set cost_usd=:cost where id=:id"),
+        {"cost": total, "id": lease.conversation},
+    )
     if not retain_hold:
         for aid in participants(conn, lease.conversation):
             release_session(conn, aid, lease.conversation, client.price)
@@ -166,8 +185,13 @@ def finish(
         {"id": lease.conversation, "kind": status},
     )
 
+    if status == "completed":
+        notify_conversation_completed(conn, lease.conversation)
 
-def retry(conn: Connection, lease: Lease, client: LLMClient, now: datetime, delay: int) -> None:
+
+def retry(
+    conn: Connection, lease: Lease, client: StructuredLLMClient, now: datetime, delay: int
+) -> None:
     assert_lease(conn, lease, now)
     if lease.attempts >= 4:
         finish(conn, lease, "failed", client, now, error="retry_limit")
@@ -183,74 +207,79 @@ def retry(conn: Connection, lease: Lease, client: LLMClient, now: datetime, dela
     )
 
 
+class WorkerStopped(Exception):
+    pass
+
+
+class ConsentLost(Exception):
+    pass
+
+
+class TimeLimit(Exception):
+    pass
+
+
+def check_context(
+    conn: Connection,
+    lease: Lease,
+    now: datetime,
+    global_limit: Decimal,
+    *,
+    active_run: uuid.UUID | None = None,
+) -> None:
+    """Called under the common lock before each external boundary and publication."""
+    assert_lease(conn, lease, now)
+    row = conn.execute(
+        text(
+            "select status,profile_versions,started_at from public.conversations "
+            "where id=:id for update"
+        ),
+        {"id": lease.conversation},
+    ).one()
+    ids = participants(conn, lease.conversation)
+    if (
+        row.status not in ("queued", "running")
+        or len(ids) != 2
+        or not pair_allowed(
+            conn,
+            (ids[0], ids[1]),
+            now,
+            conversation=lease.conversation,
+            active_run=active_run,
+        )
+    ):
+        raise ConsentLost()
+    eligible = {r["id"]: r for r in eligible_agents(conn, active_run=active_run)}
+    if any(
+        row.profile_versions.get(str(a)) != eligible[a]["approved_profile_version"] for a in ids
+    ):
+        raise ConsentLost()
+    if row.started_at is not None and (now - row.started_at).total_seconds() >= 300:
+        raise TimeLimit()
+    if exposure(conn, now=now) > global_limit or any(
+        exposure(conn, agent=a, now=now) > eligible[a]["daily_budget_usd"]
+        or session_exposure(conn, a, lease.conversation) > eligible[a]["max_session_usd"]
+        for a in ids
+    ):
+        raise BudgetExceeded()
+
+
 def prepare(
-    conn: Connection, lease: Lease, client: LLMClient, now: datetime, global_limit: Decimal
-) -> tuple[uuid.UUID, int, ProfileInput, list[str], list[str], str | None] | None:
+    conn: Connection,
+    lease: Lease,
+    now: datetime,
+    global_limit: Decimal,
+) -> tuple[uuid.UUID, int, list[str]]:
     lock_interactions(conn)
     assert_lease(conn, lease, now)
-    row = (
-        conn.execute(
-            text("select * from public.conversations where id=:id for update"),
-            {"id": lease.conversation},
-        )
-        .mappings()
-        .one()
-    )
-    ids = participants(conn, lease.conversation)
-    if len(ids) != 2 or not pair_allowed(
-        conn, (ids[0], ids[1]), now, conversation=lease.conversation
-    ):
-        finish(conn, lease, "cancelled", client, now, error="consent_lost")
-        return None
-    eligible = {r["id"]: r for r in eligible_agents(conn)}
-    if any(
-        row["profile_versions"].get(str(a)) != eligible[a]["approved_profile_version"] for a in ids
-    ):
-        finish(conn, lease, "cancelled", client, now, error="profile_changed")
-        return None
-    if row["started_at"] is None:
-        conn.execute(
-            text("update public.conversations set status='running',started_at=:now where id=:id"),
-            {"id": lease.conversation, "now": now},
-        )
-    elif (now - row["started_at"]).total_seconds() >= 300:
-        finish(conn, lease, "completed", client, now)
-        return None
     turns = list(
         conn.execute(
             text("select content from public.messages where conversation_id=:id order by turn_no"),
             {"id": lease.conversation},
         ).scalars()
     )
-    if len(turns) >= 8:
-        finish(conn, lease, "completed", client, now)
-        return None
     turn = len(turns) + 1
-    aid = ids[(turn - 1) % 2]
-    # Conservative bound for this implementation's max context/output bytes. A real adapter must
-    # enforce provider token limits at the same boundary before being enabled.
-    bound = client.price.cost(100000, 16000)
-    if (
-        any(exposure(conn, agent=a) > eligible[a]["daily_budget_usd"] for a in ids)
-        or exposure(conn) > global_limit
-    ):
-        finish(conn, lease, "completed", client, now, error="budget_reduced")
-        return None
-    spent = Decimal(
-        conn.execute(
-            text(
-                "select coalesce(sum(actual_usd),0) from public.usage_records "
-                "where agent_id=:agent and conversation_id=:conv and kind='charge'"
-            ),
-            {"agent": aid, "conv": lease.conversation},
-        ).scalar_one()
-    )
-    if (
-        bound > held(conn, aid, lease.conversation)
-        or spent + bound > eligible[aid]["max_session_usd"]
-    ):
-        finish(conn, lease, "completed", client, now, error="budget_limit")
-        return None
+    # Check crash markers before consent/budget: unknown requests must never release holds.
     invocation = conn.execute(
         text(
             "select status from public.llm_invocations where conversation_id=:id and turn_no=:turn"
@@ -258,9 +287,20 @@ def prepare(
         {"id": lease.conversation, "turn": turn},
     ).scalar_one_or_none()
     if invocation in ("started", "unknown", "finished"):
-        # Crash after dispatch/response may have incurred cost. Do not dispatch the same turn again.
-        finish(conn, lease, "failed", client, now, retain_hold=True, error="unknown_llm_outcome")
-        return None
+        raise UnknownLLMOutcome()
+    check_context(conn, lease, now, global_limit)
+    if turn > 8:
+        raise TimeLimit()
+    aid = participants(conn, lease.conversation)[(turn - 1) % 2]
+    if held(conn, aid, lease.conversation) < call_reservation():
+        raise BudgetExceeded()
+    conn.execute(
+        text(
+            "update public.conversations set status='running',started_at=coalesce(started_at,:now) "
+            "where id=:id"
+        ),
+        {"id": lease.conversation, "now": now},
+    )
     conn.execute(
         text(
             "insert into public.llm_invocations (conversation_id,turn_no,status) "
@@ -269,167 +309,208 @@ def prepare(
         ),
         {"id": lease.conversation, "turn": turn},
     )
-    profile = (
+    return aid, turn, turns
+
+
+def settle_cancelled(conn: Connection, client: StructuredLLMClient) -> bool:
+    """API/Bot cancellation precedes Worker claim; settle those untouched reservations too."""
+    lock_interactions(conn)
+    conversation = conn.execute(
+        text(
+            "select c.id from public.conversations c "
+            "join public.background_jobs j on j.id=c.job_id "
+            "where c.status='cancelled' and j.status='cancelled' "
+            "and j.kind='conversation.run' and not exists "
+            "(select 1 from public.conversation_events e where e.conversation_id=c.id "
+            "and e.kind='cancelled') order by c.id for update of c skip locked limit 1"
+        ),
+    ).scalar_one_or_none()
+    if conversation is None:
+        return False
+    unknown = (
         conn.execute(
-            text("select * from public.agent_profiles where agent_id=:id and version=:v"),
-            {"id": aid, "v": row["profile_versions"][str(aid)]},
-        )
-        .mappings()
-        .one()
+            text(
+                "select 1 from public.llm_invocations where conversation_id=:id "
+                "and status in ('started','unknown') limit 1"
+            ),
+            {"id": conversation},
+        ).first()
+        is not None
     )
-    public = ProfileInput.model_validate({k: profile[k] for k in ProfileInput.model_fields})
-    other = ids[turn % 2]
-    return aid, turn, public, turns, context(conn, aid, other), recent_summary(conn, aid, other)
+    try:
+        require_settled(conn, conversation=conversation)
+    except UnsettledBudget:
+        unknown = True
+    if not unknown:
+        for aid in participants(conn, conversation):
+            release_session(conn, aid, conversation, client.price)
+    conn.execute(
+        text(
+            "insert into public.conversation_events (conversation_id,kind) "
+            "values (:id,'cancelled') on conflict do nothing"
+        ),
+        {"id": conversation},
+    )
+    return True
 
 
 def run_one(
     engine: Engine,
-    client: LLMClient,
-    moderator: Moderator,
+    client: StructuredLLMClient,
     *,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     stopped: threading.Event | None = None,
     global_limit: Decimal = Decimal("10"),
+    forbidden: tuple[str, ...] = (),
 ) -> bool:
     stopped = stopped or threading.Event()
     if stopped.is_set():
         return False
     with engine.begin() as conn:
+        if settle_cancelled(conn, client):
+            return True
         lease = claim(conn, clock())
     if lease is None:
         return False
-    try:
-        while not stopped.is_set():
-            with engine.begin() as conn:
-                prepared = prepare(conn, lease, client, clock(), global_limit)
-            if prepared is None:
-                return True
-            aid, turn, profile, turns, memories, summary = prepared
-            if stopped.is_set():
-                # No request was dispatched. Mark retryable before yielding the lease.
-                with engine.begin() as conn:
-                    lock_interactions(conn)
-                    assert_lease(conn, lease, clock())
-                    conn.execute(
-                        text(
-                            "update public.llm_invocations set status='retryable' "
-                            "where conversation_id=:id and turn_no=:turn"
-                        ),
-                        {"id": lease.conversation, "turn": turn},
-                    )
-                    retry(conn, lease, client, clock(), 1)
-                return True
-            messages = build_prompt(profile, turns, memories, summary)
-            try:
-                with Heartbeat(engine, lease, clock) as heartbeat:
-                    response = client.generate(messages)
-                if heartbeat.lost.is_set():
-                    raise LeaseLost()
-            except TemporaryLLMError as exc:
-                with engine.begin() as conn:
-                    lock_interactions(conn)
-                    assert_lease(conn, lease, clock())
-                    conn.execute(
-                        text(
-                            "update public.llm_invocations set status='retryable' "
-                            "where conversation_id=:id and turn_no=:turn"
-                        ),
-                        {"id": lease.conversation, "turn": turn},
-                    )
-                    retry(conn, lease, client, clock(), exc.retry_after)
-                return True
-            except (UnknownLLMOutcome, TimeoutError):
-                with engine.begin() as conn:
-                    lock_interactions(conn)
-                    finish(
-                        conn,
-                        lease,
-                        "failed",
-                        client,
-                        clock(),
-                        retain_hold=True,
-                        error="unknown_llm_outcome",
-                    )
-                return True
-            cost = client.price.cost(response.input_tokens, response.output_tokens)
-            value = None
-            try:
-                value = Utterance.model_validate_json(response.output)
-                if not moderator.allowed(value.utterance) or not moderator.allowed(
-                    value.reason or "終了"
-                ):
-                    raise UnsafeOutput()
-            except (ValidationError, UnsafeOutput):
-                value = None
-            with engine.begin() as conn:
-                lock_interactions(conn)
-                assert_lease(conn, lease, clock())
-                consume(
-                    conn,
-                    aid,
-                    lease.conversation,
-                    client.price,
-                    f"{lease.conversation}:{turn}",
-                    cost,
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                )
-                conn.execute(
-                    text(
-                        "update public.llm_invocations set status='finished' "
-                        "where conversation_id=:id and turn_no=:turn"
-                    ),
-                    {"id": lease.conversation, "turn": turn},
-                )
-                conn.execute(
-                    text("update public.conversations set cost_usd=cost_usd+:cost where id=:id"),
-                    {"id": lease.conversation, "cost": cost},
-                )
-                if value is None:
-                    finish(conn, lease, "failed", client, clock(), error="unsafe_output")
-                    return True
-                ids = participants(conn, lease.conversation)
-                if stopped.is_set() or not pair_allowed(
-                    conn, (ids[0], ids[1]), clock(), conversation=lease.conversation
-                ):
-                    finish(conn, lease, "cancelled", client, clock(), error="consent_lost")
-                    return True
-                conn.execute(
-                    text(
-                        "insert into public.messages "
-                        "(conversation_id,agent_id,turn_no,content,moderation_status,"
-                        "token_input,token_output) "
-                        "values (:conv,:agent,:turn,:content,'allowed',:i,:o) "
-                        "on conflict do nothing"
-                    ),
-                    {
-                        "conv": lease.conversation,
-                        "agent": aid,
-                        "turn": turn,
-                        "content": value.utterance,
-                        "i": response.input_tokens,
-                        "o": response.output_tokens,
-                    },
-                )
-                if value.should_end or turn == 8:
-                    finish(conn, lease, "completed", client, clock())
-                    return True
-        # A graceful stop between turns leaves no in-flight external call; resume from stored turns.
+
+    execution: LLMExecution
+
+    @contextmanager
+    def authorized() -> Iterator[Connection]:
         with engine.begin() as conn:
             lock_interactions(conn)
-            retry(conn, lease, client, clock(), 1)
-        return True
+            assert_lease(conn, lease, clock())
+            if stopped.is_set():
+                raise WorkerStopped()
+            check_context(conn, lease, clock(), global_limit, active_run=execution.run_id)
+            execution.validate_memory_context(conn)
+            yield conn
+
+    def before_request() -> None:
+        with authorized():
+            pass
+
+    execution = LLMExecution(engine, client, authorized, global_limit, forbidden=forbidden)
+    # Count-token retries inside the provider adapter must also recheck stop/consent/lease.
+    previous_guard = None
+    if isinstance(client, SonnetClient):
+        previous_guard = client.before_request
+        client.before_request = before_request
+    try:
+        with Heartbeat(engine, lease, clock):
+            while True:
+                execution.run_id = None
+                execution.memory_snapshot = None
+                with engine.begin() as conn:
+                    aid, turn, turns = prepare(conn, lease, clock(), global_limit)
+                value = execution.conversation_turn(aid, lease.conversation, turns)
+                with engine.begin() as conn:
+                    lock_interactions(conn)
+                    assert_lease(conn, lease, clock())
+                    if stopped.is_set():
+                        raise WorkerStopped()
+                    check_context(conn, lease, clock(), global_limit)
+                    execution.validate_memory_context(conn)
+                    usage = conn.execute(
+                        text(
+                            "select coalesce(sum(input_tokens),0) as i,"
+                            "coalesce(sum(output_tokens),0) as o "
+                            "from public.usage_records where kind='charge' "
+                            "and starts_with(idempotency_key,:prefix)"
+                        ),
+                        {"prefix": f"llm:{execution.run_id}:"},
+                    ).one()
+                    conn.execute(
+                        text(
+                            "insert into public.messages "
+                            "(conversation_id,agent_id,turn_no,content,moderation_status,"
+                            "token_input,token_output) values "
+                            "(:conv,:agent,:turn,:content,'allowed',:i,:o)"
+                        ),
+                        {
+                            "conv": lease.conversation,
+                            "agent": aid,
+                            "turn": turn,
+                            "content": value.utterance,
+                            "i": usage.i,
+                            "o": usage.o,
+                        },
+                    )
+                    conn.execute(
+                        text(
+                            "update public.llm_invocations set status='finished' "
+                            "where conversation_id=:id and turn_no=:turn"
+                        ),
+                        {"id": lease.conversation, "turn": turn},
+                    )
+                    conn.execute(
+                        text(
+                            "update public.conversations set cost_usd="
+                            "(select coalesce(sum(actual_usd),0) from public.usage_records "
+                            "where conversation_id=:id and kind='charge') where id=:id"
+                        ),
+                        {"id": lease.conversation},
+                    )
+                    if value.should_end or turn == 8:
+                        finish(conn, lease, "completed", client, clock())
+                        return True
     except LeaseLost:
         return True
-    except Exception:
-        # Never persist exception text, response body or credentials. Post-dispatch errors
-        # conservatively retain reservations. The invocation marker prevents duplicate dispatch.
+    except TemporaryLLMError as exc:
         with engine.begin() as conn:
             lock_interactions(conn)
             try:
-                finish(
-                    conn, lease, "failed", client, clock(), retain_hold=True, error="worker_error"
-                )
+                assert_lease(conn, lease, clock())
+                billed = conn.execute(
+                    text(
+                        "select 1 from public.usage_records where kind='charge' "
+                        "and starts_with(idempotency_key,:prefix) limit 1"
+                    ),
+                    {"prefix": f"llm:{execution.run_id}:"},
+                ).first()
+                if billed:
+                    # E.g. generation succeeded but moderation was rate-limited. Re-generating
+                    # this turn would spend again; only wholly unbilled attempts can retry.
+                    finish(conn, lease, "failed", client, clock(), error="partial_llm_failure")
+                else:
+                    conn.execute(
+                        text(
+                            "update public.llm_invocations set status='retryable' "
+                            "where conversation_id=:id and status='started'"
+                        ),
+                        {"id": lease.conversation},
+                    )
+                    retry(conn, lease, client, clock(), exc.retry_after)
             except LeaseLost:
                 pass
         return True
+    except Exception as exc:
+        if isinstance(exc, (WorkerStopped, ConsentLost)):
+            status, error, retain = "cancelled", "consent_lost", False
+        elif isinstance(exc, (BudgetExceeded, TimeLimit)):
+            status, error, retain = (
+                "completed",
+                "budget_limit" if isinstance(exc, BudgetExceeded) else "time_limit",
+                False,
+            )
+        elif isinstance(exc, UnsafeOutput):
+            status, error, retain = "failed", "unsafe_output", False
+        elif isinstance(exc, LLMUnavailable):
+            status, error, retain = "failed", "llm_unavailable", False
+        else:
+            status, error, retain = "failed", "unknown_llm_outcome", True
+        with engine.begin() as conn:
+            lock_interactions(conn)
+            try:
+                # Other unsettled calls (e.g. crash before admission) always preserve holds.
+                try:
+                    require_settled(conn, conversation=lease.conversation)
+                except UnsettledBudget:
+                    retain = True
+                finish(conn, lease, status, client, clock(), retain_hold=retain, error=error)
+            except LeaseLost:
+                pass
+        return True
+    finally:
+        if isinstance(client, SonnetClient):
+            client.before_request = previous_guard

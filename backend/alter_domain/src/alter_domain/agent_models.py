@@ -4,7 +4,9 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+IconPath = Annotated[str, Field(max_length=128, pattern=r"^[0-9a-f-]{36}/[0-9a-f-]{36}\.png$")]
 
 Text = Annotated[str, Field(max_length=2000)]
 Item = Annotated[str, Field(min_length=1, max_length=100)]
@@ -28,8 +30,7 @@ class ProfileInput(BaseModel):
 class AgentDraftInput(ProfileInput):
     name: Annotated[str, Field(min_length=1, max_length=80, pattern=r"\S")]
     private_info: Text = Field(default="", repr=False)
-    # Fail closed until the Storage metadata/ownership adapter exists.
-    icon_path: None = None
+    icon_path: IconPath | None = None
 
 
 class RevisionInput(AgentDraftInput):
@@ -47,13 +48,23 @@ class Agent(BaseModel):
     status: Literal["draft", "active", "paused", "deleted"]
     approved_profile_version: int | None
     created_at: datetime
-    icon_url: None = None
+    icon_url: str | None = None
 
 
 class AgentPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: Annotated[str, Field(min_length=1, max_length=80, pattern=r"\S")]
-    icon_path: None = None
+    name: Annotated[str, Field(min_length=1, max_length=80, pattern=r"\S")] | None = None
+    icon_path: IconPath | None = None
+
+    @model_validator(mode="after")
+    def valid_patch(self) -> "AgentPatch":
+        if not self.model_fields_set or ("name" in self.model_fields_set and self.name is None):
+            raise ValueError("Provide a name or icon; name cannot be null")
+        return self
+
+
+class IconUpload(BaseModel):
+    icon_path: IconPath
 
 
 class Approval(BaseModel):
@@ -63,3 +74,20 @@ class Approval(BaseModel):
 
 class PrivateInfo(BaseModel):
     private_info: str = Field(repr=False)
+
+
+class SuggestionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    answers: dict[str, Annotated[str, Field(max_length=2000)]] = Field(
+        min_length=1, max_length=11, repr=False
+    )
+
+    @model_validator(mode="after")
+    def public_answers_only(self) -> "SuggestionInput":
+        if set(self.answers) - (set(ProfileInput.model_fields) | {"name"}):
+            raise ValueError("Only public personality answers are accepted")
+        if sum(map(len, self.answers.values())) > 8000 or not any(
+            value.strip() for value in self.answers.values()
+        ):
+            raise ValueError("Answers exceed the input limit or are blank")
+        return self

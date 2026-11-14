@@ -1,6 +1,6 @@
-import hashlib
 import itertools
 import json
+import secrets
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -9,7 +9,8 @@ from sqlalchemy import Connection, Engine, text
 
 from alter_domain.budget import BudgetExceeded, reserve
 from alter_domain.interaction import eligible_agents, lock_interactions, pair_allowed
-from alter_domain.llm_contract import ModelPrice
+from alter_domain.llm_selection import model_price, session_reservation
+from alter_domain.matcher import pair_rank
 
 
 def utc_slot(now: datetime) -> tuple[datetime, int]:
@@ -20,7 +21,7 @@ def utc_slot(now: datetime) -> tuple[datetime, int]:
 
 
 def select_due(
-    conn: Connection, now: datetime, price: ModelPrice, global_limit: Decimal, *, seed: int = 0
+    conn: Connection, now: datetime, global_limit: Decimal, *, seed: int = 0
 ) -> uuid.UUID | None:
     now, slot = utc_slot(now)
     lock_interactions(conn)
@@ -40,14 +41,14 @@ def select_due(
             ).scalar_one_or_none()
             or 0
         )
-        score = len(set(a["interests"]) & set(b["interests"])) + (1 if not count else 0) - count
-        tie = hashlib.sha256(f"{seed}:{pair[0]}:{pair[1]}".encode()).hexdigest()
-        choices.append((-score, tie, a, b))
+        rank = pair_rank(pair, (a["interests"], b["interests"]), count, seed)
+        choices.append((*rank, a, b))
     for _, _, a, b in sorted(choices, key=lambda x: (x[0], x[1])):
         key = f"{now.date()}:{slot}:{a['id']}:{b['id']}"
         if conn.execute(
             text(
-                "select 1 from public.background_jobs where kind='conversation' and dedupe_key=:key"
+                "select 1 from public.background_jobs "
+                "where kind='conversation.run' and dedupe_key=:key"
             ),
             {"key": key},
         ).first():
@@ -58,7 +59,7 @@ def select_due(
                 conn.execute(
                     text(
                         "insert into public.background_jobs (id,kind,dedupe_key,payload,run_at) "
-                        "values (:id,'conversation',:key,cast(:payload as jsonb),:now)"
+                        "values (:id,'conversation.run',:key,cast(:payload as jsonb),:now)"
                     ),
                     {
                         "id": job,
@@ -80,17 +81,22 @@ def select_due(
                         text(
                             "insert into public.conversation_participants "
                             "(conversation_id,agent_id,ordinal,discord_consent,web_consent) "
-                            "values (:conv,:agent,:ordinal,false,true)"
+                            "values (:conv,:agent,:ordinal,:discord_consent,true)"
                         ),
-                        {"conv": conversation, "agent": row["id"], "ordinal": ordinal},
+                        {
+                            "conv": conversation,
+                            "agent": row["id"],
+                            "ordinal": ordinal,
+                            "discord_consent": row["discord_publish"],
+                        },
                     )
                     reserve(
                         conn,
                         row["id"],
                         conversation,
-                        price,
+                        model_price(),
                         f"{conversation}:{row['id']}:reserve",
-                        row["max_session_usd"],
+                        session_reservation(),
                         global_limit,
                         now=now,
                     )
@@ -104,16 +110,18 @@ def select_due(
 def schedule(
     engine: Engine,
     now: datetime,
-    price: ModelPrice,
     global_limit: Decimal,
     *,
     batch_size: int = 10,
-    seed: int = 0,
+    seed: int | None = None,
 ) -> list[uuid.UUID]:
+    utc_slot(now)
+    if seed is None:
+        seed = secrets.randbits(63)
     jobs = []
     for _ in range(max(0, min(batch_size, 10))):
         with engine.begin() as conn:
-            job = select_due(conn, now, price, global_limit, seed=seed)
+            job = select_due(conn, now, global_limit, seed=seed)
         if job is None:
             break
         jobs.append(job)

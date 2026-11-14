@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import Connection, text
 
 from alter_domain.agent_models import Agent, AgentDraftInput, ProfileInput, ProfileRevision
+from alter_domain.icons import require_owned_icon
 from alter_domain.profile_crypto import ProfileCipher
 
 PROFILE_FIELDS = tuple(ProfileInput.model_fields)
@@ -36,20 +37,30 @@ def owned(conn: Connection, owner: uuid.UUID, agent_id: uuid.UUID, *, lock: bool
     return Agent.model_validate(dict(row))
 
 
-def latest(conn: Connection, agent_id: uuid.UUID) -> ProfileRevision:
+def get_profile(
+    conn: Connection, agent_id: uuid.UUID, version: int | None = None
+) -> ProfileRevision:
     row = (
         conn.execute(
             text(
                 f"select {', '.join(PROFILE_FIELDS)}, version, approved_at "
                 "from public.agent_profiles "
-                "where agent_id=:id order by version desc limit 1"
+                "where agent_id=:id "
+                + ("and version=:version " if version is not None else "")
+                + "order by version desc limit 1"
             ),
-            {"id": agent_id},
+            {"id": agent_id, "version": version},
         )
         .mappings()
-        .one()
+        .first()
     )
+    if row is None:
+        raise AgentNotFound()
     return ProfileRevision.model_validate(dict(row))
+
+
+def latest(conn: Connection, agent_id: uuid.UUID) -> ProfileRevision:
+    return get_profile(conn, agent_id)
 
 
 def save_revision(
@@ -90,10 +101,15 @@ def create_agent(
     conn.execute(text("select id from public.profiles where id=:id for update"), {"id": owner})
     if conn.execute(text("select 1 from public.agents where owner_id=:id"), {"id": owner}).first():
         raise AgentConflict()
+    if data.icon_path is not None:
+        require_owned_icon(conn, owner, data.icon_path)
     agent_id = uuid.uuid4()
     conn.execute(
-        text("insert into public.agents (id, owner_id, name) values (:id,:owner,:name)"),
-        {"id": agent_id, "owner": owner, "name": data.name},
+        text(
+            "insert into public.agents (id, owner_id, name, icon_path) "
+            "values (:id,:owner,:name,:icon)"
+        ),
+        {"id": agent_id, "owner": owner, "name": data.name, "icon": data.icon_path},
     )
     save_revision(conn, agent_id, 1, data, cipher)
     conn.execute(
@@ -115,6 +131,12 @@ def approve(conn: Connection, owner: uuid.UUID, agent_id: uuid.UUID, version: in
             "where agent_id=:id and version=:v and approved_at is null"
         ),
         {"id": agent_id, "v": version},
+    )
+    conn.execute(
+        text(
+            "update public.profiles set onboarded_at=now() where id=:owner and onboarded_at is null"
+        ),
+        {"owner": owner},
     )
     # Approval never opts the user into autonomous interaction.
     conn.execute(
