@@ -193,7 +193,7 @@ icon_pathの省略は維持、nullは解除、非nullは検証済みの本人画
 - 開始: すでに連携済みなら409。32バイト乱数のstateを返し、DBには SHA-256 の16進ハッシュだけを10分の期限付きで保存する。認可URLのscopeは`identify`だけ。期限切れ・使用済みのstateは発行時に掃除し、1人の未使用stateは新しい5件まで残す。`DISCORD_CLIENT_ID`・`DISCORD_CLIENT_SECRET`・`DISCORD_REDIRECT_URI`のどれかが未設定なら503でstateを作らない。
 - 完了: stateを行ロックして照合する。存在しない・期限切れ・使用済みは400`OAUTH_STATE_INVALID`。別の本人のstateは消費せずに400。本人のstateは結果にかかわらず削除し（使い捨て）、失敗の応答もコミットする。本人がすでに連携済みならコード交換せずに409。Discordがコードを拒否したら400`OAUTH_STATE_INVALID`、その Discord ユーザーが別の本人と連携済みなら409`CONFLICT`。Discordに到達できないときだけ503で巻き戻す。
 - トークン: Discordのアクセストークンは`/users/@me`でIDを取得するためだけに使い、取得後に失効APIを呼んで破棄する。DB・応答・ログ・監査に保存しない。
-- 解除: 連携がなくても204（冪等）。連携を`revoked_at`で失効し、未使用stateを削除、本人あての`pending`のDMを`cancelled`にする。本人のAIのギルド別公開同意も取り消し、そのAIが参加する会話の`pending`の投稿を`cancelled`にする（送信中・送信済みは変えない）。再連携しても同意は自動で戻さず、公開し直すにはDiscordで`/agent publish`が必要。招待の失効・削除要求（#30）でも`invitations.cancel_pending_deliveries`で同じ範囲（未送信のDM・投稿とギルド別同意）を取り消す。
+- 解除: 連携がなくても204（冪等）。未使用stateは連携の有無にかかわらず削除する（開始→解除→元のstateで完了、を通さない）。連携を`revoked_at`で失効し、本人あての`pending`のDMを`cancelled`にする。本人のAIのギルド別公開同意も取り消し、そのAIが参加する会話の`pending`の投稿を`cancelled`にする（送信中・送信済みは変えない）。再連携しても同意は自動で戻さず、公開し直すにはDiscordで`/agent publish`が必要。招待の失効・削除要求（#30）でも`invitations.cancel_pending_deliveries`で同じ範囲（未送信のDM・投稿とギルド別同意）を取り消す。
 - ギルド一覧: 本人のAIが同意した（取り消したものも含む）ギルドと、有効な投稿先を返す。ギルド名・チャンネル名は`discord_guilds.name`・`discord_channels.name`（Botが記録する表示用の名前）。
 - 監査: `discord.link_start`・`discord.link`・`discord.link_failed`（理由だけ）・`discord.unlink`（取り消し件数だけ）。Discord ID・state・コードは残さない。
 - Webからギルドの投稿先を設定するAPIはMVPでは公開しない（Botの`/server setup`、#27）。

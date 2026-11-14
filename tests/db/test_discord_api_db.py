@@ -532,6 +532,22 @@ def test_disconnect_is_idempotent(engine: Engine, api: Api, users: list[uuid.UUI
         )
 
 
+def test_disconnect_without_link_invalidates_pending_state(
+    engine: Engine, api: Api, users: list[uuid.UUID]
+) -> None:
+    """開始 → 解除（未連携でも 204）→ 元の state で完了、の順でも連携させない。"""
+    sub = _new_user(engine, api, users)
+    state = _start(api, sub)
+    assert api.as_user(sub).delete("/api/v1/discord/connection").status_code == 204
+    with engine.connect() as conn:
+        assert _states(conn, sub) == 0
+    api.discord.users["after-unlink"] = DISCORD_A
+    response = _complete(api, sub, "after-unlink", state)
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "OAUTH_STATE_INVALID"
+    assert api.as_user(sub).get("/api/v1/discord/connection").json()["connected"] is False
+
+
 def test_relink_after_disconnect_keeps_history(
     engine: Engine, api: Api, users: list[uuid.UUID]
 ) -> None:

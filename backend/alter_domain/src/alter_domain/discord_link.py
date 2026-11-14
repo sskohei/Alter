@@ -194,7 +194,15 @@ def complete_link(
 
 
 def disconnect(conn: Connection, owner: uuid.UUID) -> bool:
-    """連携を解除する。連携がなければ何もしない（冪等。解除したら True）。"""
+    """連携を解除する（冪等。連携を失効したら True）。
+
+    連携がなくても、発行済みの未使用 state は必ず無効にする（開始 → 解除 → 元の state で完了、
+    の順でも連携させない）。
+    """
+    conn.execute(
+        text("delete from public.discord_oauth_states where profile_id = :owner"),
+        {"owner": owner},
+    )
     discord_user_id = conn.execute(
         text(
             "update public.discord_connections set revoked_at = now() "
@@ -204,10 +212,6 @@ def disconnect(conn: Connection, owner: uuid.UUID) -> bool:
     ).scalar_one_or_none()
     if discord_user_id is None:
         return False
-    conn.execute(
-        text("delete from public.discord_oauth_states where profile_id = :owner"),
-        {"owner": owner},
-    )
     dm_cancelled = conn.execute(
         text(
             "update public.discord_dm_deliveries set status = 'cancelled' "
