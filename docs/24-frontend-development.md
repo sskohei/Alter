@@ -159,6 +159,13 @@ ALTER_REQUIRE_DB_TESTS=1 uv run --all-packages pytest tests/db/test_activity_api
 #11のコード上のデザイン仕上げ（ADR-015）と外部OAuth/本番環境の公開受け入れは、
 それぞれ#11/#37で追跡する。#23では既存UIの機能・正式契約接続・PC/mobile操作を完了する。
 
+## #37 MVP受け入れ
+
+10合成IDのMock操作、375/320px axe/keyboard、実測データとlive証跡の充足性判定器を使用する。
+手順と実環境で必要な全caseは[MVP受け入れ](26-mvp-acceptance.md)を参照する。
+実10人の受け入れ・性能測定・本番公開の証跡は未記録。
+
+
 ## PRレビュー反映（#45）
 
 OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
