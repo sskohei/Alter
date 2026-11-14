@@ -21,3 +21,24 @@ def test_private_info_is_only_in_input_and_edit_response() -> None:
     assert "private_info" in schemas["PrivateInfo"]["properties"]
     assert "private_info" not in schemas["Agent"]["properties"]
     assert "private_info" not in schemas["ProfileRevision"]["properties"]
+
+
+def test_activity_preview_reuses_the_live_contract() -> None:
+    preview = create_contract_app().openapi()
+    live = create_app().openapi()
+    for path in (
+        "/api/v1/conversations",
+        "/api/v1/conversations/{id}",
+        "/api/v1/notifications",
+        "/api/v1/notifications/{id}/read",
+    ):
+        assert preview["paths"][path] == live["paths"][path]
+    for name in (
+        "ConversationSummary",
+        "ConversationDetail",
+        "ConversationMessage",
+        "Notification",
+        "Page_ConversationSummary_",
+        "Page_Notification_",
+    ):
+        assert preview["components"]["schemas"][name] == live["components"]["schemas"][name]

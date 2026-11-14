@@ -94,6 +94,13 @@
 
 JWT検証の設定は`SUPABASE_URL`・`SUPABASE_JWT_ISSUER`・`SUPABASE_JWT_AUDIENCE`・`SUPABASE_JWT_ALGORITHMS`（ES256/RS256のみ、既定両方）・`SUPABASE_JWKS_CACHE_SECONDS`（既定300）。JWKSは`kid`ごとにキャッシュし、未知の`kid`では一度だけ再取得する（再取得は10秒以上の間隔）。ヘッダーの`alg`は許可リストかつ鍵の種類と一致する場合だけ受け付ける。時刻の許容差は30秒。JWKSが空のプロジェクトの`HS256`トークンだけを、`exp`/`iss`/`aud`/`sub`/`role`の確認後に`GET /auth/v1/user`（`apikey`は`SUPABASE_PUBLISHABLE_KEY`）で照会する。JWKSに鍵がある状態の`HS256`は拒否する。JWKS内の鍵が不正・未対応の場合は503とし、空JWKSと扱ってHS256へ切り替えない。トークン・鍵・Publishable Keyはログやエラーに出さない。`ALTER_MODE=mock`でも検証は省略しない。
 
+### 会話費用の表示対象（#21 / PR #47レビュー）
+
+会話一覧・詳細の`cost_usd`は本人のAIがこの会話で消費した確定費用（USD）だけを返す。
+2体分の合計や相手の利用額を返さない。UIは「自分のAIの確定費用」と表示し、nullを0に補完しない。
+`usage_records.kind=charge`の`actual_usd`を合計する。queued/runningはnull、終了後の課金なしは0（下記#21）。
+#23の4画面は正式生成クライアントを利用し、previewの会話・通知も正式routerを再利用する。
+
 Issue #8のMockは同じuserルーターとモデルを再利用する。`/__mock/profiles`はページングを試す合成データ専用契約で、本番APIに追加しない。手順は[フロント開発](24-frontend-development.md)を参照。
 
 ## #16 交流設定・ブロック・通知設定の実装

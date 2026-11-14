@@ -7,7 +7,7 @@ vi.mock("../lib/api-server", () => ({serverApi: async () => ({supabase: {auth: {
   getSession: async () => ({data: {session: {access_token: "synthetic"}}}),
 }}})}));
 vi.mock("../lib/origin", () => ({appOrigin: () => "http://localhost:3000"}));
-import { POST } from "../app/api/v1/[...path]/route";
+import { GET, POST } from "../app/api/v1/[...path]/route";
 
 beforeEach(() => { vi.unstubAllGlobals(); });
 const context = {params: Promise.resolve({path: ["agent-icons"]})};
@@ -67,4 +67,18 @@ test("synthetic Mock accepts an upload, checks its registration, and clears sele
   expect(bad.status).toBe(422);
   const cleared = await mock(`http://mock.test/api/v1/agents/${agent.id}`, {method: "PATCH", headers: jsonHeaders, body: JSON.stringify({icon_path: null})});
   expect((await cleared.json()).icon_url).toBeNull();
+});
+
+
+test("BFF forwards activity requests and preserves Retry-After", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json(
+    {error: {code: "RATE_LIMITED", message: "wait"}},
+    {status: 429, headers: {"Retry-After": "60", "X-Request-ID": "synthetic-request"}},
+  )));
+  const result = await GET(new NextRequest("http://localhost:3000/api/v1/conversations"),
+    {params: Promise.resolve({path: ["conversations"]})});
+  expect(result.status).toBe(429);
+  expect(result.headers.get("Retry-After")).toBe("60");
+  expect(result.headers.get("X-Request-ID")).toBe("synthetic-request");
+  expect(result.headers.get("Cache-Control")).toBe("private, no-store");
 });

@@ -457,3 +457,66 @@ def test_pagination_skips_expired_conversations(api: Api, engine: Engine, world:
     ).json()
     assert [i["id"] for i in first["items"] + second["items"]] == [str(c) for c in fresh]
     assert second["next_cursor"] is None
+
+
+def test_generated_web_client_against_live_api(
+    api: Api, engine: Engine, world: World, convs: dict[str, uuid.UUID]
+) -> None:
+    """Real HTTP/SQL and generated TS client; only external Auth is synthetic."""
+    import shutil
+    import socket
+    import subprocess
+    import threading
+    import time
+    from pathlib import Path
+
+    import uvicorn
+    from fastapi import Request
+
+    # The server exists only inside this test. Production authorization is unchanged.
+    def principal(request: Request) -> Principal:
+        sub = uuid.UUID(request.headers["authorization"].removeprefix("Bearer "))
+        return Principal(sub, "jwks")
+
+    api.app.dependency_overrides[get_principal] = principal
+    with engine.begin() as conn:
+        activity.notify_conversation_completed(conn, convs["done"])
+    pnpm = shutil.which("pnpm")
+    assert pnpm, "pnpm is required for the generated-client integration test"
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        server = uvicorn.Server(uvicorn.Config(api.app, log_level="error"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            deadline = time.monotonic() + 10
+            while not server.started and thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert server.started, "Local FastAPI server did not start"
+            result = subprocess.run(
+                [
+                    pnpm,
+                    "--filter",
+                    "@alter/api-client",
+                    "exec",
+                    "tsx",
+                    "tests/activity-live.ts",
+                    f"http://127.0.0.1:{port}",
+                    str(world.a),
+                    str(world.c),
+                    str(convs["done"]),
+                    str(convs["running"]),
+                    str(convs["others"]),
+                ],
+                cwd=Path(__file__).resolve().parents[2],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+        finally:
+            server.should_exit = True
+            thread.join(timeout=10)
+            assert not thread.is_alive()
