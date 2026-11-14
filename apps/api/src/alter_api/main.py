@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
 
+from alter_api.activity_routes import router as activity_router
 from alter_api.agent_routes import router as agent_router
 from alter_api.auth import JwtVerifier
 from alter_api.errors import (
@@ -41,6 +42,7 @@ def create_api_v1_router() -> APIRouter:
     router.include_router(users_router)
     router.include_router(settings_router)
     router.include_router(agent_router)
+    router.include_router(activity_router)
     return router
 
 
