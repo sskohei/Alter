@@ -145,7 +145,7 @@ test("disconnect failure preserves the connection until a successful retry", asy
   expect(stateCookie.sameSite).toBe("Lax");
   expect(stateCookie.value).not.toContain("access_token");
   await page.getByRole("link", { name: "テスト連携を完了" }).click();
-  await expect(page.getByRole("heading", { name: "Discord連携済み", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Discord連携済み", exact: true, includeHidden: true })).toBeVisible();
   await page.route("**/api/v1/discord/connection", async (route) => {
     if (route.request().method() !== "DELETE") return route.continue();
     await route.fulfill({ status: 503, json: { error: { code: "SERVICE_UNAVAILABLE", message: "synthetic" } } });
@@ -153,7 +153,7 @@ test("disconnect failure preserves the connection until a successful retry", asy
   await page.getByRole("button", { name: "Discord連携を解除する", exact: true }).click();
   await page.getByRole("button", { name: "連携解除を確定する" }).click();
   await expect(page.getByRole("alertdialog").getByRole("alert")).toContainText("現在この機能を利用できません");
-  await expect(page.getByRole("heading", { name: "Discord連携済み", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Discord連携済み", exact: true, includeHidden: true })).toBeVisible();
   await page.unroute("**/api/v1/discord/connection");
   await page.getByRole("button", { name: "連携解除を確定する" }).click();
   await expect(page.getByRole("heading", { name: "Discord未連携", exact: true })).toBeVisible();
