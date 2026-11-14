@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { LayersDrift } from "./layers-drift";
 const links = [
   ["/dashboard", "ホーム"],
   ["/agent", "AI分身"],
@@ -12,6 +14,10 @@ const links = [
   ["/settings/discord", "Discord連携"],
 ] as const;
 export function AppNavigation() {
+  const pathname = usePathname();
+  // Mark the current section (also for nested pages such as /conversations/[id]).
+  const current = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`) ? "page" : undefined;
   const primary = links.filter(([href]) =>
     ["/dashboard", "/conversations", "/notifications"].includes(href),
   );
@@ -22,15 +28,22 @@ export function AppNavigation() {
   return (
     <>
       <nav aria-label="メインナビゲーション" className="app-nav desktop-nav">
+        <p className="layers-ttl" aria-hidden="true">
+          <span>LAYERS</span>
+          <span className="cnt">{links.length}</span>
+        </p>
         {links.map(([href, label]) => (
-          <Link key={href} href={href}>
+          <Link key={href} href={href} aria-current={current(href)}>
+            <span className="thumb" aria-hidden="true" />
             {label}
+            <span className="eye" aria-hidden="true" />
           </Link>
         ))}
+        <LayersDrift />
       </nav>
       <nav aria-label="メインナビゲーション" className="app-nav mobile-nav">
         {primary.map(([href, label]) => (
-          <Link key={href} href={href}>
+          <Link key={href} href={href} aria-current={current(href)}>
             {label}
           </Link>
         ))}
@@ -41,6 +54,7 @@ export function AppNavigation() {
               <Link
                 key={href}
                 href={href}
+                aria-current={current(href)}
                 onClick={(event) =>
                   event.currentTarget
                     .closest("details")

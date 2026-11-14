@@ -99,7 +99,12 @@ export function DiscordSettings({
       <DataState {...resource} retry={resource.refresh} />
       {resource.data && (
         <>
-          <section className="card">
+          <section className="card cable-card" data-connected={resource.data.connection.connected ? "true" : "false"}>
+            <div className="cable" aria-hidden="true">
+              <span className="node">ALTER</span>
+              <span className="wire" />
+              <span className="node">DISCORD</span>
+            </div>
             <h2>
               {resource.data.connection.connected
                 ? "Discord連携済み"

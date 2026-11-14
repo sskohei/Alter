@@ -38,6 +38,7 @@ export function RelationshipList() {
   const resource = useResource(load);
   return (
     <>
+      <p className="eyebrow page-no" aria-hidden="true">07 / RELATIONSHIPS</p>
       <h1>AI分身の交流相手</h1>
       <p>
         表示はAI分身どうしの交流集計です。本人同士の友人関係や相性を示すものではありません。
@@ -60,8 +61,12 @@ export function RelationshipList() {
               <Link href="/conversations">交流の記録を見る</Link>
             </section>
           ) : (
-            resource.data.relationships.items.map((relationship) => (
-              <article className="card" key={relationship.other_agent_id}>
+            <div className="contact-grid">
+            {resource.data.relationships.items.map((relationship) => (
+              <article className="card contact" key={relationship.other_agent_id}>
+                <span className="contact-face" aria-hidden="true">
+                  {relationship.other_agent_name.slice(0, 1)}
+                </span>
                 <p className="eyebrow">
                   AI分身 · {relationshipLabel(relationship.conversation_count)}
                 </p>
@@ -104,7 +109,8 @@ export function RelationshipList() {
                   }
                 />
               </article>
-            ))
+            ))}
+            </div>
           )}
           <PageControls
             {...page}
