@@ -10,6 +10,7 @@ from alter_domain.memory import enrich_pending
 from alter_domain.runtime import run_mock_process
 from alter_domain.settings import Settings
 from alter_domain.sonnet import SonnetClient
+from alter_domain.summary import summarize_one
 
 
 def main() -> None:
@@ -52,6 +53,13 @@ def main() -> None:
                 )
                 if not stopped.is_set():
                     enrich_pending(engine, limit=1, forbidden=forbidden)
+                    summarize_one(
+                        engine,
+                        client,
+                        global_limit=settings.max_daily_cost_usd,
+                        stopped=stopped,
+                        forbidden=forbidden,
+                    )
                 if args.once:
                     return
                 if not processed:

@@ -1,6 +1,6 @@
 """Extractive MVP memories, source suppression and relationship recomputation.
 
-No extra LLM invocation: quote only already moderated utterances, never promote them to facts.
+Candidate extraction uses no LLM. Semantic summaries are produced separately by summary.py.
 """
 
 import hashlib
@@ -116,14 +116,6 @@ def extract_completed(
         {"id": conversation},
     ).all()
     messages = [m for m in messages if safe(m.content, forbidden)]
-    summary = "\n".join(
-        f"AI{ids.index(m.agent_id) + 1}の会話中の発言: {m.content}" for m in messages
-    )[:4000]
-    if safe(summary, forbidden):
-        conn.execute(
-            text("update public.conversations set summary=:summary where id=:id"),
-            {"id": conversation, "summary": summary},
-        )
     for aid in ids:
         if conn.execute(
             text(

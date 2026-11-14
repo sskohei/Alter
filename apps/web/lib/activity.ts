@@ -11,6 +11,12 @@ export const conversationStatus: Record<Conversation["status"], string> = {
 };
 export const isOngoing = (detail: Detail) =>
   detail.status === "running" || detail.status === "queued";
+
+export const needsConversationRefresh = (detail: Detail, now = Date.now()) =>
+  isOngoing(detail) || (
+    detail.status === "completed" && !detail.summary && !!detail.started_at &&
+    now - Date.parse(detail.started_at) < 10 * 60_000
+  );
 export function dateLabel(value: string | null | undefined) {
   return value
     ? new Intl.DateTimeFormat("ja-JP", {

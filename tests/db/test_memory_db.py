@@ -37,6 +37,13 @@ def completed(engine):
     assert enrich_pending(engine) == 1
     assert enrich_pending(engine) == 0
     with engine.begin() as conn:
+        # Memory visibility fixtures are independent from the separately tested LLM summary job.
+        conn.execute(
+            text(
+                "update public.conversations set summary="
+                "'読書の楽しみを話題にしたが、具体的な作品や結論には至らなかった。'"
+            )
+        )
         return conn.execute(text("select id from public.conversations")).scalar_one()
 
 
@@ -281,17 +288,17 @@ def test_memory_list_hides_deleted_source_participant_before_purge(
         assert body["next_cursor"] is None
 
 
-def source(conn, pair, utterances, *, days=0):
+def source(conn, pair, utterances, *, days=0, summary=None):
     from datetime import timedelta
 
     conversation = uuid.uuid4()
     at = datetime.now(UTC) - timedelta(days=days)
     conn.execute(
         text(
-            "insert into public.conversations (id,status,created_at,ended_at) "
-            "values (:id,'completed',:at,:at)"
+            "insert into public.conversations (id,status,created_at,ended_at,summary) "
+            "values (:id,'completed',:at,:at,:summary)"
         ),
-        {"id": conversation, "at": at},
+        {"id": conversation, "at": at, "summary": summary},
     )
     for ordinal, agent in enumerate(pair, 1):
         conn.execute(
@@ -354,11 +361,7 @@ def test_concurrent_extraction_screens_quotes_and_is_idempotent(engine, ai_pair)
         assert all(row.importance == 3 and len(row.dedupe_key) == 64 for row in rows)
         assert all("確定事実ではない" in row.text for row in rows)
         summary = recent_summary(conn, ai_pair[0], ai_pair[1])
-        assert summary and "自分のAI" in summary and "相手のAI" in summary
-        assert all(
-            value not in summary
-            for value in ("example.com", "ignore previous", "PRIVATE_SENTINEL", "sk-ant-")
-        )
+        assert summary is None  # Extracting memories no longer pretends a transcript is a summary.
         extract_completed(conn, conversation)
         assert conn.execute(text("select count(*) from public.memories")).scalar_one() == 6
         relation = conn.execute(text("select * from public.agent_relationships")).one()
@@ -388,7 +391,7 @@ def test_extraction_rollback_is_recovered_by_pending_consumer(engine, ai_pair, m
 @pytest.mark.parametrize("ai_pair", [3], indirect=True)
 def test_context_limits_order_partner_retention_and_summary(engine, ai_pair):
     with engine.begin() as conn:
-        current = source(conn, ai_pair[:2], ["最新の会話です。"])
+        current = source(conn, ai_pair[:2], ["最新の会話です。"], summary="最新の会話の要約です。")
         unrelated = source(conn, (ai_pair[0], ai_pair[2]), ["別の相手との会話です。"])
         expired = source(conn, ai_pair[:2], ["期限切れの会話です。"], days=91)
         for conv in (current, unrelated, expired):
@@ -461,7 +464,11 @@ def test_next_worker_turn_uses_authorized_memory_and_rechecks_deletion(
 
     with engine.begin() as conn:
         previous = source(
-            conn, ai_pair, ["図書館について話した記録です。", "自然の話もしました。"], days=1
+            conn,
+            ai_pair,
+            ["図書館について話した記録です。", "自然の話もしました。"],
+            days=1,
+            summary="図書館と自然を題材に、それぞれの楽しみ方を話し合った。",
         )
         extract_completed(conn, previous)
         conn.execute(text("update public.agent_settings set autonomy_enabled=true"))

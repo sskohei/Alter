@@ -217,6 +217,8 @@ class FakeLLM:
         output: dict[str, Any]
         if call.body["schema"] == "SafetyVerdict":
             output = {"allowed": True}
+        elif call.body["schema"] == "SummaryText":
+            output = {"summary": "読書の楽しみを話題にしたが、具体的な作品や結論には至らなかった。"}
         elif call.body["schema"] == "ProfileInput":
             output = {
                 name: []

@@ -33,7 +33,7 @@ def model_price() -> ModelPrice:
 
 
 def session_generation_reservation() -> Decimal:
-    """Whole-session bound per AI: four generations; MVP summaries use no extra LLM.
+    """Dialogue bound per AI: four generations; summaries are admitted separately.
 
     Provider retries are allowed only when confirmed unbilled; unknown billing stops
     the session and retains its reservation. Additional billable moderation/summary
@@ -45,6 +45,14 @@ def session_generation_reservation() -> Decimal:
 # Independent safety classification has its own tight, separately counted bound.
 MODERATION_INPUT_TOKENS: Final = 512
 MODERATION_OUTPUT_TOKENS: Final = 16
+SUMMARY_MODERATION_INPUT_TOKENS: Final = 768
+
+
+def summary_reservation() -> Decimal:
+    """One summary generation and its independent review, within existing budget caps."""
+    return model_price().cost(MAX_INPUT_TOKENS, MAX_OUTPUT_TOKENS) + model_price().cost(
+        SUMMARY_MODERATION_INPUT_TOKENS, MODERATION_OUTPUT_TOKENS
+    )
 
 
 def call_reservation() -> Decimal:
