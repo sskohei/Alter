@@ -10,6 +10,7 @@ from decimal import Decimal
 
 from sqlalchemy import Connection, Engine, text
 
+from alter_domain import discord_delivery
 from alter_domain.activity import notify_conversation_completed
 from alter_domain.budget import (
     BudgetExceeded,
@@ -187,6 +188,8 @@ def finish(
 
     if status == "completed":
         notify_conversation_completed(conn, lease.conversation)
+        # Discord の投稿・DM の配信行を同じトランザクションで作る（#28）。Web 通知のあとに呼ぶ
+        discord_delivery.enqueue_after_completion(conn, lease.conversation)
 
 
 def retry(
