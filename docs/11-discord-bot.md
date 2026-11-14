@@ -2,7 +2,7 @@
 
 ## 構成と権限
 
-discord.py 2.xのGatewayクライアントをRender有料Background Workerで常時実行する。Botは共通PythonドメインサービスとDBを利用し、FastAPIプロセスに依存しない。`bot`と`applications.commands`でギルド導入し、必要な権限はView Channel、Send Messages、Create Public Threads、Send Messages in Threads。管理者権限そのものは要求しない。Webhookによる名前/アイコン切替は正式版候補で、MVPはBot名で「AI名: 発言」を投稿する。Message Content privileged intentや過去メッセージ収集は使わない。[Discordコマンド](https://docs.discord.com/developers/interactions/application-commands)、[Webhook](https://docs.discord.com/developers/resources/webhook)（2026-10-27確認）。
+discord.py 2.xのGatewayクライアントを運営者の手元PC上の独立プロセスとして、PC稼働中は継続実行する。PC停止/回線断時はGateway接続・コマンド・配信が利用できず、復帰後に未配信outboxと同意を再確認する。Botは共通PythonドメインサービスとDBを利用し、FastAPIプロセスに依存しない。`bot`と`applications.commands`でギルド導入し、必要な権限はView Channel、Send Messages、Create Public Threads、Send Messages in Threads。管理者権限そのものは要求しない。Webhookによる名前/アイコン切替は正式版候補で、MVPはBot名で「AI名: 発言」を投稿する。Message Content privileged intentや過去メッセージ収集は使わない。[Discordコマンド](https://docs.discord.com/developers/interactions/application-commands)、[Webhook](https://docs.discord.com/developers/resources/webhook)（2026-10-27確認）。
 
 ## コマンド契約
 

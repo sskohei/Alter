@@ -7,35 +7,62 @@ apps/web/                 Next.js App Router
 apps/api/                 FastAPI HTTP入口
 apps/worker/              DBジョブ処理
 apps/discord_bot/         discord.py Gateway/Slash Commands
-apps/scheduler/           Render Cronの短命入口
+apps/scheduler/           OS定期実行から呼ぶ短命入口
 backend/alter_domain/     Python共通ドメインパッケージ
 packages/api-client/      OpenAPI生成TypeScriptクライアント
 supabase/migrations/      SQL/RLS唯一のDDL正本
 docs/                     本仕様と意思決定
 .github/workflows/        lint/test/OpenAPI差分
-render.yaml               Render Blueprint（デプロイIssueで追加予定）
 pnpm-workspace.yaml
 pyproject.toml            uv workspace
-docker-compose.yml        ローカル補助（任意、現在は未使用）
+docker-compose.yml        手元PCのプロセス管理候補（未実装、#34で方式選定）
 .env.example              ダミー値・取得先・必須/任意
 ```
 
-`uv`でPythonの共通パッケージをworkspace依存にし、Render各サービスはrepo rootをbuild contextとして同じlockfileを使う。`pnpm`もlockfileをrootに置く。ローカルはSupabase CLIでDB/Authを起動し、`uv run`でAPI/Worker/Bot（Botはテスト用ギルド）、`pnpm --filter web dev`でWebを起動する。`docker-compose.yml`は任意の`api`/`worker`/`bot`プロファイルと環境変数読み込みを定義し、DB/AuthはSupabase CLIのローカル環境を参照する。Compose内に別のDBを作らない。CIではRuff、mypy、pytest、ESLint、TypeScript、Vitest、Playwrightの必要ゲートを実行する。
+`uv`でPythonの共通パッケージをworkspace依存にし、手元PCの各Pythonプロセスはrepo rootと同じlockfileを使う。`pnpm`もlockfileをrootに置く。ローカルはSupabase CLIでDB/Authを起動し、`uv run`でAPI/Worker/Bot（Botはテスト用ギルド）、`pnpm --filter web dev`でWebを起動する。この開発環境のローカルSupabaseと、MVP運用時のクラウドSupabaseを区別する。MVP運用ではDBをPC上に追加せず、Supabase Freeの環境別プロジェクトへ接続する。OSサービス管理またはDocker Composeによる起動/再起動の具体化は #34 で行う。CIではRuff、mypy、pytest、ESLint、TypeScript、Vitest、Playwrightの必要ゲートを実行する。
 
-Issue #2で開発用雛形を配置済み。固定バージョン、初回設定、起動・停止・reset、Mockの制約は[README](../README.md#ローカル開発最初に実行)を参照。現時点の各入口は起動確認用で、業務処理・認証・本番デプロイは後続Issueで実装する。
+Issue #2で開発用雛形を配置済み。固定バージョン、初回設定、起動・停止・reset、Mockの制約は[README](../README.md#ローカル開発最初に実行)を参照。認証/人格/活動等のAPIは実装済み。SchedulerのDB交流予約は #19 で実装済み。Workerの本番処理と実配置の受け入れは後続Issueで継続する。本節のPC起動設定・HTTPS公開経路・定期実行・バックアップは配置契約であり、本変更では実装/設定していない。
 
 ## 配置と起動
 
 | サービス | 配置 | 起動と重要設定 |
 |---|---|---|
-| Next.js | Vercel | `apps/web`、Preview/Productionを別環境。FastAPI URLとSupabase URL/Publishable Keyを公開設定 |
-| FastAPI | Render有料Web Service | `uvicorn ... --host 0.0.0.0 --port $PORT`、health/readiness、CORS許可Origin固定。`ALTER_ENVIRONMENT=production`では`/docs`・`/redoc`を出さない |
-| Worker | Render有料Background Worker | ジョブループ、並列数1から開始、lease更新と終了シグナル対応 |
-| Bot | Render有料Background Worker | Gateway常時接続、再接続、コマンド同期はデプロイ時のみ |
-| Scheduler | Render Cron Job | `*/15 * * * *` UTC、1回実行で終了。DB一意制約で多重作成抑止 |
-| DB/Auth | Supabase | 本番とPreviewは別プロジェクト。RLS、バックアップ、Auth redirect allowlist |
+| Next.js | Vercel Hobby | `apps/web`、Preview/Productionを別環境。公開HTTPSのFastAPI URLと環境別Supabase URL/Publishable Keyを設定 |
+| FastAPI | 手元PCの独立プロセス | loopbackで待受け、HTTPS経路を中継。health/readiness、CORS許可Origin固定。`ALTER_ENVIRONMENT=production`では`/docs`・`/redoc`を出さない |
+| Worker | 手元PCの独立プロセス | ジョブループ、並列数1から開始、lease更新と終了シグナル対応 |
+| Bot | 手元PCの独立プロセス | PC稼働中はGateway接続、再接続、コマンド同期は配置時のみ |
+| Scheduler | 手元PCのOS定期実行 | UTC `*/15 * * * *`、1回実行で終了。DB一意制約とOS側の重複起動抑止 |
+| DB/Auth | Supabase Free | 本番/Previewは別プロジェクト。RLS、Auth redirect allowlist。バックアップを別途取得 |
 
-BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制約](https://render.com/docs/free)では無料Webが15分無通信で停止し、Background Workerに無料プランがない。[Cron公式](https://render.com/docs/cronjobs)は月額最低$1で、UTC指定。確認日2026-10-27。API・Bot・Workerを単一サービスに詰める案は障害分離とデプロイ単位を損なうため採用しない。RedisはMVP不要。
+2026-11-14の方針変更（ADR-015、#75）によりRenderへの配置とBlueprint作成は行わない。API・Worker・Botのプロセス境界は保つが、PC・電源・回線は共有する。RedisはMVP不要。
+
+### 無料枠と利用可能時間
+
+Vercel Hobbyは個人・非商用の利用条件と使用量上限を満たす範囲で使う。Supabase Freeは無料プロジェクト数の上限内で本番/Previewを分離し、DB/Storage/転送量と非稼働時の休止条件を確認する。自動バックアップを前提としない。無料枠を超える場合や用途条件を満たさない場合は、公開前にプラン/構成を再検討する。[Vercel Hobby](https://vercel.com/docs/plans/hobby)、[Supabase Free](https://supabase.com/pricing)（確認日2026-11-14）。
+
+運営者はPCの稼働時間を参加者へ案内する。ブラウザを閉じてもPCが稼働していれば生成するが、電源OFF/スリープ/OS再起動/回線断ではAPI・交流・Discord・パージが停止する。WebやAuthが表示できても、APIが必要な閲覧/操作は失敗し得る。WebはAPI障害を表示し、Mock/ローカルAPI/DB直接更新へ自動退避しない。PC停止中の削除依頼窓口と復旧予定を私的経路で案内し、パージ期限を延長しない。
+
+### 公開Webから手元PCへの接続（#34、#35）
+
+- ブラウザとVercelのSSR/Server Routeから到達できる公開HTTPS API URLを確保する。`NEXT_PUBLIC_API_URL=http://localhost:8000`はローカル開発専用であり、公開Webには設定しない。
+- 手元PCから外向きに接続するHTTPSトンネル等を基本候補とする。提供元・無料条件・URL固定可否・認証方式は #34 で選定/検証する。公開経路はAPIだけに限定し、DB/SSH/管理画面を公開しない。無料の固定URLを確保できない場合は費用/方式を再検討する。
+- APIはloopbackで待受け、中継先をそのポートに固定する。追加の中継認証を使う場合は、ブラウザからのBearer付き要求・CORS preflightとVercelからの通信を妨げないことを確認する。JWT/招待/所有権確認はAPI自身が維持する。
+- Vercelの`NEXT_PUBLIC_API_URL`へ公開HTTPS URLを設定して再ビルド/再配置する。`WEB_URL`と`CORS_ORIGINS`は対象WebのOrigin、SupabaseのSite URL/Redirect allowlistとDiscord OAuth redirectはWeb callbackに合わせる。APIのURLが変わっただけならWeb callbackをAPIへ変更しない。
+- Preview/ProductionはSupabaseだけでなくAPIのプロセス・待受ポート・公開URL・環境ファイルも分離する。同じPCを共用してもPreviewの要求/秘密をProductionへ流さない。CORSへ任意のPreview URLをワイルドカード登録しない。
+
+### PC上の起動と停止（#34）
+
+repo rootで`uv sync --all-packages --locked`を行い、専用の実行ユーザーで環境ごと・プロセスごとに起動する。運用用checkoutに開発用root `.env`を残さず、OSサービスから対象環境の設定だけを渡す。API運用時は`uv run --package alter-api uvicorn alter_api.main:app --host 127.0.0.1 --port 8000`を基本とし、開発用のreload付き入口を常用しない。Previewは別ポートとする。Worker/BotはREADMEの入口を使い、対応するlive実装の完了後に有効化する。
+
+OSのサービス管理（Linuxならsystemd等）でAPI・Worker・Bot・HTTPS中継を個別に管理し、起動順・作業ディレクトリ・環境ファイル・終了シグナル・再起動回数の制限・本文/秘密を含めないログを設定する。自動起動と自動再起動を検証し、PCのスリープを稼働時間中は無効にする。OSや運用スクリプトの具体化は #34 で行う。
+
+Schedulerは`ALTER_MODE=live`かつ`SCHEDULER_ENABLED=true`でDB交流予約を行う（既定無効、LLMキー不要）。OS側のタイムゾーンをUTCに明示した15分定期実行とし、repo rootで`uv run --package alter-scheduler alter-scheduler`を1回だけ実行する。OSロック等で前回の実行中は次の起動を抑止し、DBの一意制約も併用する。停止中に逃した全スロットを復帰時に再生せず、現在の枠から再開する。
+
+計画停止では定期実行を止め、Worker/Botが新規claimしないようにして進行中処理を制限時間内に終了させ、APIと中継を停止する。強制停止後もジョブや予約を手動で一括削除しない。復旧では時刻同期・回線・DB接続・migration版を確認し、失効/削除要求と課金/投稿の結果不明を照合する。失効leaseはDBジョブの規則で回収し、投稿結果不明や課金不明を自動再送/再課金/予約解放しない。確認後にAPI→Worker→Bot→定期実行を再開する。
+
+### バックアップと復元（#33、#36）
+
+Supabase Freeでマネージド自動バックアップは利用できる前提にしない。運営者は少なくとも稼働日ごと、およびmigration前にDBバックアップを取得し、PCディスク故障に備えて暗号化した別の保存先へ保管する。Auth/Storage/DBのどのデータが復元対象か、保持期限と削除/失効の再適用方法を #33/#36 で具体化し、公開前に復元演習を行う。鍵はDBバックアップと分けて暗号化保管する。バックアップの保存期間/削除は[運用契約](23-invitation-consent-operations.md)の公開ゲートに従う。
 
 ## 環境変数と秘密
 
@@ -43,10 +70,10 @@ BotとWorkerは無料Web Serviceでは常時動作しない。[Render無料制�
 |---|---|---|
 | Web | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_API_URL` | 公開可。秘密を`NEXT_PUBLIC_`へ置かない |
 | Web server | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | SSRクライアント。公開可能な値だがサーバー設定にも保持 |
-| API | `ALTER_ENVIRONMENT`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `WEB_URL`, `CORS_ORIGINS`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `PROFILE_ENCRYPTION_KEY_V1` | DB/OAuth/暗号鍵はRender Secret。`CORS_ORIGINS`はCSVで明示 |
+| API | `ALTER_ENVIRONMENT`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE`, `WEB_URL`, `CORS_ORIGINS`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `PROFILE_ENCRYPTION_KEY_V1` | DB/OAuth/暗号鍵はPCのAPI専用環境ファイル/OS秘密管理。`CORS_ORIGINS`はCSVで明示 |
 | Worker | `DATABASE_URL`, `ANTHROPIC_API_KEY`, `LLM_MODEL`, `MAX_DAILY_COST_USD`, `JOB_LEASE_SECONDS` | LLMキーをWebに渡さない |
-| Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはRender Secret |
-| Cron | `ALTER_MODE=live`, `SCHEDULER_ENABLED=true`, `DATABASE_URL`, `SCHEDULER_BATCH_SIZE`, `MAX_DAILY_COST_USD` | 15分ごとに`uv run --package alter-scheduler alter-scheduler`を1回実行。LLMキー不要、既定無効 |
+| Bot | `DATABASE_URL`, `DISCORD_BOT_TOKEN`, `WEB_URL`, `DISCORD_CLIENT_ID` | Bot tokenはPCのBot専用環境ファイル/OS秘密管理 |
+| Scheduler（OS定期実行） | `ALTER_MODE=live`, `SCHEDULER_ENABLED=true`, `DATABASE_URL`, `SCHEDULER_BATCH_SIZE`, `MAX_DAILY_COST_USD` | 15分ごとに`uv run --package alter-scheduler alter-scheduler`を1回実行。LLMキー不要、既定無効 |
 | DB migration | `SUPABASE_DB_URL` | CI/管理者のみ。通常サービスに配らない |
 
 ### APIの環境別設定（#34、#35 と対応）
@@ -59,7 +86,7 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 | `SUPABASE_URL` | `http://127.0.0.1:54321` | Preview用Supabaseプロジェクト | 本番用Supabaseプロジェクト |
 | `SUPABASE_JWT_ISSUER` | `http://127.0.0.1:54321/auth/v1` | `https://<preview-project>.supabase.co/auth/v1` | `https://<prod-project>.supabase.co/auth/v1` |
 | `SUPABASE_JWT_AUDIENCE` | `authenticated` | `authenticated` | `authenticated` |
-| `SUPABASE_SECRET_KEY` | `supabase status`のSecret | その環境のSecret Key（Render Secret） | その環境のSecret Key（Render Secret） |
+| `SUPABASE_SECRET_KEY` | `supabase status`のSecret | その環境のSecret Key（PCのAPI専用秘密管理） | その環境のSecret Key（PCのAPI専用秘密管理） |
 | `CORS_ORIGINS` | `http://localhost:3000` | VercelのPreview用`NEXT_PUBLIC_SITE_URL`と完全一致 | VercelのProduction用`NEXT_PUBLIC_SITE_URL`と完全一致 |
 
 `SUPABASE_SECRET_KEY`はAPI/運営CLIだけに置き、Web・Worker・Bot・Cronへ渡さない。`CORS_ORIGINS`に`*`は指定できない（起動時に拒否）。
@@ -68,7 +95,7 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 
 `/openapi.json`はすべての環境で公開する（Vercelのスモーク確認とTypeScript生成に使い、APIの形だけで秘密は含まない）。Swagger UIの`/docs`とReDocの`/redoc`は`ALTER_ENVIRONMENT=production`のときだけ無効にし（404）、local/Previewでは従来どおり表示する。`ALTER_ENVIRONMENT`は`local`/`preview`/`production`以外の値を起動時に拒否し、綴りの誤りで本番の画面が開いたままにならないようにする。
 
-`.env.example`には上の変数名・ダミー値・取得先・必須/任意を記載し、実値はGitに入れない。RenderのEnvironment Groupは共通非秘密値だけ、秘密はサービス単位。Discord OAuth secretはコールバックを処理するAPIだけに置く。Supabase server secretは通常CRUDに使わず、Authユーザー削除・招待時のidentity照合の限定管理操作だけに使用し、専用環境変数`SUPABASE_SECRET_KEY`をAPIに限定する。
+`.env.example`には上の変数名・ダミー値・取得先・必須/任意を記載し、実値はGitに入れない。PCでは環境/プロセスごとに秘密を分け、実行ユーザーのみ読取可能な環境ファイル（Unixなら`chmod 600`）またはOS秘密管理へ置く。運用ファイルはリポジトリ外に保管し、コマンド引数・ログ・同期共有フォルダーへ秘密を出さない。API専用鍵をWorker/Bot/Schedulerの環境へ一括配布しない。Discord OAuth secretはコールバックを処理するAPIだけに置く。Supabase server secretは通常CRUDに使わず、Authユーザー削除・招待時のidentity照合の限定管理操作だけに使用し、専用環境変数`SUPABASE_SECRET_KEY`をAPIに限定する。
 
 ## 招待管理の運営手順（ADR-014、#7で実装）
 
@@ -78,11 +105,12 @@ Preview/Productionでそれぞれ設定し、他の環境の値を流用しな�
 
 ## デプロイ手順
 
-1. Supabaseの本番/Previewプロジェクトを作り、Google/GitHub OAuth、Redirect URL、JWT signing、バックアップを設定する。
-2. CIでSQL migrationを検証し、本番へのDDLはレビュー済みSQLを一方向適用。下位互換migrationを先行する。
-3. RenderのAPI→Worker→Bot→CronをBlueprintで配置し、Secretsを個別設定。SupabaseへのTLS接続とIPv4/プーラー方式を実環境で検証する。[Supabase接続](https://supabase.com/docs/guides/database/connecting-to-postgres)。
-4. Vercel PreviewでE2E、ProductionでAuth callbackとCORSを確認し、Discordテストギルドへ1件投稿する。
-5. rollbackはアプリを前版へ戻す。破壊的DDLは別リリースで実行する。DBバックアップ復元手順を定期演習する。
+1. Vercel Hobbyの用途/使用量、Supabase Freeのプロジェクト数/容量と休止条件を確認し、本番/Previewの別プロジェクト、Google/GitHub OAuth、Redirect URL、JWT signingとバックアップを設定する（#33、#35）。
+2. CIでSQL migrationを検証し、Previewへ先行適用する。本番へのDDLはレビュー済みSQLを一方向適用し、下位互換migrationを先行する。
+3. 手元PCの実行ユーザー・プロセス別秘密・OSサービス・UTC定期実行・HTTPS公開経路を設定し、API→Worker→Bot→Schedulerを起動する（#34）。SupabaseへのTLS/IPv4/プーラー接続をPCから検証する。[Supabase接続](https://supabase.com/docs/guides/database/connecting-to-postgres)。
+4. Vercelへ公開HTTPS API URLを設定し、別端末からPreviewでE2E、ProductionでAuth callback・CORS・SSR疎通を確認する。Discordテストギルドへの投稿は対象/予算を確認して行う（#35、#37）。
+5. PC停止/スリープ/回線断、独立プロセス再起動、lease回収、停止枠の非再生、課金/投稿結果不明の保留、期限内パージ、バックアップ復元を確認する（#36、#37）。
+6. rollbackは定期実行・Worker/Botを停止してアプリを前版へ戻す。破壊的DDLは別リリースで実行する。復元時は失効/削除を再適用してから再開する。常時利用が必要になったら有料基盤への移行を再検討する。
 
 ### 自律交流ONを有効にする設定（#14・#16・#24）
 
