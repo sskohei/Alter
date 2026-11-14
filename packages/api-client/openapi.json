@@ -890,6 +890,24 @@
         "title": "IconUpload",
         "type": "object"
       },
+      "ManualInteractionOptions": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "unlimited_daily_count": {
+            "title": "Unlimited Daily Count",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "unlimited_daily_count"
+        ],
+        "title": "ManualInteractionOptions",
+        "type": "object"
+      },
       "Memory": {
         "properties": {
           "created_at": {
@@ -1590,6 +1608,20 @@
           "expected_version"
         ],
         "title": "RevisionInput",
+        "type": "object"
+      },
+      "StartedConversation": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "StartedConversation",
         "type": "object"
       },
       "SuggestionInput": {
@@ -3150,6 +3182,216 @@
           }
         ],
         "summary": "\u81ea\u5206\u306e AI \u304c\u53c2\u52a0\u3057\u305f\u4f1a\u8a71\u306e\u4e00\u89a7\uff08\u65b0\u3057\u3044\u9806\uff09",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
+    "/api/v1/conversations/start": {
+      "get": {
+        "operationId": "get_manual_interaction_options",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualInteractionOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "Manual Interaction Options",
+        "tags": [
+          "activity"
+        ]
+      },
+      "post": {
+        "operationId": "start_conversation",
+        "parameters": [
+          {
+            "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\u540c\u3058\u64cd\u4f5c\u306e\u518d\u9001\u3092\u8b58\u5225\u3059\u308b\u30ad\u30fc\u3002\u5370\u5b57\u53ef\u80fd\u306a ASCII 8\u301c255 \u6587\u5b57\uff08UUID \u63a8\u5968\uff09",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartedConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u30ed\u30fc\u30ab\u30eb\u30c7\u30e2\u3067\u672c\u4eba\u306eAI\u306e\u4ea4\u6d41\u30921\u4ef6\u4e88\u7d04\u3059\u308b\uff08\u65e5\u6b21\u56de\u6570\u5236\u9650\u306a\u3057\uff09",
         "tags": [
           "activity"
         ]

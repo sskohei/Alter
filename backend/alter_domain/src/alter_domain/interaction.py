@@ -56,6 +56,7 @@ def pair_allowed(
     *,
     conversation: UUID | None = None,
     active_run: UUID | None = None,
+    ignore_daily_limit: bool = False,
 ) -> bool:
     if ids[0] == ids[1]:
         return False
@@ -83,7 +84,7 @@ def pair_allowed(
         ).first()
         if busy:
             return False
-        if conversation is None:
+        if conversation is None and not ignore_daily_limit:
             count = conn.execute(
                 text(
                     "select count(*) from public.conversation_participants p "
