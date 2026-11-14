@@ -216,6 +216,15 @@ def test_history_lists_links_without_content(engine: Engine, pair: tuple[Person,
     me, other = pair
     with engine.begin() as conn:
         convs = [_conversation(conn, me.agent, other.agent) for _ in range(12)]
+        # 同じトランザクション内の now() は同じ時刻になるので、並び順が決まるようにずらす
+        for minutes_ago, conv in enumerate(reversed(convs)):
+            conn.execute(
+                text(
+                    "update public.conversations "
+                    "set created_at = now() - make_interval(mins => :m) where id = :c"
+                ),
+                {"m": minutes_ago, "c": conv},
+            )
         old = _conversation(conn, me.agent, other.agent)
         conn.execute(
             text(
