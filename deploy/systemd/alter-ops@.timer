@@ -1,0 +1,12 @@
+[Unit]
+Description=Alter ops status check every 15 minutes (%i)
+
+[Timer]
+OnCalendar=*-*-* *:05/15:00 UTC
+# 状態確認は最新の値だけを見ればよいので、逃した回は再生しない
+Persistent=false
+AccuracySec=1min
+Unit=alter-ops@%i.service
+
+[Install]
+WantedBy=timers.target
