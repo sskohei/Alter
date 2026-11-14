@@ -18,6 +18,7 @@ QUIET: dict[str, Any] = {
         }
     },
     "llm_unsettled": dict.fromkeys(ops.UNSETTLED_LLM, 0) | {"generating": 2},
+    "llm_stale": 0,
     "llm_invocations": {"started": 1},
     "cost": {"exposure_usd": "0.799999", "daily_limit_usd": "1.00"},
     "discord": {
@@ -52,6 +53,7 @@ def test_quiet_state_has_no_alerts() -> None:
         ("jobs.conversation.failed_24h", 1, "jobs_failed:conversation"),
         ("llm_unsettled.unknown", 1, "llm_unknown_outcome"),
         ("llm_invocations.unknown", 1, "llm_unknown_outcome"),
+        ("llm_stale", 1, "llm_stale_in_flight"),
         ("cost.exposure_usd", "0.800000", "budget_near_limit"),
         ("discord.posts.needs_review", 1, "discord_needs_review"),
         ("discord.dms.needs_review", 1, "discord_needs_review"),

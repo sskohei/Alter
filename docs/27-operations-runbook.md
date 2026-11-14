@@ -22,6 +22,7 @@ uv run alter-ops --env production --operator sskohei status --json   # 監視・
 | `lease_expired:<kind>` | 実行中のままリースが5分以上切れている | プロセスの異常終了の可能性。次の取り出しで自動回収されるので、手動で消さない。続く場合はWorkerを再起動する |
 | `jobs_failed:<kind>` | 24時間以内に失敗で打ち切ったジョブ | `last_error`のコードを確認する。`account.purge`なら §5 |
 | `llm_unknown_outcome` | LLMの呼び出し結果が分からない実行がある | §4。自動で再実行・解放しない |
+| `llm_stale_in_flight` | 結果不明以外の未確定の実行が15分以上止まっている（プロセスの異常終了など） | §4。Worker・APIが動いているか確認してから照合する |
 | `budget_near_limit` | 今日（UTC）の費用の見込みが`MAX_DAILY_COST_USD`の80%以上 | §6 |
 | `discord_needs_review` | Discordの投稿・DMで要確認がある | §3 |
 | `discord_cleanup_failed` | 削除済みアカウントのスレッド削除が打ち切りになった | ギルド管理者にスレッドの削除を依頼する（docs/11）。`forbidden`は警告にしない（MVPのBotは権限を持たないため想定内） |
@@ -77,11 +78,28 @@ DM（dm）: Discordのユーザー ID は一覧に出さない。本人に私的
 
 ## 4. LLMの結果不明の照合
 
-`status`の「LLM 未確定」のうち`unknown`（`llm_runs`）と、`llm_invocations`の`unknown`が対象。Workerは結果が分からない呼び出しを再実行せず、予算の予約も保持したままにする（docs/08・09）。
+対象は`status`の「LLM 未確定」の`unknown`と「止まっているもの」。Worker・APIは結果が分からない呼び出しを再実行せず、予算の予約も保持したままにする（docs/08・09）。照合はsskoheiだけが行う（APIキーとConsoleはsskoheiの環境にだけある）。
 
-1. Anthropic Consoleの使用量（日付・モデル・トークン数）と、`usage_records`の当日分を見比べる（照合はsskoheiだけが行う。APIキーはsskoheiの環境にだけある）。
-2. この版では結果不明の実行を確定させるCLIはない。件数が増え続ける・費用の見込みが上限に近い場合は、Workerの`LLM_ENABLED=false`で新しい呼び出しを止めてから、Bで確定用の手順を追加する（#36の残り）。
-3. 確定させる前に、該当するAI・会話を手動で削除しない（費用台帳のガードで止まる）。アカウント削除はこの間`llm_unsettled`で待つ。
+```
+uv run alter-ops --env production --operator sskohei llm-list
+```
+
+一覧には実行ID・種類（suggestion/conversation）・状態・結果が分からない段階（generation=生成、moderation=安全判定）・会話IDと会話の状態・予約額・確定できるか・更新日時だけが出る。
+
+1. 「進行中の可能性」の行は触らない（`unknown`以外で最後の更新から15分以内）。会話の実行は、会話が終わる（completed/failed/cancelled）まで確定できない。
+2. Anthropic Consoleの使用量（日時・モデル・トークン数）で、その時刻にその段階の要求が課金されたかを確認する。
+3. 課金されていた場合は、Consoleのトークン数で記録する。上限（生成は入力3,072・出力512、安全判定は入力512・出力16）を超える値は入力の誤りとして断る。
+   ```
+   uv run alter-ops --env production --operator sskohei llm-settle <実行ID> charged --input-tokens <入力> --output-tokens <出力>
+   ```
+4. 課金されていなかった、またはConsoleで見つからない場合:
+   ```
+   uv run alter-ops --env production --operator sskohei llm-settle <実行ID> not_charged
+   ```
+5. どちらも実行を`failed`（`unknown_outcome`）で終え、出力は使わない。提案の実行は残った予約をその場で解放する。会話の実行は、同じ会話の未確定の実行がすべて確定したときに、両参加者の会話の予約を解放する（もう一方が残っていれば、それも確定させる）。
+6. 確定すると、待っていたアカウント削除（`llm_unsettled`）も次のPurgeで進む。
+
+課金の記録は通常の実行と同じ鍵（`llm:<実行ID>:<段階>`）で行うので、同じ段階を二重に記録しない。本番では`production`の入力で確認する。監査には実行ID・結果・段階・トークン数・運営者名だけが残る。
 
 ## 5. アカウント削除の打ち切り・期限
 

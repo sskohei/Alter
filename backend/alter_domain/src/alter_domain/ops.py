@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from sqlalchemy import Connection, text
 
-from alter_domain import budget
+from alter_domain import budget, llm_reconcile
 from alter_domain.discord_delivery import _postable_channels
 
 # しきい値（運用手順 docs/27 と合わせる）
@@ -82,6 +82,17 @@ def snapshot(conn: Connection, now: datetime, *, max_daily_cost: Decimal) -> dic
         {"s": list(UNSETTLED_LLM)},
     ):
         llm[row.status] = row.n
+    # unknown 以外で状態が止まった実行（プロセスの異常終了など。docs/27 §4 で照合する）
+    llm_stale = conn.execute(
+        text(
+            "select count(*) from public.llm_runs where status = any(cast(:s as text[])) "
+            "and updated_at <= :stale"
+        ),
+        {
+            "s": [s for s in UNSETTLED_LLM if s != "unknown"],
+            "stale": now - timedelta(minutes=llm_reconcile.STALE_MINUTES),
+        },
+    ).scalar_one()
     invocations = {
         str(status): int(n)
         for status, n in conn.execute(
@@ -135,6 +146,7 @@ def snapshot(conn: Connection, now: datetime, *, max_daily_cost: Decimal) -> dic
         "at": now.isoformat(),
         "jobs": jobs,
         "llm_unsettled": llm,
+        "llm_stale": int(llm_stale),
         "llm_invocations": invocations,
         "cost": {
             "charged_today_usd": str(usage.charged),
@@ -168,6 +180,8 @@ def alerts(snap: dict[str, Any]) -> list[str]:
             found.append(f"jobs_failed:{kind}")
     if snap["llm_unsettled"]["unknown"] or snap["llm_invocations"].get("unknown"):
         found.append("llm_unknown_outcome")
+    if snap["llm_stale"]:
+        found.append("llm_stale_in_flight")
     cost = snap["cost"]
     limit = Decimal(cost["daily_limit_usd"])
     if limit > 0 and Decimal(cost["exposure_usd"]) >= limit * BUDGET_ALERT_RATIO:
