@@ -1,5 +1,5 @@
-import type { components } from "./preview-schema";
-export function createDiscordMock(withGuild: boolean, disconnect: () => void) {
+import type { components } from "./schema";
+export function createDiscordMock(withGuild: boolean) {
   let connected = false;
   let revoked = false;
   const states = new Map<string, { expires: number; used: boolean }>();
@@ -14,7 +14,6 @@ export function createDiscordMock(withGuild: boolean, disconnect: () => void) {
         connected = false;
         revoked = true;
         states.clear();
-        disconnect();
         return new Response(null, { status: 204 });
       }
       return Response.json(connection());

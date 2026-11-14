@@ -4,8 +4,9 @@ import { useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
 import { interactionBudgetSchema, type BudgetValues } from "../lib/interaction-budget";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ApiError, unwrap, type components } from "@alter/api-client/preview";
-import { browserApi } from "../lib/api-browser";
+import { ApiError, unwrap, type components } from "@alter/api-client";
+import { activityApi } from "../lib/api-browser";
+import { useRetryAfter } from "../lib/use-retry-after";
 import { useResource } from "../lib/use-resource";
 import type { LlmDisclosure } from "../lib/interaction-policy";
 import { costLabel } from "../lib/activity";
@@ -33,7 +34,7 @@ export function InteractionSettings({
   disclosure: LlmDisclosure | null;
 }) {
   const load = useCallback(async (signal: AbortSignal) => {
-    const api = browserApi();
+    const api = activityApi();
     let agent: Agent;
     try {
       agent = await unwrap(await api.GET("/api/v1/agents/me", { signal }));
@@ -52,7 +53,7 @@ export function InteractionSettings({
   const resource = useResource(load);
   const guildLoad = useCallback(
     (signal: AbortSignal) =>
-      browserApi().GET("/api/v1/discord/guilds", { signal }).then(unwrap),
+      activityApi().GET("/api/v1/discord/guilds", { signal }).then(unwrap),
     [],
   );
   const guilds = useResource(guildLoad);
@@ -118,6 +119,7 @@ function SettingsForm({
     defaultValues: initial,
   });
   const [busy, setBusy] = useState(false);
+  const retry = useRetryAfter();
   const [error, setError] = useState<unknown>(null);
   const [startFailed, setStartFailed] = useState(false);
   const [message, setMessage] = useState("");
@@ -133,13 +135,14 @@ function SettingsForm({
     destinations.length > 0 &&
     destinations.every((g) => g.channel_id && g.guild_name && g.channel_name);
   async function patch(body: components["schemas"]["AgentSettingsPatch"]) {
+    if (retry.seconds && body.autonomy_enabled !== false && body.discord_publish !== false) return;
     setBusy(true);
     setError(null);
     setStartFailed(false);
     setMessage("");
     try {
       const saved = await unwrap(
-        await browserApi().PATCH("/api/v1/agents/{id}/settings", {
+        await activityApi().PATCH("/api/v1/agents/{id}/settings", {
           params: { path: { id: agent.id } },
           body,
           headers: { "Idempotency-Key": crypto.randomUUID() },
@@ -155,6 +158,7 @@ function SettingsForm({
       setAgreed(false);
       setMessage("設定を保存しました。");
     } catch (cause) {
+      retry.defer(cause);
       setStartFailed(body.autonomy_enabled === true);
       setError(cause);
     } finally {
@@ -183,7 +187,7 @@ function SettingsForm({
     }
     if (intent.kind === "stop") await patch({ autonomy_enabled: false });
     if (intent.kind === "publish") {
-      if (!agreed || !publishReady) return;
+      if (!agreed || !publishReady || agent.status !== "active" || !agent.approved_profile_version) return;
       await patch({ discord_publish: true });
     }
     if (intent.kind === "unpublish") await patch({ discord_publish: false });
@@ -197,6 +201,12 @@ function SettingsForm({
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      {retry.seconds > 0 && <p role="status">再試行まで{retry.seconds}秒お待ちください。停止と公開撤回は操作できます。</p>}
+      {error instanceof ApiError && [403, 404, 409].includes(error.status) && !intent && (
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          最新の状態を読み直す（未保存の入力を破棄）
+        </Button>
+      )}
       <section className="card">
         <h2>自律交流: {settings.autonomy_enabled ? "ON" : "OFF"}</h2>
         <p>
@@ -232,7 +242,7 @@ function SettingsForm({
             </Button>
           ) : (
             <Button
-              disabled={busy || !disclosure || !agent.approved_profile_version || agent.status !== "active"}
+              disabled={busy || retry.seconds > 0 || !disclosure || !agent.approved_profile_version || agent.status !== "active"}
               onClick={handleSubmit((values) => propose("start", values))}
             >
               交流をONにする
@@ -285,7 +295,7 @@ function SettingsForm({
             ),
           )}
           <p>Webの公開範囲: 参加者限定（変更できません）</p>
-          <Button type="submit">{busy ? "保存中…" : "頻度・予算を保存"}</Button>
+          <Button type="submit" disabled={retry.seconds > 0}>{busy ? "保存中…" : "頻度・予算を保存"}</Button>
           {isDirty && (
             <p className="help">
               未保存の入力があります。上の状態表示は保存済みの値です。
@@ -307,7 +317,7 @@ function SettingsForm({
         )}
         <Button
           variant="outline"
-          disabled={busy || (!settings.discord_publish && !publishReady)}
+          disabled={busy || (!settings.discord_publish && (!publishReady || retry.seconds > 0 || agent.status !== "active" || !agent.approved_profile_version))}
           onClick={() =>
             propose(settings.discord_publish ? "unpublish" : "publish")
           }
@@ -405,6 +415,12 @@ function SettingsForm({
               状態表示は前回の確認値です。最新の状態を読み直してください。
             </p>
           )}
+          {retry.seconds > 0 && <p role="status">再試行まで{retry.seconds}秒お待ちください。</p>}
+          {error instanceof ApiError && [403, 404, 409].includes(error.status) && (
+            <Button variant="outline" disabled={busy} onClick={() => window.location.reload()}>
+              最新の状態を読み直す（未保存の入力を破棄）
+            </Button>
+          )}
           <div className="actions">
             <AlertDialogCancel asChild>
               <Button variant="outline" disabled={busy}>
@@ -415,6 +431,7 @@ function SettingsForm({
               <Button
                 disabled={
                   busy ||
+                  (retry.seconds > 0 && (intent?.kind === "start" || intent?.kind === "publish")) ||
                   ((intent?.kind === "start" || intent?.kind === "publish") &&
                     !agreed) ||
                   (intent?.kind === "start" &&
