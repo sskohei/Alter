@@ -2,7 +2,7 @@
 
 受付（``account_deletion.request_deletion``）が積んだジョブ ``account.purge`` を 1 件ずつ処理する。
 管理鍵（Auth・Storage）を使うため、API 側の運営 CLI（``alter-api-purge``）からだけ呼ぶ。
-Worker・Bot には管理鍵を渡さない（ADR-016）。
+Worker・Bot には管理鍵を渡さない（ADR-018）。
 
 1 件の流れ（どの段階も再実行してよい。途中で失敗したらジョブを再試行に戻す）
 1. 取り出し: ``for update skip locked`` でジョブを 1 件取り、``running`` とリース期限を付ける
