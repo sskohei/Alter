@@ -40,7 +40,7 @@ class AuthUser:
 class SupabaseAuthAdmin:
     def __init__(self, settings: Settings, http: httpx.Client) -> None:
         self._base_url = settings.supabase_url.rstrip("/")
-        self._secret_key = settings.supabase_secret_key
+        self._secret_key = settings.supabase_secret_key.get_secret_value()
         self._http = http
 
     def get_user(self, user_id: uuid.UUID) -> AuthUser | None:

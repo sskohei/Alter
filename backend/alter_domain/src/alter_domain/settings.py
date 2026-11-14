@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     profile_encryption_key_v1: SecretStr = SecretStr("")
     api_idempotency_hmac_keys: dict[PositiveInt, SecretStr] = Field(default_factory=dict)
     api_idempotency_hmac_active_version: PositiveInt = 1
-    database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres"
+    # 接続文字列にはパスワードが入るので repr に出さない（#32）
+    database_url: str = Field(
+        default="postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres", repr=False
+    )
     database_pool_size: int = Field(default=2, ge=1, le=5)
     database_max_overflow: int = Field(default=0, ge=0, le=2)
     cors_origins: str = "http://localhost:3000"
@@ -43,7 +46,7 @@ class Settings(BaseSettings):
     # JWKS を短時間キャッシュする秒数
     supabase_jwks_cache_seconds: int = 300
     # Supabase Auth 管理 API（招待の identity 照合）。API と運営 CLI のサーバー側だけで使う。
-    supabase_secret_key: str = ""
+    supabase_secret_key: SecretStr = SecretStr("")
     supabase_storage_secret_key: SecretStr = SecretStr("")
 
     # 交流設定（#16）。利用者が設定できる 1 体あたりの日次予算の上限（USD、小数 6 桁まで）
@@ -58,7 +61,7 @@ class Settings(BaseSettings):
 
     # Discord 本人連携（#26）。シークレットは API だけに置く（docs/14）。未設定なら連携 API は 503
     discord_client_id: str = ""
-    discord_client_secret: str = ""
+    discord_client_secret: SecretStr = SecretStr("")
     discord_redirect_uri: str = ""
 
     # Discord Bot（#27）。トークンは Bot プロセスだけに置く。Web の URL は案内リンクに使う

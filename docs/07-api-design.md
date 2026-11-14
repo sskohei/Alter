@@ -1,6 +1,6 @@
 # REST API契約 v1
 
-基点`/api/v1`、JSON、UTC ISO 8601、UUID。OpenAPIの`operationId`は固定し、FastAPIから`/openapi.json`を生成して`packages/api-client`に型・クライアントを生成する。エラー共通形は`{"error":{"code":"FORBIDDEN","message":"...","request_id":"uuid"}}`。一覧は`limit`（1〜50、既定20）と不透明`cursor`、返却は`{items,next_cursor}`。全書込はCSRF/CORSとBearer検証を通し、削除・開始・公開操作には`Idempotency-Key`を受け付ける。共通エラー: 401認証なし/期限切れ、403権限不足、404対象なし、409競合、422入力不正、429制限、503外部依存不可。利用画面の略号は [画面仕様](12-frontend-screens.md) のURLを指す。
+基点`/api/v1`、JSON、UTC ISO 8601、UUID。OpenAPIの`operationId`は固定し、FastAPIから`/openapi.json`を生成して`packages/api-client`に型・クライアントを生成する。エラー共通形は`{"error":{"code":"FORBIDDEN","message":"...","request_id":"uuid"}}`。一覧は`limit`（1〜50、既定20）と不透明`cursor`、返却は`{items,next_cursor}`。全書込はCSRF/CORSとBearer検証を通し、削除・開始・公開操作には`Idempotency-Key`を受け付ける。共通エラー: 401認証なし/期限切れ、403権限不足、404対象なし、409競合、413本文が大きすぎる（`VALIDATION_ERROR`、既定256 KiB・アイコンは2 MiB＋64 KiB、#32）、422入力不正、429制限、503外部依存不可。利用画面の略号は [画面仕様](12-frontend-screens.md) のURLを指す。
 
 ## 招待・停止・削除の共通認可
 
