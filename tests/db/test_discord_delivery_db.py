@@ -229,6 +229,7 @@ POST_BREAKAGES = [
     "insert into public.agent_blocks (blocker_agent_id, blocked_agent_id) values (:b, :a)",
     "update public.conversations set created_at = now() - interval '91 days' where id = :c",
     "update public.conversation_participants set discord_consent = false where agent_id = :a",
+    "update public.invitations set status = 'revoked', revoked_at = now() where auth_user_id = :p",
 ]
 
 
@@ -281,11 +282,89 @@ def test_new_channel_gets_its_own_post(engine: Engine, world: tuple[Person, Pers
     assert {r.channel_id for r in _post_rows(engine, cid)} == {CHANNEL, NEW_CHANNEL}
 
 
+OTHER_GUILD = "200000000000000012"
+OTHER_CHANNEL = "300000000000000013"
+
+
+def _second_guild(engine: Engine, people: tuple[Person, ...]) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "insert into public.discord_guilds (id, name, admin_discord_user_id) "
+                "values (:g, '別鯖', '400000000000000011')"
+            ),
+            {"g": OTHER_GUILD},
+        )
+        conn.execute(
+            text(
+                "insert into public.discord_channels (id, guild_id, name, configured_by) "
+                "values (:c, :g, 'ai', '400000000000000011')"
+            ),
+            {"c": OTHER_CHANNEL, "g": OTHER_GUILD},
+        )
+        for p in people:
+            conn.execute(
+                text(
+                    "insert into public.agent_discord_consents (agent_id, guild_id) values (:a, :g)"
+                ),
+                {"a": p.agent, "g": OTHER_GUILD},
+            )
+
+
+def _drop_second_guild(engine: Engine) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text("delete from public.discord_deliveries where channel_id = :c"),
+            {"c": OTHER_CHANNEL},
+        )
+        conn.execute(
+            text("delete from public.discord_channels where guild_id = :g"), {"g": OTHER_GUILD}
+        )
+        conn.execute(text("delete from public.discord_guilds where id = :g"), {"g": OTHER_GUILD})
+
+
+def test_two_eligible_guilds_hold_the_post(engine: Engine, world: tuple[Person, Person]) -> None:
+    a, b = world
+    _second_guild(engine, world)
+    try:
+        cid = _conversation(engine, a, b)
+        assert run(engine, dd.enqueue_conversation_posts, cid) == 2
+        # どちらにも送らず、候補を要確認で残す（docs/09: 複数なら保留して管理者が選ぶ）
+        assert {(r.channel_id, r.status, r.last_error) for r in _post_rows(engine, cid)} == {
+            (CHANNEL, "needs_review", "ambiguous_target"),
+            (OTHER_CHANNEL, "needs_review", "ambiguous_target"),
+        }
+        assert run(engine, dd.claim_next_post) is None
+    finally:
+        _drop_second_guild(engine)
+
+
+def test_post_is_held_if_second_guild_becomes_eligible_later(
+    engine: Engine, world: tuple[Person, Person]
+) -> None:
+    a, b = world
+    cid = _conversation(engine, a, b)
+    assert run(engine, dd.enqueue_conversation_posts, cid) == 1
+    _second_guild(engine, world)
+    try:
+        assert run(engine, dd.claim_next_post) is None
+        assert [(r.status, r.last_error) for r in _post_rows(engine, cid)] == [
+            ("needs_review", "ambiguous_target")
+        ]
+    finally:
+        _drop_second_guild(engine)
+
+
 @pytest.mark.parametrize(
     ("breakage", "other_gets_dm"),
     [
         ("update public.profiles set discord_dm_notifications = false where id = :p", True),
         ("update public.discord_connections set revoked_at = now() where profile_id = :p", True),
+        (
+            "update public.invitations set status = 'revoked', revoked_at = now() "
+            "where auth_user_id = :p",
+            True,
+        ),
         # 削除要求を出した参加者がいる会話は双方から見えなくなるので、相手にも送らない
         ("update public.profiles set deleted_at = now() where id = :p", False),
     ],
@@ -466,29 +545,16 @@ def test_publish_off_block_and_dm_off_cancel_pending(
 
 # -- Bot の送信ループ（偽の Discord） -------------------------------------------------------
 
-
-class _Msg:
-    def __init__(self, n: int) -> None:
-        self.id = 500000000000000000 + n
-
-
-class _Thread:
-    id = 600000000000000002
-
-    def __init__(self) -> None:
-        self.sent: list[str] = []
-
-    async def send(self, content: str, **_: Any) -> _Msg:
-        self.sent.append(content)
-        return _Msg(len(self.sent))
+THREAD = "600000000000000002"
 
 
 class _Channel:
     class guild:  # noqa: N801
         me = object()
 
-    def __init__(self) -> None:
-        self.thread = _Thread()
+    async def create_thread(self, **_: Any) -> Any:
+        # テキストチャンネルの目印。書き込みは REST 経由なので呼ばれない
+        raise AssertionError("writes must go through the no-retry REST client")
 
     def permissions_for(self, _: object) -> Any:
         import discord
@@ -500,17 +566,25 @@ class _Channel:
             send_messages_in_threads=True,
         )
 
-    async def create_thread(self, **_: Any) -> _Thread:
-        return self.thread
 
-
-class _User:
+class _Rest:
     def __init__(self) -> None:
-        self.sent: list[str] = []
+        self.threads: list[str] = []
+        self.messages: dict[str, list[str]] = {}
+        self.dm_channels: dict[str, str] = {}
+        self.count = 0
 
-    async def send(self, content: str, **_: Any) -> _Msg:
-        self.sent.append(content)
-        return _Msg(1)
+    async def create_thread(self, channel_id: str, name: str, archive_minutes: int) -> str:
+        self.threads.append(channel_id)
+        return THREAD
+
+    async def send_message(self, channel_id: str, content: str) -> str:
+        self.count += 1
+        self.messages.setdefault(channel_id, []).append(content)
+        return str(500000000000000000 + self.count)
+
+    async def open_dm(self, user_id: str) -> str:
+        return self.dm_channels.setdefault(user_id, f"70000000000000000{len(self.dm_channels)}")
 
 
 class _Bot:
@@ -519,7 +593,7 @@ class _Bot:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
         self.channel = _Channel()
-        self.users: dict[int, _User] = {}
+        self.rest = _Rest()
 
     async def in_transaction(self, work: Callable[[Connection], T]) -> T:
         def go() -> T:
@@ -534,12 +608,6 @@ class _Bot:
     async def fetch_channel(self, _: int) -> Any:
         raise AssertionError
 
-    def get_user(self, user_id: int) -> Any:
-        return self.users.setdefault(user_id, _User())
-
-    async def fetch_user(self, _: int) -> Any:
-        raise AssertionError
-
 
 def test_bot_loop_posts_thread_and_dms_end_to_end(
     engine: Engine, world: tuple[Person, Person]
@@ -551,7 +619,8 @@ def test_bot_loop_posts_thread_and_dms_end_to_end(
     assert asyncio.run(delivery.process_once(bot)) == 3
     assert asyncio.run(delivery.process_once(bot)) == 0
 
-    sent = bot.channel.thread.sent
+    assert bot.rest.threads == [CHANNEL]
+    sent = bot.rest.messages[THREAD]
     assert "AI が生成" in sent[0]
     assert sent[1] == "🤖 AI1（AI）\nこんにちは \\@everyone"
     assert sent[2] == "🤖 AI2（AI）\nどうも"
@@ -560,11 +629,10 @@ def test_bot_loop_posts_thread_and_dms_end_to_end(
     row = _post_rows(engine, cid)[0]
     assert (row.status, row.discord_thread_id, row.discord_message_id) == (
         "sent",
-        str(_Thread.id),
-        str(_Msg(1).id),
+        THREAD,
+        "500000000000000001",
     )
     for p in (a, b):
-        assert bot.users[int(p.discord_id)].sent == [
-            f"新しい交流があります: {WEB}/conversations/{cid}"
-        ]
+        channel = bot.rest.dm_channels[p.discord_id]
+        assert bot.rest.messages[channel] == [f"新しい交流があります: {WEB}/conversations/{cid}"]
     assert {r.status for r in _dm_rows(engine, cid)} == {"sent"}
