@@ -1,7 +1,8 @@
 "use server";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { serverSupabase } from "../../lib/supabase/server";
+import { challengeCookie, proofCookie } from "../../lib/reauth-proof";
 import { safeReturnPath } from "../../lib/auth-policy";
 
 export async function login(form: FormData) {
@@ -22,6 +23,9 @@ export async function logout() {
   const supabase = await serverSupabase();
   const { error } = await supabase.auth.signOut();
   if (error) redirect("/login?error=oauth");
-  // A full navigation destroys client state; no persistent Query cache is used.
+  const store = await cookies();
+  store.delete(challengeCookie);
+  store.delete(proofCookie);
+  // Changing session cookies invalidates the Router cache; no persistent Query cache is used.
   redirect("/login");
 }

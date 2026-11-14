@@ -599,6 +599,64 @@
         "title": "ConversationSummary",
         "type": "object"
       },
+      "DeletionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "title": "DeletionInput",
+        "type": "object"
+      },
+      "DeletionRequest": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requested_at"
+        ],
+        "title": "DeletionRequest",
+        "type": "object"
+      },
       "DiscordConnection": {
         "properties": {
           "connected": {
@@ -4760,6 +4818,228 @@
         "summary": "\u81ea\u5206\u306e\u8868\u793a\u540d\u3092\u5909\u66f4\u3059\u308b",
         "tags": [
           "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/deletion": {
+      "get": {
+        "operationId": "get_own_deletion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u81ea\u5206\u306e\u524a\u9664\u8981\u6c42\u306e\u72b6\u6cc1\uff08ID\u30fb\u72b6\u614b\u30fb\u65e5\u6642\u3060\u3051\uff09",
+        "tags": [
+          "account"
+        ]
+      },
+      "post": {
+        "operationId": "request_deletion",
+        "parameters": [
+          {
+            "description": "\u518d\u9001\u306e\u8b58\u5225\u7528\uff08\u4efb\u610f\uff09\u3002\u524a\u9664\u8981\u6c42\u306f\u5229\u7528\u8005\u3054\u3068\u306b 1 \u4ef6\u306a\u306e\u3067\u3001\u30ad\u30fc\u304c\u306a\u304f\u3066\u3082\u91cd\u8907\u3057\u306a\u3044",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\u518d\u9001\u306e\u8b58\u5225\u7528\uff08\u4efb\u610f\uff09\u3002\u524a\u9664\u8981\u6c42\u306f\u5229\u7528\u8005\u3054\u3068\u306b 1 \u4ef6\u306a\u306e\u3067\u3001\u30ad\u30fc\u304c\u306a\u304f\u3066\u3082\u91cd\u8907\u3057\u306a\u3044",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "SupabaseBearer": []
+          }
+        ],
+        "summary": "\u30a2\u30ab\u30a6\u30f3\u30c8\u524a\u9664\u3092\u8981\u6c42\u3059\u308b\uff085 \u5206\u4ee5\u5185\u306e\u518d\u8a8d\u8a3c\u304c\u5fc5\u8981\u3002AI \u3068\u914d\u4fe1\u306f\u3059\u3050\u6b62\u307e\u308b\uff09",
+        "tags": [
+          "account"
         ]
       }
     }

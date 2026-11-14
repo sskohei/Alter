@@ -13,6 +13,8 @@ export function dataErrorMessage(error: unknown) {
     ].includes(error.detail.code)
   )
     return accessMessage(error.detail.code);
+  if (error.detail.code === "REAUTHENTICATION_REQUIRED")
+    return "本人確認の有効期限が切れました。キャンセルして同じアカウントで本人確認をやり直してください。";
   const messages: Record<number, string> = {
     401: "ログインの有効期限が切れました。もう一度ログインしてください。",
     403: "このデータを操作する権限がありません。",

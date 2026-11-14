@@ -4,7 +4,7 @@
 
 ## 招待・停止・削除の共通認可
 
-`/health`を除く一般業務APIは[招待契約](23-invitation-consent-operations.md)の共通認可を通す。無効JWTは401 `UNAUTHENTICATED`、有効JWTでも招待外は403 `INVITATION_REQUIRED`、停止/削除要求済みは403 `ACCOUNT_INACTIVE`、招待判定障害は503 `AUTHORIZATION_UNAVAILABLE`。`GET /users/me`も例外ではなく、拒否時にプロフィールを作成しない。削除要求の本人向け状況確認は最小限の状態だけを返す専用経路とし、#30/#31でPydantic/OpenAPIを確定する。
+`/health`を除く一般業務APIは[招待契約](23-invitation-consent-operations.md)の共通認可を通す。無効JWTは401 `UNAUTHENTICATED`、有効JWTでも招待外は403 `INVITATION_REQUIRED`、停止/削除要求済みは403 `ACCOUNT_INACTIVE`、招待判定障害は503 `AUTHORIZATION_UNAVAILABLE`。`GET /users/me`も例外ではなく、拒否時にプロフィールを作成しない。削除要求の本人向け状況確認は`GET /users/me/deletion`でID・状態・日時だけを返す。#31は正式なPydantic/OpenAPIから生成したクライアントを利用する。
 
 招待照合はDBの`invitations`・`invitation_identities`を参照する。DB障害・データ不整合・Auth照会障害は503で拒否する。運営専用CLIは共通ドメイン処理を利用し、公開APIに招待管理操作や招待一覧を追加しない（ADR-014）。
 

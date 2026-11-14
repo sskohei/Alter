@@ -51,3 +51,19 @@ def test_memory_preview_reuses_formal_contract() -> None:
         assert preview["paths"][path] == live["paths"][path]
     for name in ("Memory", "Relationship", "Page_Memory_", "Page_Relationship_"):
         assert preview["components"]["schemas"][name] == live["components"]["schemas"][name]
+
+
+def test_account_preview_reuses_formal_contract() -> None:
+    preview = create_contract_app().openapi()
+    live = create_app().openapi()
+    for path in ("/api/v1/users/me", "/api/v1/preferences", "/api/v1/users/me/deletion"):
+        assert preview["paths"][path] == live["paths"][path]
+    for name in (
+        "Profile",
+        "ProfilePatch",
+        "Preferences",
+        "PreferencesPatch",
+        "DeletionInput",
+        "DeletionRequest",
+    ):
+        assert preview["components"]["schemas"][name] == live["components"]["schemas"][name]
