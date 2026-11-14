@@ -11,8 +11,8 @@
 - Web: Next.js App Router、TypeScript、Tailwind CSS、shadcn/ui。認証はSupabase Auth。
 - API: FastAPI、Pydantic。業務操作と所有権検証はAPIが担当し、Webから重要テーブルを直接更新しない。
 - DB: Supabase PostgreSQL。DDL/RLSの正本は`supabase/migrations/`のSQLで、Alembicと二重管理しない。
-- 自律交流: Render Cron、独立Worker、DBジョブ。Discord Botは独立プロセスで共通ドメイン処理とDBを利用する。
-- デプロイ: WebはVercel、API/Worker/Bot/CronはRender。[構成](docs/04-system-architecture.md)、[デプロイ](docs/14-deployment-infrastructure.md)を参照。
+- 自律交流: 手元PCのOS定期実行、独立Worker、DBジョブ。Discord Botは独立プロセスで共通ドメイン処理とDBを利用する。
+- デプロイ: WebはVercel Hobby、DB/AuthはSupabase Free、API/Worker/Bot/Schedulerは運営者の手元PC（独立プロセス）。公開APIはHTTPS経路を用意し、PC稼働中に利用する。[構成](docs/04-system-architecture.md)、[デプロイ](docs/14-deployment-infrastructure.md)を参照。
 
 ## 変更時の約束
 

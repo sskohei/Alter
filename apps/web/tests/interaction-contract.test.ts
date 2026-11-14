@@ -2,14 +2,14 @@
 import { expect, test } from "vitest";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
-import schema from "../../../packages/api-client/preview.openapi.json";
+import schema from "../../../packages/api-client/openapi.json";
 import { createMockFetch } from "@alter/api-client/mock";
-import { createPreviewClient, unwrap } from "@alter/api-client/preview";
+import { createApiClient, unwrap } from "@alter/api-client";
 const ajv = new Ajv2020({ strict: false });
 addFormats(ajv);
 ajv.addSchema(schema, "preview");
 test("settings preserve independent consents, reject invalid budgets and unknown owner", async () => {
-  const client = createPreviewClient(
+  const client = createApiClient(
     "http://mock.test",
     createMockFetch("normal", { seedAgent: true, activity: true }),
   );
@@ -61,9 +61,4 @@ test("settings preserve independent consents, reject invalid budgets and unknown
       })
     ).response.status,
   ).toBe(404);
-  const guilds = await unwrap(await client.GET("/api/v1/discord/guilds"));
-  const validateGuild = ajv.compile({
-    $ref: "preview#/components/schemas/Guild",
-  });
-  expect(guilds.every((g) => validateGuild(g))).toBe(true);
 });

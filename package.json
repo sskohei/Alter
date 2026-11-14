@@ -22,7 +22,8 @@
     "web:check-env": "node scripts/check_web_environment.mjs",
     "web:smoke": "node scripts/smoke_web.mjs",
     "test:deployment": "node --test scripts/*.test.mjs",
-    "acceptance:gate": "node scripts/acceptance_gate.mjs"
+    "acceptance:gate": "node scripts/acceptance_gate.mjs",
+    "acceptance:run": "node scripts/acceptance_run.mjs"
   },
   "devDependencies": {
     "supabase": "2.122.0"

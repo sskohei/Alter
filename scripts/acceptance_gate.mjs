@@ -2,10 +2,11 @@ import { readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { participantCount, performanceMetrics, validateParticipants } from "./acceptance_data.mjs";
 
 export const stagingChecks = [
   "oauth_invitation",
-  "ten_account_operations",
+  "participant_operations",
   "autonomous_browser_closed",
   "dual_consent_discord",
   "ownership_direct_api",
@@ -65,16 +66,16 @@ export function acceptanceGate(
   );
   const testers = Array.isArray(report.testers) ? report.testers : [];
   add(
-    testers.length === 10 &&
+    testers.length === participantCount &&
       testers.every(
         (t) =>
           nonempty(t?.alias) &&
           t.status === "pass" &&
           ["google", "github"].includes(t.provider),
       ) &&
-      new Set(testers.map((t) => t?.alias)).size === 10 &&
+      new Set(testers.map((t) => t?.alias)).size === participantCount &&
       new Set(testers.map((t) => t?.provider)).size === 2,
-    "ten distinct passed testers and both OAuth providers required",
+    "three distinct passed testers and both OAuth providers required",
   );
   const checks = Array.isArray(report.checks) ? report.checks : [];
   const required = [
@@ -111,8 +112,17 @@ export function acceptanceGate(
         createHash("sha256").update(data).digest("hex") !== evidence.sha256
       )
         throw new Error("Invalid evidence");
+      if (id === "participant_operations")
+        validateParticipants(JSON.parse(data.toString()), testers);
+      if (id === "performance_measurements") {
+        const measured = performanceMetrics(JSON.parse(data.toString()));
+        for (const [key, value] of Object.entries(measured)) {
+          if (report.metrics?.[key] !== value)
+            throw new Error("Reported metrics differ from raw measurements");
+        }
+      }
     } catch {
-      errors.push(`${id}: evidence missing or hash mismatch`);
+      errors.push(`${id}: evidence missing, invalid, hash or measurement mismatch`);
     }
   }
   const metrics = report.metrics ?? {};
@@ -132,7 +142,7 @@ export function acceptanceGate(
         Number.isFinite(metrics[key]) &&
         metrics[key] >= minimum &&
         metrics[key] <= maximum &&
-        (!key.endsWith("samples") || Number.isInteger(metrics[key])),
+        (!["read_p95_ms", "reservation_max_seconds"].includes(key) ? Number.isInteger(metrics[key]) : true),
       `metric ${key}: missing or outside limit`,
     );
   return errors;

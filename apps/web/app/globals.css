@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* =========================================================================
-   Brand tokens (#5, ADR-015) — the single source for colour and type on every screen.
+   Brand tokens (#5, ADR-016) — the single source for colour and type on every screen.
    Grey-mixed colours on warm paper, sunk dark faces, and ONE full-saturation colour
    (--line) that only appears as lines and small marks.
    ========================================================================= */

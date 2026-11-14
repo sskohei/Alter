@@ -3,23 +3,32 @@ import Image from "next/image";
 import Link from "next/link";
 import pair from "../public/visuals/pair.png";
 import { useCallback } from "react";
-import { ApiError, unwrap } from "@alter/api-client/preview";
-import { browserApi } from "../lib/api-browser";
+import { ApiError, unwrap } from "@alter/api-client";
+import { DiscordStatus } from "./discord-status";
+import { activityApi } from "../lib/api-browser";
 import { useResource } from "../lib/use-resource";
 import { costLabel } from "../lib/activity";
 import { DataState } from "./data-state";
 import { ConversationCard } from "./conversation-card";
 export function ActivityDashboard() {
   const load = useCallback(async (signal: AbortSignal) => {
-    const api = browserApi();
+    const api = activityApi();
     const agent = api
       .GET("/api/v1/agents/me", { signal })
       .then(unwrap)
       .catch((error) => {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;
-      });
-    const [own, conversations, notifications, discord] = await Promise.all([
+      })
+      .then(async (own) => own && ({
+        ...own,
+        settings: await api
+          .GET("/api/v1/agents/{id}/settings", {
+            params: { path: { id: own.id } }, signal,
+          })
+          .then(unwrap),
+      }));
+    const [own, conversations, notifications] = await Promise.all([
       agent,
       api
         .GET("/api/v1/conversations", {
@@ -33,9 +42,8 @@ export function ActivityDashboard() {
           signal,
         })
         .then(unwrap),
-      api.GET("/api/v1/discord/connection", { signal }).then(unwrap),
     ]);
-    return { own, conversations, notifications, discord };
+    return { own, conversations, notifications };
   }, []);
   const resource = useResource(load, 30_000);
   const data = resource.data;
@@ -71,18 +79,20 @@ export function ActivityDashboard() {
               <section className="card tile tile-agent">
                 <p className="eyebrow">あなたのAI分身</p>
                 <h2>{data.own.name}</h2>
+                <p>状態: {{ draft: "下書き", active: "活動中", paused: "停止中", deleted: "削除済み" }[data.own.status]}</p>
                 <p>
                   {data.own.approved_profile_version
                     ? `承認済み · 版 ${data.own.approved_profile_version}`
                     : "人格は未承認です"}
                 </p>
                 <p>
-                  自律交流: {data.own.settings?.autonomy_enabled ? "ON" : "OFF"} /
-                  Discord公開: {data.own.settings?.discord_publish ? "ON" : "OFF"}
+                  自律交流: {data.own.settings.autonomy_enabled ? "ON" : "OFF"} /
+                  Discord公開: {data.own.settings.discord_publish ? "ON" : "OFF"}
                 </p>
+                <p>交流頻度: 1日{data.own.settings.frequency_per_day}回まで</p>
                 <p>
-                  日次予算: {costLabel(data.own.settings?.daily_budget_usd)} /
-                  1会話上限: {costLabel(data.own.settings?.max_session_usd)}
+                  日次予算: {costLabel(data.own.settings.daily_budget_usd)} /
+                  1会話上限: {costLabel(data.own.settings.max_session_usd)}
                 </p>
                 <Link className="button" href="/agent">
                   AI分身を確認する
@@ -117,13 +127,8 @@ export function ActivityDashboard() {
             </section>
             <section className="card tile tile-discord">
               <p className="tile-k" aria-hidden="true">DISCORD</p>
-              <span className="tile-tag" aria-hidden="true">
-                {data.discord.connected ? "ON" : "OFF"}
-              </span>
               <h2>Discord連携</h2>
-              <p className="tile-big-text">
-                {data.discord.connected ? "連携済み" : "未連携"}
-              </p>
+              <DiscordStatus />
               <p className="help">
                 連携だけで会話が公開されることはありません。
               </p>

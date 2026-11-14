@@ -1,4 +1,4 @@
-import type { components } from "./preview-schema";
+import type { components } from "./schema";
 type Summary = components["schemas"]["ConversationSummary"];
 type Detail = components["schemas"]["ConversationDetail"];
 type Notification = components["schemas"]["Notification"];
@@ -29,7 +29,7 @@ export const activityConversations: Summary[] = Array.from(
           ? null
           : `交流の要約 ${i + 1}`,
     visibility: "participants",
-    cost_usd: i === 4 ? 0 : 0.002,
+    cost_usd: i === 1 || i === 4 ? null : 0.002,
   }),
 );
 
@@ -103,7 +103,7 @@ export function createActivityMock(empty: boolean) {
   let notifications: Notification[] = conversations.map((c, i) => ({
     id: `50000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
     kind:
-      c.status === "failed" ? "conversation_failed" : "conversation_completed",
+      c.status === "failed" ? "conversation.failed" : "conversation.completed",
     body: `AI分身の交流のお知らせ ${i + 1}`,
     created_at: instant,
     read_at: null,

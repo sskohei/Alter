@@ -36,3 +36,21 @@ test.describe("native form origin and logout", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 });
+
+test("login and OAuth failure responses apply deployment headers", async ({ request }) => {
+  const login = await request.get("/login");
+  expect(login.headers()["referrer-policy"]).toBe("same-origin");
+  expect(login.headers()["x-content-type-options"]).toBe("nosniff");
+  expect(login.headers()["x-frame-options"]).toBe("DENY");
+  for (const path of [
+    "/auth/callback?error=access_denied",
+    "/auth/reauth/callback?error=access_denied",
+    "/auth/discord/callback?error=access_denied",
+  ]) {
+    const response = await request.get(path, { maxRedirects: 0 });
+    expect(response.status()).toBe(307);
+    expect(response.headers()["cache-control"]).toContain("no-store");
+    expect(response.headers()["referrer-policy"]).toBe("no-referrer");
+    expect(new URL(response.headers().location).origin).toBe("http://127.0.0.1:3000");
+  }
+});

@@ -2,10 +2,10 @@
 import Link from "next/link";
 import { useCallback } from "react";
 import {
-  createPreviewClient,
+  createApiClient,
   unwrap,
   type components,
-} from "@alter/api-client/preview";
+} from "@alter/api-client";
 import { useResource } from "../lib/use-resource";
 import { dateLabel } from "../lib/activity";
 import { DataState } from "./data-state";
@@ -16,7 +16,7 @@ const pending = (data: Deletion) =>
 export function DeletionStatus() {
   const load = useCallback(
     (signal: AbortSignal) =>
-      createPreviewClient("")
+      createApiClient("")
         .GET("/api/v1/users/me/deletion", { signal, cache: "no-store" })
         .then(unwrap),
     [],
@@ -58,7 +58,7 @@ export function DeletionStatus() {
       <p>
         認証情報が削除された後は、招待時のsskoheiとの私的な連絡先で本人確認のうえ結果をお伝えします。公開Issueへ個人情報を書かないでください。
       </p>
-      <Link href="/login">ログイン画面へ</Link>
+      <Link href="/login?next=/deletion-status">ログインして削除状況を確認</Link>
     </main>
   );
 }

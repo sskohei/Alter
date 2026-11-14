@@ -1,8 +1,9 @@
-# 10人MVPの受け入れ記録と公開判定（#37 Draft）
+# 3人MVPの受け入れ記録と公開判定（#37）
 
-2026-11-08現在、実環境は未設定。#35/#36/#32と業務API/Worker/Bot、#4の法務・料金判断が必要。
+2026-11-14: 初回は招待済み3人全員で受け入れる（招待上限10人は維持）。
+最新の#35と正式業務APIを統合済み。#33/#34/#35/#36/#32と交流/配送の実接続、#4の法務確認が必要。
 本PRのMock/axe成功は実環境受け入れや本番公開の証跡ではない。公開は実施しない。
-[Done判定](21-mvp-definition.md)は8条件あり、Issue本文の「6条件」だけに範囲を狭めない。
+[Done判定](21-mvp-definition.md)の全8条件を検証する。
 招待契約はmainのADR-014（DB＋運営CLI）に合わせる。先行Draftの古いenv方式を採用しない。
 
 ## 自動回帰（Mock専用）
@@ -12,7 +13,7 @@
 
 | テスト | 確認すること | 実環境で別に必要な確認 |
 |---|---|---|
-| acceptance.spec.tsの10合成ID | Google/GitHub UI入口、作成/承認、初期OFF、予算、明示ON、キーボード停止、未知ID拒否 | 10人の実Auth/招待DB、他の実ユーザーIDでの所有権認可 |
+| acceptance.spec.tsの10合成ID | Google/GitHub UI入口、作成/承認、初期OFF、予算、明示ON、キーボード停止、未知ID拒否 | 3人全員の実Auth/招待DB、他の実ユーザーIDでの所有権認可 |
 | 同ファイル375/320px | 主要11画面のaxe WCAG A/AA、横溢れ、削除dialogのfocusと取消 | 読み上げ・ズーム・実機・axe incompleteの手動確認 |
 | agent/auth/interaction.spec.ts | PKCE UI、入力/競合/429/障害、同意分離、停止、logout/アカウント切替 | 外部OAuth・JWT署名/失効、Workerの実停止と費用上限 |
 | activity/memory.spec.ts | 履歴/通知/出典/記憶削除、ブロックと再読込後の状態 | 実ジョブ完了、削除再投入防止、双方の共有データ非表示 |
@@ -29,7 +30,7 @@ axe結果とincompleteはPlaywright attachments/JSONファイルに残し、CI�
    まず`pnpm web:smoke`を通す。合成MockをstagingのAPIへ置かない。
 2. 実招待は運営CLIで本人照合後に登録する。公開レポートにはtester-1等の別名だけを用い、
    氏名・メール・provider subject・JWT・OAuth code/state・秘密・人格本文は書かない。
-3. `docs/acceptance/staging.example.json`を無視対象の`artifacts/acceptance/<run>/report.json`へコピーする。
+3. 下記の`acceptance:run init`で無視対象の`artifacts/acceptance/<run>/`に記録を作成する。
    実施したcommit SHA、UTC日時、確認担当の別名、文面版、公開/rollback担当を記録する。
    同じディレクトリへサニタイズ済み証跡を保管し、各証跡の相対pathとSHA-256を登録する。
    実記録はGit/公開PRに添付せずアクセス制限した保管先でレビューする。
@@ -39,11 +40,11 @@ axe結果とincompleteはPlaywright attachments/JSONファイルに残し、CI�
 | check ID | 実行・残す証跡 |
 |---|---|
 | oauth_invitation | Google/GitHub両方の実OAuth、招待外/削除済みの直接APIと再OAuth拒否。ユーザーを勝手に作成/復活しない |
-| ten_account_operations | 10別名×作成/承認/ON/OFF/予算/ブロック/履歴/通知/記憶削除/連携解除/アカウント削除の結果表。1人の失敗を全体passにしない |
+| participant_operations | 3別名×作成/承認/ON/OFF/予算/ブロック/履歴/通知/記憶削除/連携解除/アカウント削除の結果表。1人の失敗を全体passにしない |
 | autonomous_browser_closed | 両者ON・未ブロック・予算内でブラウザを閉じても1会話生成、参加者だけが全文閲覧 |
 | dual_consent_discord | テストギルド名/ID/公開先、両者ギルド同意＋全体ON＋管理者設定/権限の真偽組合せ、同一会話をWebとギルドで確認 |
 | ownership_direct_api | 別実ユーザーの人格/記憶/会話/通知IDへの直接取得/更新拒否。anon/authenticatedのDB直接操作拒否 |
-| independent_process_recovery | API/Bot/Worker/Cronの別プロセス。Bot停止中の会話継続、復帰後の配送照合、ブラウザ非依存 |
+| independent_process_recovery | 手元PCのAPI/Bot/Worker/Schedulerの独立稼働とUTC 15分定期実行。PC停止/スリープ/回線断からの復旧、利用時間/停止制約の説明。Bot停止中の会話継続、復帰後の配送照合、ブラウザ非依存 |
 | duplicate_cron_worker | Cron重複/Worker lease切れ・再実行・応答喪失。二重会話/投稿0 |
 | unknown_delivery_hold | Discord送信成功後応答喪失・結果不明をunknown保留し、自動再送0。運営照合と解決の監査 |
 | stop_and_budget | 停止後の新規LLM呼出0、日次/1会話上限・予約残高・429/外部障害時の上限遵守 |
@@ -61,6 +62,52 @@ axe結果とincompleteはPlaywright attachments/JSONファイルに残し、CI�
 
 公開必須ゲートの期限は**2026-11-17または本番公開前日の早い方**。法務等の未決定は公開担当へ引き継ぎ、未完了なら公開を延期する。
 
+## 実行用レコードと測定
+
+```bash
+mkdir -p artifacts/acceptance
+pnpm acceptance:run init artifacts/acceptance/<run>
+```
+
+現在のGit HEADを記録し、全項目未実施のreport.json、participants.json、performance.jsonを作る。
+ディレクトリは0700、ファイルは0600で作成し、既存runは上書きしない。共有保管先のアクセス権も担当者が確認する。
+`participants.json`は3人×12操作の結果表。report.testersと同じ別名を使い、実施後だけ各操作をpassへ変更する。
+削除・解除は最後に実施し、他の操作を先に確認する。Google/GitHub両方を3人の中で検証する。
+合成Mockの10ID回帰は広めの自動検査として維持し、実参加人数の証跡と分ける。
+
+通常読み取りは、stagingで3人のうち1人が作成/承認した後に測定する。
+`ALTER_ACCEPTANCE_API_ORIGIN`と`ALTER_ACCEPTANCE_TOKEN`へstaging API Originと当人の短命access tokenを
+私的なシェルから渡す。トークンをコマンド引数・履歴・Git・公開ログへ残さない。
+
+```bash
+pnpm acceptance:run measure artifacts/acceptance/<run>/reads.json
+```
+
+HTTPS APIへ本人/AI/会話一覧/通知一覧のGETを計20回、リダイレクト・自動再試行なしで実行する。
+本文・ヘッダー・実IDは保存せず、method/path/status/duration_msだけを保存する。
+応答本文の受信完了までを計測する。失敗も除外せずstatus=0や実statusを記録し、非0終了する。
+APIの通常GETを測るもので、BFF/CDNや全利用者の負荷検証は別途必要。
+
+reads.jsonのreads配列をperformance.jsonへ移す。予約→完了は対象時間帯の**全件**をDB/監視から抽出し、
+実IDをconversation-1等へ置換してreservationsへ記入する。遅い/失敗/未完了を除外しない。
+全件の抽出方法・時間帯は別証跡へ記す。各予約の形は以下。
+
+```json
+{"alias":"conversation-1","status":"completed","reserved_at":"2026-11-14T01:00:00Z","completed_at":"2026-11-14T01:10:00Z"}
+```
+
+```bash
+pnpm acceptance:run metrics artifacts/acceptance/<run>/performance.json
+```
+
+出力4項目をreport.metricsへ記入する。p95はnearest-rank（昇順ceil(N×0.95)番目）。
+20件以上の成功した通常GETと完了済み予約1件以上が必要で、失敗/未完了は先に解決して全件を再検証する。
+安全性5カウンターは対応caseの実観測から記入し、未確認を0と推測しない。
+`participant_operations`の証跡pathはparticipants.json、`performance_measurements`はperformance.jsonとし、
+実施後のSHA-256を登録する（`sha256sum <file>`）。case自体と日時/担当も実施後にpassへ更新する。
+判定器は3人全員の全操作と原データを解析し、集計値の不一致、操作欠落、失敗要求、未完了予約を拒否する。
+他のcaseにも別途サニタイズ済み実証跡が必要。
+
 ## 判定器と段階的公開
 
 `metrics`には実測値を記入する。停止後新規呼出、予算超過、二重会話、二重投稿、不明時自動再送はいずれも0が必須。
@@ -74,7 +121,7 @@ pnpm acceptance:gate --report artifacts/acceptance/<run>/report.json --commit <�
 ```
 
 既定はrelease。preproductionだけproduction_smokeを除外する。両方ともlive出典、対応環境、同一SHA、
-7日以内の実行/証跡、担当、10人と両provider、全case、実ファイルとhash一致を要求する。
+7日以内の実行/証跡、担当、3人全員と両provider、全case、実ファイルとhash一致を要求する。
 証跡はreportのディレクトリ内のみ読み、外部へのpath traversal/symlinkを拒否する。
 別SHAへ修正した場合は再実行する。Mock結果をlive欄へ転記しない。
 
@@ -82,5 +129,13 @@ pnpm acceptance:gate --report artifacts/acceptance/<run>/report.json --commit <�
 自動CIはMockと判定器自体を検査し、live合格を捏造しない。最終承認はB/F/Dと公開担当が実証跡を確認する。
 release合格後に招待者へ案内し、一般募集はしない。復旧は[Web手順](25-web-deployment.md)と#36に従う。
 
-今回の実施結果：Mock UIと判定器の検証のみ。実10人、実OAuth/Discord、Render独立稼働/障害、
+今回の実施結果：Mock UIと判定器の検証のみ。実3人、実OAuth/Discord、PC独立稼働/停止/復旧、
 実測p95/予約完了時間、法務/料金確定、限定本番スモークは未実施で公開不可。
+
+
+## Issue #37をcloseする条件
+
+PR #54のコード/Mock検査完了後も、未実施項目はOpenのまま追跡する。
+3人の実受け入れ、Done全8条件、法務文面の確認、PC停止復旧/無料枠条件、preproduction判定、
+限定本番スモーク、release判定、B/F/Dと公開/rollback担当のレビューを揃えてからcloseする。
+公開PRにはサニタイズ済みの結果概要とアクセス制限された証跡保管先へのリンクを記録する。

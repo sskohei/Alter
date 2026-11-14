@@ -1,0 +1,302 @@
+"""Append-only USD ledger. Budget operations serialize writes with one advisory transaction lock.
+
+Callers holding authorization/interaction rows acquire those before this lock.
+
+Outstanding holds include previous UTC days; unknown outcomes retain the hold until reconciliation.
+Amounts must be worst-case bounds (including provider retries), not expected averages.
+"""
+
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
+
+from sqlalchemy import Connection, text
+
+from alter_domain.llm_contract import ModelPrice
+
+BUDGET_LOCK = 660018
+
+
+class BudgetExceeded(Exception):
+    pass
+
+
+class LedgerConflict(Exception):
+    pass
+
+
+class UnsettledBudget(LedgerConflict):
+    """Reconcile external invocations before releasing their reservations."""
+
+
+def lock_budget(conn: Connection) -> None:
+    conn.execute(text("select pg_advisory_xact_lock(:key)"), {"key": BUDGET_LOCK})
+
+
+def amount(value: Decimal) -> Decimal:
+    if not value.is_finite() or value < 0 or value != value.quantize(Decimal("0.000001")):
+        raise ValueError("USD must be nonnegative with at most six decimal places")
+    return value
+
+
+def exposure(
+    conn: Connection, *, agent: UUID | None = None, now: datetime | None = None
+) -> Decimal:
+    return Decimal(
+        conn.execute(
+            text(
+                "select coalesce(sum(case when kind='reserve' then estimated_usd "
+                "when kind='release' then -estimated_usd "
+                "when kind='charge' and created_at >= date_trunc('day', "
+                "coalesce(cast(:now as timestamptz),now()) at time zone 'UTC') at time zone 'UTC' "
+                "then actual_usd else 0 end),0) from public.usage_records "
+                "where (cast(:agent as uuid) is null or agent_id=:agent)"
+            ),
+            {"agent": agent, "now": now},
+        ).scalar_one()
+    )
+
+
+def record(
+    conn: Connection,
+    agent: UUID,
+    conversation: UUID | None,
+    price: ModelPrice,
+    kind: str,
+    key: str,
+    usd: Decimal,
+    *,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+) -> None:
+    amount(usd)
+    old = conn.execute(
+        text(
+            "select "
+            "agent_id,conversation_id,kind,estimated_usd,provider,model,input_tokens,output_tokens "
+            "from public.usage_records "
+            "where idempotency_key=:key"
+        ),
+        {"key": key},
+    ).first()
+    if old is not None:
+        if (
+            old.agent_id,
+            old.conversation_id,
+            old.kind,
+            old.estimated_usd,
+            old.provider,
+            old.model,
+            old.input_tokens,
+            old.output_tokens,
+        ) != (
+            agent,
+            conversation,
+            kind,
+            usd,
+            price.provider,
+            price.model,
+            input_tokens,
+            output_tokens,
+        ):
+            raise LedgerConflict()
+        return
+    conn.execute(
+        text(
+            "insert into public.usage_records "
+            "(agent_id,conversation_id,provider,model,input_tokens,output_tokens,estimated_usd,"
+            "actual_usd,kind,idempotency_key) "
+            "values (:agent,:conversation,:provider,:model,:i,:o,:usd,:actual,:kind,:key)"
+        ),
+        {
+            "agent": agent,
+            "conversation": conversation,
+            "provider": price.provider,
+            "model": price.model,
+            "i": input_tokens,
+            "o": output_tokens,
+            "usd": usd,
+            "actual": usd if kind == "charge" else None,
+            "kind": kind,
+            "key": key,
+        },
+    )
+
+
+def reserve(
+    conn: Connection,
+    agent: UUID,
+    conversation: UUID | None,
+    price: ModelPrice,
+    key: str,
+    usd: Decimal,
+    global_limit: Decimal,
+    *,
+    now: datetime | None = None,
+) -> None:
+    lock_budget(conn)
+    amount(usd)
+    amount(global_limit)
+    if conn.execute(
+        text("select 1 from public.usage_records where idempotency_key=:key"), {"key": key}
+    ).first():
+        record(conn, agent, conversation, price, "reserve", key, usd)
+        return
+    settings = conn.execute(
+        text(
+            "select daily_budget_usd,max_session_usd from public.agent_settings "
+            "where agent_id=:id for update"
+        ),
+        {"id": agent},
+    ).one()
+    session_total = (
+        session_exposure(conn, agent, conversation) if conversation is not None else Decimal(0)
+    )
+    if (
+        session_total + usd > settings.max_session_usd
+        or exposure(conn, agent=agent, now=now) + usd > settings.daily_budget_usd
+        or exposure(conn, now=now) + usd > global_limit
+    ):
+        raise BudgetExceeded()
+    record(conn, agent, conversation, price, "reserve", key, usd)
+
+
+def held(conn: Connection, agent: UUID, conversation: UUID) -> Decimal:
+    return Decimal(
+        conn.execute(
+            text(
+                "select coalesce(sum(case when kind='reserve' then estimated_usd "
+                "when kind='release' then -estimated_usd else 0 end),0) from public.usage_records "
+                "where agent_id=:agent and conversation_id=:conv"
+            ),
+            {"agent": agent, "conv": conversation},
+        ).scalar_one()
+    )
+
+
+def session_exposure(conn: Connection, agent: UUID, conversation: UUID) -> Decimal:
+    """All-time session charges plus holds, including previous UTC days."""
+    return held(conn, agent, conversation) + Decimal(
+        conn.execute(
+            text(
+                "select coalesce(sum(actual_usd),0) from public.usage_records "
+                "where agent_id=:agent and conversation_id=:conv and kind='charge'"
+            ),
+            {"agent": agent, "conv": conversation},
+        ).scalar_one()
+    )
+
+
+def require_settled(
+    conn: Connection, agent: UUID | None = None, conversation: UUID | None = None
+) -> None:
+    if conn.execute(
+        text(
+            "select 1 from public.llm_runs where "
+            "(cast(:agent as uuid) is null or agent_id=:agent) "
+            "and (cast(:conv as uuid) is null or conversation_id=:conv) "
+            "and status in ('reserved','generating','generated','moderating','unknown')"
+        ),
+        {"agent": agent, "conv": conversation},
+    ).first():
+        raise UnsettledBudget()
+
+
+def release_for_deletion(
+    conn: Connection, *, agent: UUID | None = None, conversation: UUID | None = None
+) -> None:
+    """Release reconciled holds BEFORE deletion in the same transaction.
+
+    Caller must stop workers and reconcile in-flight/unknown provider outcomes first.
+    Conversation deletion covers both participants; agent deletion covers holds without
+    a conversation too. With both filters only their intersection is released.
+    Take the budget lock before agent/setting locks, as for all ledger writers.
+    """
+    if agent is None and conversation is None:
+        raise ValueError("A deletion target is required")
+    lock_budget(conn)
+    require_settled(conn, agent, conversation)
+    rows = conn.execute(
+        text(
+            "select agent_id,conversation_id,provider,model, "
+            "sum(case when kind='reserve' then estimated_usd "
+            "when kind='release' then -estimated_usd else 0 end) as remaining "
+            "from public.usage_records where agent_id is not null "
+            "and (cast(:agent as uuid) is null or agent_id=:agent) "
+            "and (cast(:conv as uuid) is null or conversation_id=:conv) "
+            "group by agent_id,conversation_id,provider,model "
+            "having sum(case when kind='reserve' then estimated_usd "
+            "when kind='release' then -estimated_usd else 0 end)>0"
+        ),
+        {"agent": agent, "conv": conversation},
+    ).all()
+    for row in rows:
+        record(
+            conn,
+            row.agent_id,
+            row.conversation_id,
+            ModelPrice(
+                provider=row.provider,
+                model=row.model,
+                input_per_million=Decimal(0),
+                output_per_million=Decimal(0),
+            ),
+            "release",
+            f"deletion-release:{uuid4()}",
+            row.remaining,
+        )
+
+
+def consume(
+    conn: Connection,
+    agent: UUID,
+    conversation: UUID,
+    price: ModelPrice,
+    key: str,
+    usd: Decimal,
+    *,
+    input_tokens: int,
+    output_tokens: int,
+) -> None:
+    lock_budget(conn)
+    amount(usd)
+    if conn.execute(
+        text("select 1 from public.usage_records where idempotency_key=:key"),
+        {"key": key + ":charge"},
+    ).first():
+        record(
+            conn,
+            agent,
+            conversation,
+            price,
+            "charge",
+            key + ":charge",
+            usd,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        return
+    if usd > held(conn, agent, conversation):
+        raise BudgetExceeded()
+    record(
+        conn,
+        agent,
+        conversation,
+        price,
+        "charge",
+        key + ":charge",
+        usd,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
+    record(conn, agent, conversation, price, "release", key + ":consume", usd)
+
+
+def release_session(conn: Connection, agent: UUID, conversation: UUID, price: ModelPrice) -> None:
+    lock_budget(conn)
+    require_settled(conn, agent, conversation)
+    remaining = held(conn, agent, conversation)
+    if remaining > 0:
+        record(
+            conn, agent, conversation, price, "release", f"{conversation}:{agent}:end", remaining
+        )

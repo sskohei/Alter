@@ -11,6 +11,7 @@ test("dashboard, paged conversations, notifications and transcript", async ({
     page.getByRole("heading", { name: "こはる", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("main")).toContainText("未読が3件以上あります");
+  await expect(page.getByRole("main")).toContainText("未連携");
   await page.screenshot({
     path: `../../docs/images/frontend-activity/${test.info().project.name}-dashboard.png`,
     fullPage: true,
@@ -141,4 +142,61 @@ test("list polls every 30 seconds and a new account sees an empty list", async (
     page.getByRole("heading", { name: "まだ交流がありません" }),
   ).toBeVisible();
   await expect(page.getByRole("article")).toHaveCount(0);
+});
+
+test("dashboard uses separate settings and survives unavailable Discord; uncreated AI gets a guide", async ({ page }) => {
+  await signIn(page, "activity");
+  await page.route("**/api/v1/discord/connection", route => route.fulfill({status: 404, json: {error: {code: "NOT_FOUND", message: "Unavailable"}}}));
+  await page.route("**/api/v1/agents/*/settings", route => route.fulfill({json: {
+    autonomy_enabled: true, discord_publish: false, frequency_per_day: 2,
+    daily_budget_usd: 0.15, max_session_usd: 0.03,
+    web_visibility: "participants", updated_at: "2026-11-07T00:00:00Z",
+  }}));
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", {name: "こはる", exact: true})).toBeVisible();
+  await expect(page.getByRole("main")).toContainText("自律交流: ON");
+  await expect(page.getByRole("main")).toContainText("Discord連携は現在利用できません");
+  await expect(page.getByRole("article")).toHaveCount(3);
+  await page.getByRole("button", {name: "ログアウト"}).click();
+  await signIn(page, "normal");
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", {name: "AI分身を作成しましょう"})).toBeVisible();
+});
+
+test("notification polling announces new arrivals and keyboard read keeps focus on the conversation link", async ({ page }) => {
+  await signIn(page, "activity");
+  await page.clock.install();
+  let calls = 0;
+  await page.route("**/api/v1/notifications?**", async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    if (++calls > 1) body.items[0].body = "新しい交流が届きました";
+    await route.fulfill({json: body});
+  });
+  await page.goto("/notifications");
+  await expect(page.getByRole("status", {name: "通知の更新"})).toContainText("未読: 10件");
+  await page.clock.fastForward(30_000);
+  await expect(page.getByRole("status", {name: "通知の更新"})).toContainText("新しい交流が届きました");
+  const notice = page.getByRole("article").first();
+  await notice.getByRole("button", {name: "既読にする"}).focus();
+  await page.keyboard.press("Enter");
+  await expect(notice.getByRole("button")).toHaveCount(0);
+  await expect(notice.getByRole("link", {name: "会話を見る"})).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/conversations/${id}$`));
+});
+
+test("an ongoing conversation disappearing at the next poll clears its transcript", async ({ page }) => {
+  await signIn(page, "activity");
+  await page.clock.install();
+  let calls = 0;
+  await page.route(`**/api/v1/conversations/${runningId}`, async route => {
+    if (++calls > 1) await route.fulfill({status: 404, json: {error: {code: "NOT_FOUND", message: "Missing"}}});
+    else await route.continue();
+  });
+  await page.goto(`/conversations/${runningId}`);
+  await expect(page.getByText("最近読んだ本の話をしませんか。", {exact: true})).toBeVisible();
+  await page.clock.fastForward(15_000);
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("対象が見つかりません");
+  await expect(page.getByText("最近読んだ本の話をしませんか。", {exact: true})).toHaveCount(0);
 });

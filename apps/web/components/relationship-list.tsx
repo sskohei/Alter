@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useCallback } from "react";
-import { ApiError, unwrap } from "@alter/api-client/preview";
-import { browserApi } from "../lib/api-browser";
+import { ApiError, unwrap } from "@alter/api-client";
+import { activityApi } from "../lib/api-browser";
 import { useCursor, useResource } from "../lib/use-resource";
 import { relationshipLabel } from "../lib/relationships";
 import { dateLabel } from "../lib/activity";
@@ -12,7 +12,7 @@ export function RelationshipList() {
   const page = useCursor();
   const load = useCallback(
     async (signal: AbortSignal) => {
-      const api = browserApi();
+      const api = activityApi();
       let agent;
       try {
         agent = await unwrap(await api.GET("/api/v1/agents/me", { signal }));
@@ -81,11 +81,11 @@ export function RelationshipList() {
                 <p>
                   最終交流:{" "}
                   <time dateTime={relationship.last_met_at ?? undefined}>
-                    {dateLabel(relationship.last_met_at)}
+                    {relationship.last_met_at ? dateLabel(relationship.last_met_at) : "未交流"}
                   </time>
                 </p>
                 <BlockControl
-                  key={`${relationship.other_agent_id}:${relationship.blocked}`}
+                  key={relationship.other_agent_id}
                   ownAgentId={resource.data!.agent.id}
                   otherAgentId={relationship.other_agent_id}
                   otherAgentName={relationship.other_agent_name}

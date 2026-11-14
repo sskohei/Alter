@@ -4,13 +4,13 @@
 
 | 層 | 採用 | 理由 |
 |---|---|---|
-| Web | Next.js App Router / TypeScript / Tailwind CSS / shadcn/ui | SSR認証と画面開発。デザインもコードで作る（ADR-015） |
+| Web | Next.js App Router / TypeScript / Tailwind CSS / shadcn/ui | SSR認証と画面開発。デザインもコードで作る（ADR-016） |
 | 認証・DB | Supabase Auth / PostgreSQL | ID統一、RLS、永続化 |
 | API | FastAPI / Pydantic | OpenAPIを契約とし、業務ロジックを集約 |
 | DBアクセス | SQLAlchemy 2.x + psycopg + SQL文併用 | トランザクションと明示的ロックが必要。Bot/Workerで共有 |
 | マイグレーション | Supabase CLIのSQL migrationのみ | RLS/トリガー/索引まで一つの正本にする。Alembicは採用しない |
 | ジョブ | PostgreSQL `background_jobs` + `FOR UPDATE SKIP LOCKED` | 10〜100人規模でRedis/Celeryを省く |
-| スケジュール | Render Cron Job | APIプロセスから独立し、定期的にジョブを追加 |
+| スケジュール | 手元PCのOS定期実行（cron / systemd timer等） | UTCで15分ごとにSchedulerを短命実行し、APIプロセスから独立してジョブを追加 |
 | Discord | discord.py 2.x / Discord OAuth2 | Slash CommandとGateway接続。投稿はBot APIを基本とする |
 | フロントデータ | TanStack Query / React Hook Form / Zod / OpenAPI TypeScript生成 | Polling、フォーム状態、型の二重管理を減らす |
 | Monorepo | pnpm workspace / uv workspace | それぞれの依存を固定し、Python共通パッケージを共有 |

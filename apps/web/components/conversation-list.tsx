@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useCallback } from "react";
-import { unwrap } from "@alter/api-client/preview";
-import { browserApi } from "../lib/api-browser";
+import { unwrap } from "@alter/api-client";
+import { activityApi } from "../lib/api-browser";
 import { useResource, useCursor } from "../lib/use-resource";
 import { ConversationCard } from "./conversation-card";
 import { DataState, PageControls } from "./data-state";
@@ -10,7 +10,7 @@ export function ConversationList() {
   const page = useCursor();
   const load = useCallback(
     (signal: AbortSignal) =>
-      browserApi()
+      activityApi()
         .GET("/api/v1/conversations", {
           params: {
             query: {

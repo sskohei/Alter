@@ -1,4 +1,4 @@
-import type { components } from "./preview-schema";
+import type { components } from "./schema";
 import {
   createMockPager,
   mockOwnAgentId,
@@ -15,7 +15,7 @@ export const memoryFixtures: Memory[] = Array.from({ length: 12 }, (_, i) => ({
       ? null
       : i === 2
         ? "30000000-0000-4000-8000-000000000099"
-        : mockConversationId,
+        : i === 3 ? mockConversationId : `30000000-0000-4000-8000-${String(i + 20).padStart(12, "0")}`,
   created_at: "2026-11-07T00:00:00Z",
   status: "active",
 }));
@@ -50,7 +50,10 @@ export function createMemoryMock(empty: boolean, blocked: Set<string>) {
       const id = path.split("/").at(-1)!;
       if (!memories.some((m) => m.id === id) || deleted.has(id))
         return new Response(null, { status: 404 });
-      deleted.add(id);
+      const target = memories.find(m => m.id === id)!;
+      for (const candidate of memories)
+        if (candidate.id === id || (target.source_conversation_id && candidate.source_conversation_id === target.source_conversation_id))
+          deleted.add(candidate.id);
       return new Response(null, { status: 204 });
     }
     if (path === "/api/v1/relationships" && request.method === "GET") {
