@@ -55,8 +55,12 @@ test("memory source, cancelled deletion, rollback, successful deletion and pagin
     page.getByRole("heading", { name: firstTitle, exact: true }),
   ).toHaveCount(0);
   await expect(page.getByRole("status")).toHaveText("記憶を削除しました。");
+  // Successful deletion revalidates this page and fills the vacant row before paging.
+  await expect(page.getByRole("article")).toHaveCount(10);
+  await expect(page.getByRole("heading", { name: "記憶候補 11:", exact: false })).toBeVisible();
   await page.getByRole("button", { name: "次のページ" }).click();
-  await expect(page.getByRole("article")).toHaveCount(2);
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "記憶候補 12:", exact: false })).toBeVisible();
   await page.getByRole("button", { name: "前のページ" }).click();
   await page.reload();
   await expect(
