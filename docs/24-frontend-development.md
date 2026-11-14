@@ -1,35 +1,60 @@
-# フロント先行実装とMock
+# フロント開発とMock
 
-#8は#3（完了）/#7（契約レビュー待ち）に依存する。
-実APIの`openapi.json`は`/health`のみ。文書から起こしたレビュー用Pydantic契約は
-`apps/api/src/alter_api/contracts/frontend_preview.py`を正本とし、`pnpm api:generate`で
-`preview.openapi.json`/`preview-schema.d.ts`を生成する。本番APIへはマウントしない。
-CIは両方のOpenAPI/型の未生成差分を拒否する。
+## Issue #8 の依存と契約
+
+#3（CI）と#7（JWT・共通認可・GET/PATCH `/api/v1/users/me`）はmainへ統合済み。
+実APIの正本はFastAPI/Pydanticで、`pnpm api:generate`により次を再生成する。
+
+- `packages/api-client/openapi.json` / `src/schema.d.ts`: `/health`と本人プロフィール・人格・設定・会話・通知等の正式契約。
+- `packages/api-client/preview.openapi.json` / `src/preview-schema.d.ts`: 同じuserルーター・モデルを再利用し、合成一覧`/__mock/profiles`と人格のpreview契約案を含む開発用契約。本番APIにはマウントしない。
+
+`@alter/api-client`の`createApiClient(baseUrl, fetcher?)`に`authenticatedFetch`を渡すと、
+Bearer転送、no-store、一度だけの401更新・再送が使える。サーバーではリクエストごとに生成する。
+トークン取得がnullなら既存Authorizationを除去する。403/503ではトークンを更新しない。
+`unwrap`は生成された共通エラー型、HTTP status、API採番のrequest_id、任意のRetry-After秒数を返す。
+request_idは応答から取得し、X-Request-IDは送らない（実APIのCORS契約）。
+HTTPエラー本文やトークンをログへ出さない。Supabase重要テーブルの直接DMLは追加しない。
+
+## Webからの再現
+
+`pnpm dev:web`を起動し、`http://localhost:3000/development/mock`を開く。
+合成データだけをブラウザ内のMockへ渡すため、実キー・API・DB・OAuth設定は不要。
+通常、空一覧、401/403/停止/404/409/422/429/503を選んで取得・保存を実行できる。
+空白の表示名で入力不正、正常名の保存と再取得で状態保持も確認できる。
+合成一覧は1ページ2件、不透明cursorで次ページへ進む。シナリオ変更時は状態を初期化する。
+この画面は開発用の契約確認であり、本人確認や実API認可の受け入れではない。
+
+## ローカルHTTP Mock
 
 `pnpm dev:mock`で127.0.0.1:8001に合成データ専用サーバーを起動する。
 `MOCK_SCENARIO=401|403|inactive|404|409|422|429|503|normal|empty`で切り替える。
-Bearerは合成文字列でよく、認証の安全性を検証するサーバーではない。本番へ配備しない。
-ページングヘルパーは不透明cursorと1〜50件を扱う。業務一覧の空fixtureは対応画面の契約追加時に接続する。
+Bearerは合成文字列を使う。認証の安全性を検証するサーバーではなく、本番へ配備しない。
+`GET/PATCH /api/v1/users/me`、`GET /__mock/profiles?limit=2&cursor=...`を利用できる。
+プロフィール更新は生成OpenAPIの型/必須項目/余剰フィールド/長さ制約と、#7の前後空白除去・制御文字拒否に合わせる。
+Mockは各factoryの状態を分離する。HTTP Mockは単一の合成ユーザー用なので実情報を送らない。
+429はRetry-After、全応答はrequest_id/no-storeを返し、CORSで応答ヘッダーを公開する。
 
-`@alter/api-client/preview`は型付きクライアント、共通エラー（status/code/request_id）、
-Bearer転送、応答のリクエストID、一度だけの401更新・再送を提供する。
-HTTPエラーの本文をログへ出さない。サーバーではユーザーごと・リクエストごとに生成する。
-ブラウザへrefresh tokenを返す独自APIや、Supabase重要テーブルの直接DMLは追加しない。
+## 再生成と検証
 
-## mainの実装との統合（2026-11-10）
+CIのAPI contractジョブは4つの生成物の追跡と再生成差分を検査する。
+WebジョブはMock応答を同じOpenAPIで検証し、正式/previewのuser契約一致、入力失敗、
+ページング、認証切れ、PC/375pxでの全シナリオを検証する。
 
-#43/#55でJWT検証・共通エラー・招待DB/CLIがmainへ入った。previewのエラーは
-`alter_api.errors.ErrorResponse`を直接使用し、エラーコードとrequest_idの型を二重管理しない。
-Mockエラーも実APIの生成OpenAPIで検査する。request_idはAPIが採番するため、
-クライアントはX-Request-IDを送らず応答から取得する（APIのCORS許可ヘッダーに含まれない）。
+```bash
+pnpm api:generate
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm test:e2e
+```
 
-`GET/PATCH /users/me`を含む業務ルーターは未実装で、招待判定はドメイン処理まで。
-プロフィール・人格・会話等のMockを実APIへ切り替える条件はまだ満たさない。
-外部OAuth/LLM/Discordを使う自動テストのMockは引き続き維持する。
+人格・会話・通知等の本番業務APIは各依存Issueの範囲。
+合成一覧を本番ユーザー一覧として公開しない。外部OAuth、LLM、Discordと本番ネットワークはこのテストで検証しない。
 
 ## #9 SSR認証
 
-依存は#2（完了）、#7（契約待ち）、#8（先行PR）、#5（トークン未提供）。
+#2/#7とSSR認証（PR #45）はmainへ統合済み。#8の正式契約・合成Mockと併用する。
+#5のトークンは未提供。
 `@supabase/ssr`のbrowser/server clientとNext 16 ProxyでセッションCookieを更新し、
 保護レイアウトとcallbackは`getUser`でAuthサーバーを確認してからAPI `/users/me`で入場判定する。
 403招待外/停止、503判定障害は拒否し、OAuth成功だけで入場しない。
@@ -44,7 +69,7 @@ API401では1回だけ更新・再送する。画面からのAPIは同一Origin�
 アプリにテスト専用認証ルートやCookieの検証を省略する分岐はない。
 法務確認済みの正式文面は未提供のため、/legalは開発用案と明示する。
 
-Draftは依存差分をレビューするため #8 → #9 → #17 のbaseを積む。
+後続のDraft PRは依存差分をレビューするためbaseを積む。
 先行PRのSquash後は残りへmainを取り込み、baseをmainに変更して再検証する。
 mainへ直接push/自動mergeは行わない。依存ブランチ向けPRもCIの対象に含める。
 
@@ -94,54 +119,56 @@ http://127.0.0.1:3000/login で同意→Google/GitHub→テストOAuthのnormal�
 forbidden/inactive/unavailable/failure/cancelで拒否・失敗を再現できる。
 テストAuthはセッションごとに状態を分離し、プロセス停止で消える。実ユーザーの情報を入れない。
 
-## #23 ダッシュボード・会話・通知（Draft）
+## #23 ダッシュボード・会話・通知
 
-依存: #17（PR #46）、#11（Figma未提供）、#21（正式API未提供）。
-`activity_preview.py`に文書を基にしたPydantic案を分離し、既存preview OpenAPI/型へ生成する。
-partner/participantsは`{id,name}`、開始前日時/未生成要約はnull。PR #47のBレビューでこの形に合わせる方針を確認済み。
-Discord連携の読み取りだけはダッシュボードのため#26の契約案を先行する。
+#17と#21の正式APIを利用する。4画面の活動データは`activityApi()`と
+`@alter/api-client`の正式生成型を使う。preview側も会話・通知は正式routerを再利用し、
+独立したPydantic案は保持しない。Mock応答は正式OpenAPIのSchemaで検査する。
+
+ダッシュボードは`GET /agents/me`の後、`GET /agents/{id}/settings`で本人の設定を取得する。
+AIの404だけを未作成として扱い、設定取得の失敗は再試行を案内する。
+Discord読み取りは#26の独立した契約で、取得失敗時もAI・交流・通知を表示する。
+未実装404では「現在利用できません」と表示し、未連携とは判断しない。
 
 一覧・通知・ダッシュボードは30秒、queued/runningの詳細は15秒Polling。
 完了/失敗/停止後は詳細Pollingを止め、非表示タブでは自動取得を控える。
 リクエストの重複を避け、移動・cursor変更時はabort/連番で古い応答を破棄する。
-401/403/404等の失敗で表示データを消去し、所有者変更でクライアント表示を作り直す。
+401/403/404等の取得失敗で表示データを消去し、所有者変更でクライアント表示を作り直す。
 429はBFFのRetry-Afterを引き継ぎ、指定時間（未提供時60秒）まで再取得を止める。
-ページングは不透明cursor、既読は成功時だけ反映し、失敗時は未読のまま再試行可能。
-発言はturn_noのDOM順、生成時刻とAI分身ラベルを表示する。第三者公開は行わない。
+既読は成功時だけ反映し、失敗時は未読のまま再試行可能。成功後に操作ボタンが消える際は
+同じ通知の会話リンク（リンクがなければ通知本体）へフォーカスを移す。
+常設のpolite/atomic領域で最新通知と未読件数を読み上げ、会話本文の自動読み上げはしない。
 
 テストOAuthの`activity`は承認済みAIと合成会話12件、`activity-empty`は空の交流を返す。
-本番FastAPIに業務APIを追加したことや、実認可が完了したことを意味しない。
+PlaywrightはPC/375pxで通知→詳細、ページング、既読失敗からの復帰、15/30秒更新、
+閲覧中404で本文消去、認証切替、Discord障害、未作成、キーボード操作を検証する。
+`tests/db/test_activity_api_db.py::test_generated_web_client_against_live_api`は、
+正式生成TSクライアント→実HTTP FastAPI→使い捨てPostgreSQLを接続し、
+本人会話・本人確定費用・ページング・既読の冪等性・非参加者404を検証する。
+外部Authだけテスト内で差し替え、製品コードに認証迂回は追加しない。
 
-## #24 交流設定・予算・停止・ブロック（Draft）
+```bash
+# migration適用済みの使い捨てDBにだけ向ける（招待テーブルを空にする）
+ALTER_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres \
+ALTER_REQUIRE_DB_TESTS=1 uv run --all-packages pytest tests/db/test_activity_api_db.py
+```
 
-依存: #17（PR #46）、#12（Figma未提供）、#16（正式設定/ブロックAPI未提供）。
-今回のブランチは#23の共通取得・会話導線を利用するため、PR #47も先行する。
-`interaction_preview.py`のPydantic案からsettings GET/PATCH、blocks PUT/DELETE、
-公開先確認用のDiscord guilds GETを生成する。公開先の名称は#26と確認するnullableの案。
-名称/ID/有効チャンネルを確認できない場合は公開ONを無効化するが、公開撤回は可能。
+#11のコード上のデザイン仕上げ（ADR-015）と外部OAuth/本番環境の公開受け入れは、
+それぞれ#11/#37で追跡する。#23では既存UIの機能・正式契約接続・PC/mobile操作を完了する。
 
-頻度0〜2回、非負・有限のUSD予算、Web参加者固定を検証する。予算だけの変更では
-交流/DiscordをONにせず、保存結果を確認してから表示を更新する。エラー時の表示は前回の確認値で、
-結果不明時は最新状態を再確認する。停止は入力中の不正な予算やLLM情報の欠落と独立して実行できる。
-
-#14のLLM供給元/データ条件が未決定のため、`ALTER_LLM_NAME`と
-`ALTER_LLM_DATA_POLICY_URL`（https、ローカル開発だけhttp localhost可）が未設定なら交流ONを拒否する。
-デプロイ時は#14のレビュー済み値だけを設定する。LLMへの人格/必要記憶の送信、他者AIとの自動交流、
-ブラウザ閉鎖後の継続、会話90日保存、Web参加者閲覧を分けて表示し、未チェックの確認でONにする。
-E2Eだけは「合成データ専用LLM・外部送信なし」とローカルの利用説明URLを設定する。
-
-Discord全体公開は別の確認。サーバー/チャンネル名とID、本人のギルド別同意状態、閲覧範囲、
-完全回収不可を表示する。全体ONだけでギルド別同意を付与せず、Bot操作を案内する。
-公開先変更時の同意失効と双方の同意検査、監査の文面版記録は#16/#26/#27のAPI責務であり、Mockでは保証しない。
-
-ブロック/解除は確認Dialogと成功後の反映を共通部品にする。会話の初期状態取得契約が未確定のため、
-会話画面では未確認と表示し、まず冪等なPUTでブロックを確定できる。#25の関係性リストでは
-APIのblocked値を使う。未知の状態を「未ブロック」と推測しない。
 ## PRレビュー反映（#45）
 
 OAuth callbackの入場判定が403 `INVITATION_REQUIRED` / `ACCOUNT_INACTIVE`なら、
 このブラウザのSupabaseセッションを終了して元の拒否理由を表示する。503ではセッションを終了せず再試行できる。
 BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABLE`に統一する。
+
+`SERVICE_UNAVAILABLE`は「サービスを一時的に利用できません。時間をおいて再試行してください。」と表示する。
+認証E2Eの503ケースは実APIと同じコードを返し、PC/mobileで文言とセッションCookieの維持を確認する。
+
+`onboarded_at`は最初の`POST /agents/{id}/profile/approve`成功時にAPIが記録し、再承認では日時を保持する。
+PR #58でこの記録処理が反映された後に、初回承認→ログアウト→再ログインで
+`/onboarding`へ戻らず`/dashboard`へ遷移することを実APIで受け入れ確認する。
+Mockの既存ユーザーでの遷移確認だけでは、この受け入れ条件を完了としない。
 
 ## PRレビュー反映（#46）
 
@@ -153,12 +180,37 @@ BFF/transportの共通エラーがない場合のコードは`SERVICE_UNAVAILABL
 ## PRレビュー反映（#47）
 
 `cost_usd`は本人AIの確定費用だけという方針をAPI説明・生成型・一覧/詳細文言に反映した。
-集計対象列と未確定時のnull/0は#21で確定待ち。nullは従来どおり未提供として表示し、0へ変換しない。
+正式な集計は本人AIのcharge.actual_usd。queued/runningはnull（集計中）、終了後の課金なしは0。UIでnullを0へ変換しない。
 
-## PRレビュー反映（#48）
 
-予算は小数6桁まで、1会話上限は日次予算以下として保存/開始の両方で検証する。
-交流ONには人格承認に加え`agent.status === active`が必要。停止・公開撤回はこれらの条件と独立したまま。
-開始の409は停止状態または同意設定を確認する案内、422は運営上限・小数桁・予算の大小関係を確認する案内を表示する。
-運営上限はAPI側設定を正本とし、UIに既定の$1を固定しない。現時点では応答フィールドを追加せず、422で運営への確認を案内する。
-Webの`ALTER_LLM_NAME`/`ALTER_LLM_DATA_POLICY_URL`とAPIの`ALTER_CONSENT_VERSION`は#14の承認値を同時に設定する。
+## #24 自律交流・費用上限・ブロック
+
+#16の正式設定/ブロックAPIへ`activityApi()`（正式生成クライアント）で接続する。
+previewも同じsettings routerを再利用し、独立したPatch案を保持しない。
+Discordギルドの名称/公開先だけは#26のpreview契約を使い、未取得/404/名称不明では公開ONを禁止する。
+
+`/settings/interaction`は本人AIの取得後に設定を読み、保存成功後だけ保存値を更新する。
+交流とDiscord公開は別の未チェック同意でONにする。承認済みactive AIと開示設定が必要。
+LLMの採用済み表示名/データ利用URLはdocs/14に従いWebへ設定し、APIの同意文面版と同時に配布する。
+空の設定を便宜的な値で補わない。法務/公開ゲートは#37で追跡する。
+
+頻度は整数0〜2、費用は非負/小数6桁まで、1会話上限≤日次予算。
+運営上限はAPIで判定しUIに固定しない。422/409/503でも入力と前回の保存値を保持し、
+409では最新状態の再読込を明示的に選べる。429ではRetry-After（未提供時60秒）だけ再送を待つ。
+停止と公開撤回は不正な未保存予算・LLM開示未設定・Discord取得失敗と独立して送信できる。
+
+会話詳細から確認付きブロック/解除を行う。成功時だけ表示を変更し、204は空本文で処理する。
+成功後は会話を再取得し、取消後の状態を表示する。関係性画面（#25）も同じBlockControlを利用する。
+既存APIにブロック状態取得がないため、未確認を未ブロックとは表示しない。BFFはPUT/DELETEにも
+同一Origin/本人認証を適用し、任意パスは転送しない。
+
+PC/375px/320pxのE2Eは予算・停止・公開撤回のAPI状態反映、失敗からの復帰、
+公開先不明時のON禁止、キーボード停止を検証する。
+実DBの`tests/db/test_settings_api_db.py::test_generated_settings_client_against_live_api`は、
+正式TSクライアント→実HTTP FastAPI→PostgreSQLで、設定保存、独立した同意、非所有者404、
+ブロック/停止でqueued会話とジョブの取消、無関係な予約の保持、同意版の監査を検証する。
+外部Authだけをテスト内で差し替え、製品コードに認証迂回は追加しない。
+
+実行中のWorkerの停止判定（#20）、取消予約の費用精算（#59）、未配信Discord配送の停止判定（#28）、
+#12のデザイン仕上げは各Issueで継続する。UIの停止フラグ保存とqueued会話/ジョブ取消を、それらの
+実装完了と取り違えない。外部LLM/Discordの実通信はこのテストで行わない。

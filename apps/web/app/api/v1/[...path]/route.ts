@@ -11,7 +11,7 @@ async function forward(
   const pathname = path.join("/");
   // Fixed allowlist prevents using this route as an arbitrary authenticated proxy.
   if (
-    !/^(users\/me|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds)|agents(?:\/me|\/[a-f\d-]{36}(?:\/profile(?:\/private|\/revisions|\/approve|\/suggest)?|\/settings|\/blocks\/[a-f\d-]{36})?)?)$/.test(
+    !/^(users\/me|agent-icons|conversations(?:\/[a-f\d-]{36})?|notifications(?:\/[a-f\d-]{36}\/read)?|discord\/(?:connection|guilds)|agents(?:\/me|\/[a-f\d-]{36}(?:\/blocks\/[a-f\d-]{36}|\/settings|\/profile(?:\/private|\/revisions|\/approve|\/suggest)?)?)?)$/.test(
       pathname,
     )
   )
@@ -48,16 +48,40 @@ async function forward(
       "http://localhost:8000",
   );
   upstream.search = request.nextUrl.search;
-  const headers = new Headers({ "Content-Type": "application/json" });
+  const isIcon = pathname === "agent-icons";
+  if (isIcon && request.method !== "POST") return new Response(null, { status: 405 });
+  const contentType = isIcon ? request.headers.get("Content-Type") ?? "" : "application/json";
+  const headers = new Headers({ "Content-Type": contentType });
   const idempotency = request.headers.get("Idempotency-Key");
   if (idempotency) headers.set("Idempotency-Key", idempotency);
   try {
+    let body: BodyInit | undefined;
+    if (isIcon) {
+      const invalid = () => Response.json({error: {code: "VALIDATION_ERROR", message: "画像を確認してください。", request_id: crypto.randomUUID()}}, {status: 422, headers: {"Cache-Control": "no-store"}});
+      if (!["image/png", "image/jpeg", "image/webp"].includes(contentType.split(";", 1)[0].toLowerCase())) return invalid();
+      const reader = request.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      if (reader) {
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > 2097152) { await reader.cancel(); return invalid(); }
+          chunks.push(value);
+        }
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      body = bytes.buffer;
+    } else if (request.method !== "GET") body = await request.text();
     const response = await transport(upstream, {
       method: request.method,
       headers,
-      ...(request.method === "GET" ? {} : { body: await request.text() }),
+      ...(body === undefined ? {} : { body }),
     });
-    return new Response(response.body, {
+    return new Response(response.status === 204 ? null : response.body, {
       status: response.status,
       headers: {
         "Content-Type": "application/json",
@@ -83,10 +107,4 @@ async function forward(
     );
   }
 }
-export {
-  forward as GET,
-  forward as POST,
-  forward as PATCH,
-  forward as PUT,
-  forward as DELETE,
-};
+export { forward as GET, forward as POST, forward as PATCH, forward as PUT, forward as DELETE };

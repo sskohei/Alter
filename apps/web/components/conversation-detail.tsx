@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useCallback } from "react";
-import { ApiError, unwrap } from "@alter/api-client/preview";
-import { browserApi } from "../lib/api-browser";
+import { ApiError, unwrap } from "@alter/api-client";
+import { activityApi } from "../lib/api-browser";
 import { useResource } from "../lib/use-resource";
 import {
   conversationStatus,
@@ -15,14 +15,14 @@ import { DataState } from "./data-state";
 export function ConversationDetail({ id }: { id: string }) {
   const load = useCallback(
     (signal: AbortSignal) =>
-      browserApi()
+      activityApi()
         .GET("/api/v1/conversations/{id}", { params: { path: { id } }, signal })
         .then(unwrap),
     [id],
   );
   const ownLoad = useCallback(
     (signal: AbortSignal) =>
-      browserApi()
+      activityApi()
         .GET("/api/v1/agents/me", { signal })
         .then(unwrap)
         .catch((error) => {
@@ -69,6 +69,7 @@ export function ConversationDetail({ id }: { id: string }) {
                 ownAgentId={own.data.id}
                 otherAgentId={detail.partner.id}
                 otherAgentName={detail.partner.name}
+                onChanged={() => resource.refresh()}
               />
             )}
             {!!own.error && (
