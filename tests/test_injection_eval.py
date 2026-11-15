@@ -1,7 +1,7 @@
 """#32: 注入文の固定評価セット（evaluations/injection/cases.json）を外部通信なしで確かめる。
 
 - ローカル検査（SafetyModerator）の判定が各ケースの ``expect`` と一致する（止めすぎも回帰）
-- ``block`` の文は、どの入口（人格・相手の発言・提案の回答・記憶の候補）から入っても
+- ``block`` の文は、どの入口（人格・相手の発言・相手の名前・記憶・要約・提案の回答）から入っても
   LLM を呼ぶ前に止まり、モデルが従ってしまった場合の出力も止まる
 - ``allow`` の文（普通の会話と、モデルに任せるもの）は入口でも出力でも止めない
 - どの入口でも、文は user の引用データにだけ入り、system 指示は変わらない
@@ -17,6 +17,7 @@ from alter_domain import memory
 from alter_domain.agent_models import ProfileInput
 from alter_domain.llm import (
     SYSTEM,
+    DialogueTurn,
     FakeLLM,
     LLMResponse,
     SafetyModerator,
@@ -51,11 +52,16 @@ def _profile(text: str) -> ProfileInput:
 
 def _entry_prompts(text: str) -> dict[str, list[Any]]:
     """文が入りうる入口ごとの、LLM に渡す直前のプロンプト。"""
+    hello = DialogueTurn(turn_no=1, speaker="partner", content="こんにちは")
+    calm = _profile("穏やか")
     return {
-        "profile": build_prompt(_profile(text), ["こんにちは"]),
-        "turn": build_prompt(_profile("穏やか"), ["こんにちは", text]),
-        "memory": build_prompt(_profile("穏やか"), [], memories=[text]),
-        "summary": build_prompt(_profile("穏やか"), [], summary=text),
+        "profile": build_prompt(_profile(text), [hello]),
+        "turn": build_prompt(
+            calm, [hello, DialogueTurn(turn_no=2, speaker="partner", content=text)]
+        ),
+        "memory": build_prompt(calm, [], memories=[text]),
+        "summary": build_prompt(calm, [], summary=text),
+        "partner-name": build_prompt(calm, [hello], partner_name=text),
         "suggestion": suggestion_prompt({"personality": text}),
     }
 
