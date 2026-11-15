@@ -15,6 +15,8 @@ from sqlalchemy import Connection, Engine, text
 
 from alter_domain import budget, memory
 from alter_domain.llm import (
+    ConversationTurn,
+    DialogueTurn,
     LLMResponse,
     PromptMessage,
     SafetyModerator,
@@ -25,8 +27,8 @@ from alter_domain.llm import (
     build_prompt,
 )
 from alter_domain.llm_contract import Utterance
-from alter_domain.llm_selection import GENERATIONS_PER_AGENT, call_reservation
-from alter_domain.sonnet import LLMUnavailable
+from alter_domain.llm_selection import GENERATIONS_PER_AGENT, call_reservation, summary_reservation
+from alter_domain.sonnet import LLMUnavailable, RequestNotSent
 
 Transaction = Callable[[], AbstractContextManager[Connection]]
 
@@ -36,6 +38,10 @@ class SuggestionLimit(Exception):
 
 
 class UnsettledLLMCall(Exception):
+    pass
+
+
+class SummaryAlreadyStarted(Exception):
     pass
 
 
@@ -98,12 +104,17 @@ class LLMExecution:
         global_limit: Decimal,
         *,
         forbidden: tuple[str, ...] = (),
+        guard_before_dispatch: bool = False,
+        summary_mode: bool = False,
     ) -> None:
         self.engine = engine
         self.client = client
         self.transaction = authorized_transaction
         self.global_limit = global_limit
         self.forbidden = forbidden
+        self.guard_before_dispatch = guard_before_dispatch
+        self.summary_mode = summary_mode
+        self.pending_phase: tuple[UUID, str] | None = None
         self.run_id: UUID | None = None
         self.memory_snapshot: tuple[UUID, UUID, list[str], str | None] | None = None
 
@@ -111,17 +122,15 @@ class LLMExecution:
         if self.memory_snapshot is None:
             return
         agent, other, memories, summary = self.memory_snapshot
-        if (
-            memory.context(conn, agent, other) != memories
-            or memory.recent_summary(conn, agent, other) != summary
-        ):
+        if memory.prompt_context(conn, agent, other) != (memories, summary):
             raise UnsafeOutput("Memory context changed before publication")
 
     def _admit(self, agent: UUID, conversation: UUID | None) -> UUID:
         self.client.require_enabled()
         run = uuid4()
         with self.transaction() as conn:
-            budget.lock_budget(conn)
+            if not (conversation is not None and self.guard_before_dispatch):
+                budget.lock_budget(conn)
             if conn.execute(
                 text(
                     "select 1 from public.llm_runs where agent_id=:agent and status in "
@@ -130,7 +139,27 @@ class LLMExecution:
                 {"agent": agent},
             ).first():
                 raise UnsettledLLMCall()
-            if conversation is None:
+            if self.summary_mode:
+                if conversation is None:
+                    raise ValueError("A summary requires a conversation")
+                if conn.execute(
+                    text(
+                        "select 1 from public.llm_runs where conversation_id=:conv "
+                        "and purpose='summary'"
+                    ),
+                    {"conv": conversation},
+                ).first():
+                    raise SummaryAlreadyStarted()
+                budget.reserve(
+                    conn,
+                    agent,
+                    conversation,
+                    self.client.price,
+                    f"llm:{run}:reserve",
+                    summary_reservation(),
+                    self.global_limit,
+                )
+            elif conversation is None:
                 count = conn.execute(
                     text(
                         "select count(*) from public.llm_runs where agent_id=:agent "
@@ -151,7 +180,8 @@ class LLMExecution:
                     self.global_limit,
                 )
             else:
-                _conversation_allowed(conn, agent, conversation)
+                if not self.guard_before_dispatch:
+                    _conversation_allowed(conn, agent, conversation)
                 attempts = conn.execute(
                     text(
                         "select count(*) from public.llm_runs where agent_id=:agent "
@@ -174,32 +204,51 @@ class LLMExecution:
                     "id": run,
                     "agent": agent,
                     "conv": conversation,
-                    "purpose": "suggestion" if conversation is None else "conversation",
+                    "purpose": "summary"
+                    if self.summary_mode
+                    else ("suggestion" if conversation is None else "conversation"),
                     "usd": call_reservation(),
                 },
             )
         return run
 
     def _phase(self, run: UUID, agent: UUID, conversation: UUID | None, status: str) -> None:
+        if conversation is not None and self.guard_before_dispatch:
+            # Commit the bookkeeping in the next pre-dispatch authorization transaction.
+            # The adapter guards EVERY request, including every token-count retry.
+            self.pending_phase = (run, status)
+            return
         with self.transaction() as conn:
             self.validate_memory_context(conn)
             budget.lock_budget(conn)
-            if conversation is not None:
+            if conversation is not None and not self.summary_mode:
                 _conversation_allowed(conn, agent, conversation)
             limits = conn.execute(
                 text(
-                    "select daily_budget_usd,max_session_usd from public.agent_settings "
-                    "where agent_id=:agent for update"
+                    "WITH ledger AS (select agent_id, "
+                    "case when kind='reserve' then estimated_usd "
+                    "when kind='release' then -estimated_usd when kind='charge' and "
+                    "created_at >= date_trunc('day',now() at time zone 'UTC') at time zone 'UTC' "
+                    "then actual_usd else 0 end as daily, "
+                    "case when conversation_id=:conv then case "
+                    "when kind='reserve' then estimated_usd "
+                    "when kind='release' then -estimated_usd "
+                    "when kind='charge' then actual_usd else 0 end else 0 end as session "
+                    "from public.usage_records) "
+                    "select s.daily_budget_usd,s.max_session_usd, "
+                    "(select coalesce(sum(daily),0) from ledger) as global_exposure, "
+                    "(select coalesce(sum(daily),0) from ledger where agent_id=:agent) "
+                    "as own_exposure, "
+                    "(select coalesce(sum(session),0) from ledger where agent_id=:agent) "
+                    "as session_exposure "
+                    "from public.agent_settings s where s.agent_id=:agent for update of s"
                 ),
-                {"agent": agent},
+                {"agent": agent, "conv": conversation},
             ).one()
             if (
-                budget.exposure(conn, agent=agent) > limits.daily_budget_usd
-                or budget.exposure(conn) > self.global_limit
-                or (
-                    conversation is not None
-                    and budget.session_exposure(conn, agent, conversation) > limits.max_session_usd
-                )
+                limits.own_exposure > limits.daily_budget_usd
+                or limits.global_exposure > self.global_limit
+                or (conversation is not None and limits.session_exposure > limits.max_session_usd)
                 or (conversation is None and call_reservation() > limits.max_session_usd)
             ):
                 raise budget.BudgetExceeded()
@@ -207,6 +256,15 @@ class LLMExecution:
                 text("update public.llm_runs set status=:status where id=:id"),
                 {"id": run, "status": status},
             )
+
+    def flush_phase(self, conn: Connection) -> None:
+        if self.pending_phase is not None:
+            run, status = self.pending_phase
+            conn.execute(
+                text("update public.llm_runs set status=:status where id=:id"),
+                {"id": run, "status": status},
+            )
+            self.pending_phase = None
 
     def _charge(
         self, run: UUID, agent: UUID, conversation: UUID | None, phase: str, response: LLMResponse
@@ -328,11 +386,19 @@ class LLMExecution:
                 raise UnsafeOutput("Output failed independent safety review")
             # Recheck access after the final call too; never return output after revocation.
             with self.transaction() as conn:
-                self.validate_memory_context(conn)
-                if conversation is not None:
+                if not self.guard_before_dispatch:
+                    self.validate_memory_context(conn)
+                if (
+                    conversation is not None
+                    and not self.guard_before_dispatch
+                    and not self.summary_mode
+                ):
                     _conversation_allowed(conn, agent, conversation)
             self._finish(run, agent, conversation, "succeeded")
             return value
+        except RequestNotSent as exc:
+            self._finish(run, agent, conversation, "failed")
+            raise exc.reason from None
         except (TemporaryLLMError, LLMUnavailable):
             self._finish(run, agent, conversation, "failed")
             raise
@@ -348,32 +414,59 @@ class LLMExecution:
                 raise UnknownLLMOutcome("Provider outcome is unknown") from None
             raise
 
-    def conversation_turn(self, agent: UUID, conversation: UUID, turns: list[str]) -> Utterance:
+    def conversation_turn(
+        self, agent: UUID, conversation: UUID, turns: list[ConversationTurn]
+    ) -> Utterance:
         self.memory_snapshot = None
         with self.transaction() as conn:
-            _conversation_allowed(conn, agent, conversation)
-            other = conn.execute(
+            if not self.guard_before_dispatch:
+                _conversation_allowed(conn, agent, conversation)
+            participants = conn.execute(
                 text(
-                    "select agent_id from public.conversation_participants "
-                    "where conversation_id=:conv and agent_id<>:agent"
+                    "select a.id,a.name from public.conversation_participants cp "
+                    "join public.agents a on a.id=cp.agent_id "
+                    "where cp.conversation_id=:conv order by cp.ordinal"
                 ),
-                {"conv": conversation, "agent": agent},
-            ).scalar_one()
-            memories = memory.context(conn, agent, other)
-            summary = memory.recent_summary(conn, agent, other)
+                {"conv": conversation},
+            ).all()
+            own = next(row for row in participants if row.id == agent)
+            partner = next(row for row in participants if row.id != agent)
+            other = partner.id
+            if any(turn.agent_id not in (agent, other) for turn in turns):
+                raise UnsafeOutput("Unknown conversation speaker")
+            dialogue = [
+                DialogueTurn(
+                    turn_no=turn.turn_no,
+                    speaker="self" if turn.agent_id == agent else "partner",
+                    content=turn.content,
+                )
+                for turn in turns
+            ]
+            memories, summary = memory.prompt_context(conn, agent, other)
             self.memory_snapshot = agent, other, memories, summary
-            messages = approved_prompt(conn, agent, turns, memories, summary)
+            messages = approved_prompt(
+                conn,
+                agent,
+                dialogue,
+                memories,
+                summary,
+                self_name=own.name,
+                partner_name=partner.name,
+            )
         return self.execute(agent, messages, Utterance, conversation=conversation)
 
 
 def _conversation_allowed(conn: Connection, agent: UUID, conversation: UUID) -> None:
-    status = conn.execute(
-        text("select status from public.conversations where id=:id"), {"id": conversation}
-    ).scalar_one_or_none()
     rows = conn.execute(
         text(
             "select a.id,a.status,a.approved_profile_version,s.autonomy_enabled,p.deleted_at,"
-            "i.status as invitation_status from public.conversation_participants cp "
+            "i.status as invitation_status,c.status as conversation_status, "
+            "exists(select 1 from public.agent_blocks b where "
+            "b.blocker_agent_id in (select agent_id from public.conversation_participants "
+            "where conversation_id=:id) and b.blocked_agent_id in "
+            "(select agent_id from public.conversation_participants where conversation_id=:id)) "
+            "as blocked from public.conversation_participants cp "
+            "join public.conversations c on c.id=cp.conversation_id "
             "join public.agents a on a.id=cp.agent_id "
             "join public.agent_settings s on s.agent_id=a.id "
             "join public.profiles p on p.id=a.owner_id "
@@ -383,11 +476,12 @@ def _conversation_allowed(conn: Connection, agent: UUID, conversation: UUID) -> 
         {"id": conversation},
     ).all()
     if (
-        status not in ("queued", "running")
-        or len(rows) != 2
+        len(rows) != 2
         or agent not in [r.id for r in rows]
         or any(
-            r.status != "active"
+            r.conversation_status not in ("queued", "running")
+            or r.blocked
+            or r.status != "active"
             or r.approved_profile_version is None
             or not r.autonomy_enabled
             or r.deleted_at is not None
@@ -396,14 +490,6 @@ def _conversation_allowed(conn: Connection, agent: UUID, conversation: UUID) -> 
         )
     ):
         raise UnsafeOutput("Conversation is not authorized")
-    if conn.execute(
-        text(
-            "select 1 from public.agent_blocks where blocker_agent_id=any(:ids) "
-            "and blocked_agent_id=any(:ids)"
-        ),
-        {"ids": [r.id for r in rows]},
-    ).first():
-        raise UnsafeOutput("Conversation is blocked")
 
 
 def _strings(value: object) -> list[str]:
@@ -419,9 +505,12 @@ def _strings(value: object) -> list[str]:
 def approved_prompt(
     conn: Connection,
     agent: UUID,
-    turns: list[str] | None = None,
+    turns: list[DialogueTurn] | None = None,
     memories: list[str] | None = None,
     summary: str | None = None,
+    *,
+    self_name: str | None = None,
+    partner_name: str | None = None,
 ) -> list[PromptMessage]:
     """Load ONLY the approved public revision. Worker supplies separately authorized quotes."""
     from alter_domain.agents import get_profile
@@ -435,4 +524,11 @@ def approved_prompt(
     profile = get_profile(conn, agent, version)
     if profile.approved_at is None:
         raise UnsafeOutput("An approved profile is required")
-    return build_prompt(profile, turns or [], memories, summary)
+    return build_prompt(
+        profile,
+        turns or [],
+        memories,
+        summary,
+        self_name=self_name,
+        partner_name=partner_name,
+    )

@@ -7,6 +7,20 @@ from alter_domain.sonnet import LLMUnavailable
 from alter_worker.main import main
 
 
+def test_role_specific_env_file_does_not_load_root_settings(monkeypatch, tmp_path):
+    path = tmp_path / "worker.env"
+    path.write_text("ALTER_MODE=live\nLLM_ENABLED=false\n")
+    monkeypatch.delenv("ALTER_MODE", raising=False)
+    monkeypatch.setattr("sys.argv", ["alter-worker", "--once", "--env-file", str(path)])
+    connect = Mock(side_effect=AssertionError("must not connect"))
+    monkeypatch.setattr("alter_worker.main.create_db_engine", connect)
+    settings = Mock(side_effect=Settings)
+    monkeypatch.setattr("alter_worker.main.Settings", settings)
+    main()
+    settings.assert_called_once_with(_env_file=str(path))
+    connect.assert_not_called()
+
+
 @pytest.mark.parametrize("mode,enabled", [("mock", True), ("live", False)])
 def test_mock_or_disabled_worker_never_connects(monkeypatch, mode, enabled):
     monkeypatch.setattr("sys.argv", ["alter-worker", "--once"])

@@ -6,17 +6,19 @@
 - ``PATCH /notifications/{id}/read``（``read_notification``、冪等）
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from alter_domain import activity
-from fastapi import APIRouter, Depends, Query, Response
+from alter_domain import activity, scheduling
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from alter_api.auth import CurrentPrincipal
-from alter_api.business import BusinessConnection
+from alter_api.business import BusinessConnection, InteractionConnection
 from alter_api.errors import ApiError, ErrorResponse
+from alter_api.idempotency import idempotency_key
 from alter_api.pagination import Page, PageParams, page_params
 
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -95,6 +97,76 @@ def _not_found(what: str) -> ApiError:
 
 def _invalid_cursor() -> ApiError:
     return ApiError(422, "VALIDATION_ERROR", "Invalid cursor")
+
+
+class ManualInteractionOptions(BaseModel):
+    enabled: bool
+    unlimited_daily_count: bool
+
+
+class StartedConversation(BaseModel):
+    id: UUID
+
+
+def _manual_enabled(request: Request) -> bool:
+    settings = request.app.state.settings
+    return bool(
+        settings.demo_manual_interactions_enabled
+        and settings.alter_environment == "local"
+        and settings.alter_mode == "live"
+    )
+
+
+@router.get(
+    "/conversations/start",
+    response_model=ManualInteractionOptions,
+    responses=ERROR_RESPONSES,
+    operation_id="get_manual_interaction_options",
+)
+def manual_interaction_options(
+    request: Request, conn: BusinessConnection, response: Response
+) -> ManualInteractionOptions:
+    response.headers["Cache-Control"] = "no-store"
+    enabled = _manual_enabled(request)
+    return ManualInteractionOptions(enabled=enabled, unlimited_daily_count=enabled)
+
+
+@router.post(
+    "/conversations/start",
+    response_model=StartedConversation,
+    status_code=202,
+    responses=ERROR_RESPONSES,
+    operation_id="start_conversation",
+    summary="ローカルデモで本人のAIの交流を1件予約する（日次回数制限なし）",
+)
+def start_conversation(
+    request: Request,
+    principal: CurrentPrincipal,
+    conn: InteractionConnection,
+    response: Response,
+    key: Annotated[str | None, Depends(idempotency_key)],
+) -> StartedConversation:
+    response.headers["Cache-Control"] = "no-store"
+    if not _manual_enabled(request):
+        raise ApiError(403, "FORBIDDEN", "Manual interaction is disabled")
+    if key is None:
+        raise ApiError(422, "VALIDATION_ERROR", "Idempotency-Key is required")
+    settings = request.app.state.settings
+    if not settings.llm_enabled or not settings.anthropic_api_key.get_secret_value():
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "Conversation generation is unavailable")
+    job = scheduling.select_due(
+        conn,
+        datetime.now(UTC),
+        settings.max_daily_cost_usd,
+        owner_id=principal.sub,
+        manual_key=key,
+    )
+    if job is None:
+        raise ApiError(409, "CONFLICT", "No eligible partner or insufficient budget")
+    conversation_id = conn.execute(
+        text("select id from public.conversations where job_id=:job"), {"job": job}
+    ).scalar_one()
+    return StartedConversation(id=conversation_id)
 
 
 @router.get(

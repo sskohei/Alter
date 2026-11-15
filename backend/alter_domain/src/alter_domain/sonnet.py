@@ -26,6 +26,7 @@ from alter_domain.llm_selection import (
     MODEL,
     MODERATION_INPUT_TOKENS,
     MODERATION_OUTPUT_TOKENS,
+    SUMMARY_MODERATION_INPUT_TOKENS,
     model_price,
 )
 from alter_domain.settings import Settings
@@ -33,6 +34,14 @@ from alter_domain.settings import Settings
 
 class LLMUnavailable(Exception):
     pass
+
+
+class RequestNotSent(Exception):
+    """A pre-dispatch authorization guard failed before any provider request."""
+
+    def __init__(self, reason: Exception) -> None:
+        super().__init__("Request rejected before dispatch")
+        self.reason = reason
 
 
 class Usage(BaseModel):
@@ -76,11 +85,16 @@ class SonnetClient:
         http: httpx.Client,
         *,
         before_request: Callable[[], None] | None = None,
+        summary_mode: bool = False,
     ) -> None:
         self.before_request = before_request
         self.price = model_price()
         self._settings = settings
         self._http = http
+        self._summary_mode = summary_mode
+
+    def for_summary(self) -> "SonnetClient":
+        return SonnetClient(self._settings, self._http, summary_mode=True)
 
     def require_enabled(self) -> None:
         if (
@@ -93,7 +107,10 @@ class SonnetClient:
     def _post(self, path: str, body: dict[str, Any], *, billable: bool) -> dict[str, Any]:
         self.require_enabled()
         if self.before_request is not None:
-            self.before_request()
+            try:
+                self.before_request()
+            except Exception as exc:
+                raise RequestNotSent(exc) from None
         try:
             response = self._http.post(
                 "https://api.anthropic.com/v1/" + path,
@@ -137,7 +154,10 @@ class SonnetClient:
     def prepare(
         self, messages: list[PromptMessage], schema: type[BaseModel], *, moderation: bool = False
     ) -> PreparedCall:
-        input_limit = MODERATION_INPUT_TOKENS if moderation else MAX_INPUT_TOKENS
+        review_limit = (
+            SUMMARY_MODERATION_INPUT_TOKENS if self._summary_mode else MODERATION_INPUT_TOKENS
+        )
+        input_limit = review_limit if moderation else MAX_INPUT_TOKENS
         output_limit = MODERATION_OUTPUT_TOKENS if moderation else MAX_OUTPUT_TOKENS
         margin = 128 if moderation else 1024
         body: dict[str, Any] = {
@@ -171,6 +191,8 @@ class SonnetClient:
                 history = data.get("quoted_memories") or data.get("quoted_turns")
                 if not isinstance(history, list) or not history:
                     raise ValueError
+                if history is data.get("quoted_turns") and len(history) <= 2:
+                    raise UnsafeOutput("Recent dialogue exceeds the token bound")
                 history.pop(-1 if data.get("quoted_memories") else 0)
                 body["messages"][0]["content"] = json.dumps(data, ensure_ascii=False)
             except (ValueError, TypeError, AttributeError):

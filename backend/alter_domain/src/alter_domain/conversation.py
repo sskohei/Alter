@@ -15,15 +15,14 @@ from alter_domain.activity import notify_conversation_completed
 from alter_domain.budget import (
     BudgetExceeded,
     UnsettledBudget,
-    exposure,
     held,
     lock_budget,
     release_session,
     require_settled,
-    session_exposure,
 )
-from alter_domain.interaction import eligible_agents, lock_interactions, pair_allowed
+from alter_domain.interaction import ELIGIBLE_AGENTS_SQL, lock_interactions
 from alter_domain.llm import (
+    ConversationTurn,
     StructuredLLMClient,
     TemporaryLLMError,
     UnknownLLMOutcome,
@@ -231,39 +230,59 @@ def check_context(
     active_run: uuid.UUID | None = None,
 ) -> None:
     """Called under the common lock before each external boundary and publication."""
-    assert_lease(conn, lease, now)
     row = conn.execute(
         text(
-            "select status,profile_versions,started_at from public.conversations "
-            "where id=:id for update"
+            "WITH eligible AS (" + ELIGIBLE_AGENTS_SQL + "), "
+            "participants AS (select agent_id from public.conversation_participants "
+            "where conversation_id=:id), ledger AS ("
+            "select agent_id, coalesce(sum(case when kind='reserve' then estimated_usd "
+            "when kind='release' then -estimated_usd when kind='charge' and created_at >= "
+            "date_trunc('day',cast(:now as timestamptz) at time zone 'UTC') at time zone 'UTC' "
+            "then actual_usd else 0 end),0) as daily, "
+            "coalesce(sum(case when conversation_id=:id then case "
+            "when kind='reserve' then estimated_usd when kind='release' then -estimated_usd "
+            "when kind='charge' then actual_usd else 0 end else 0 end),0) as session "
+            "from public.usage_records group by agent_id) "
+            "select c.status,c.started_at, "
+            "(select count(*) from participants) as participant_count, "
+            "(select count(*) from eligible e join participants p on p.agent_id=e.id "
+            "where c.profile_versions->>e.id::text=e.approved_profile_version::text) "
+            "as approved_count, "
+            "not exists(select 1 from public.agent_blocks where "
+            "blocker_agent_id in (select agent_id from participants) "
+            "and blocked_agent_id in (select agent_id from participants)) "
+            "and not exists(select 1 from public.conversation_participants cp "
+            "join public.conversations busy on busy.id=cp.conversation_id "
+            "where cp.agent_id in (select agent_id from participants) "
+            "and busy.status in ('queued','running') and busy.id<>:id) as pair_safe, "
+            "coalesce((select sum(daily) from ledger),0) as global_exposure, "
+            "not exists(select 1 from eligible e join participants p on p.agent_id=e.id "
+            "join ledger l on l.agent_id=e.id where l.daily>e.daily_budget_usd "
+            "or l.session>e.max_session_usd) as budgets_safe "
+            "from public.conversations c join public.background_jobs j on j.id=c.job_id "
+            "where c.id=:id and j.id=:job and j.status='running' "
+            "and j.lease_token=:token and j.lease_until>:now for update of c,j"
         ),
-        {"id": lease.conversation},
-    ).one()
-    ids = participants(conn, lease.conversation)
+        {
+            "id": lease.conversation,
+            "job": lease.job,
+            "token": lease.token,
+            "now": now,
+            "run": active_run,
+        },
+    ).first()
+    if row is None:
+        raise LeaseLost()
     if (
         row.status not in ("queued", "running")
-        or len(ids) != 2
-        or not pair_allowed(
-            conn,
-            (ids[0], ids[1]),
-            now,
-            conversation=lease.conversation,
-            active_run=active_run,
-        )
-    ):
-        raise ConsentLost()
-    eligible = {r["id"]: r for r in eligible_agents(conn, active_run=active_run)}
-    if any(
-        row.profile_versions.get(str(a)) != eligible[a]["approved_profile_version"] for a in ids
+        or row.participant_count != 2
+        or row.approved_count != 2
+        or not row.pair_safe
     ):
         raise ConsentLost()
     if row.started_at is not None and (now - row.started_at).total_seconds() >= 300:
         raise TimeLimit()
-    if exposure(conn, now=now) > global_limit or any(
-        exposure(conn, agent=a, now=now) > eligible[a]["daily_budget_usd"]
-        or session_exposure(conn, a, lease.conversation) > eligible[a]["max_session_usd"]
-        for a in ids
-    ):
+    if row.global_exposure > global_limit or not row.budgets_safe:
         raise BudgetExceeded()
 
 
@@ -272,15 +291,19 @@ def prepare(
     lease: Lease,
     now: datetime,
     global_limit: Decimal,
-) -> tuple[uuid.UUID, int, list[str]]:
+) -> tuple[uuid.UUID, int, list[ConversationTurn]]:
     lock_interactions(conn)
     assert_lease(conn, lease, now)
-    turns = list(
-        conn.execute(
-            text("select content from public.messages where conversation_id=:id order by turn_no"),
+    turns = [
+        ConversationTurn(row.agent_id, row.turn_no, row.content)
+        for row in conn.execute(
+            text(
+                "select agent_id,turn_no,content from public.messages "
+                "where conversation_id=:id order by turn_no"
+            ),
             {"id": lease.conversation},
-        ).scalars()
-    )
+        )
+    ]
     turn = len(turns) + 1
     # Check crash markers before consent/budget: unknown requests must never release holds.
     invocation = conn.execute(
@@ -382,7 +405,6 @@ def run_one(
     def authorized() -> Iterator[Connection]:
         with engine.begin() as conn:
             lock_interactions(conn)
-            assert_lease(conn, lease, clock())
             if stopped.is_set():
                 raise WorkerStopped()
             check_context(conn, lease, clock(), global_limit, active_run=execution.run_id)
@@ -390,10 +412,17 @@ def run_one(
             yield conn
 
     def before_request() -> None:
-        with authorized():
-            pass
+        with authorized() as conn:
+            execution.flush_phase(conn)
 
-    execution = LLMExecution(engine, client, authorized, global_limit, forbidden=forbidden)
+    execution = LLMExecution(
+        engine,
+        client,
+        authorized,
+        global_limit,
+        forbidden=forbidden,
+        guard_before_dispatch=isinstance(client, SonnetClient),
+    )
     # Count-token retries inside the provider adapter must also recheck stop/consent/lease.
     previous_guard = None
     if isinstance(client, SonnetClient):
@@ -409,7 +438,6 @@ def run_one(
                 value = execution.conversation_turn(aid, lease.conversation, turns)
                 with engine.begin() as conn:
                     lock_interactions(conn)
-                    assert_lease(conn, lease, clock())
                     if stopped.is_set():
                         raise WorkerStopped()
                     check_context(conn, lease, clock(), global_limit)

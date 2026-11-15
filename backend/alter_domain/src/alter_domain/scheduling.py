@@ -1,3 +1,4 @@
+import hashlib
 import itertools
 import json
 import secrets
@@ -21,15 +22,38 @@ def utc_slot(now: datetime) -> tuple[datetime, int]:
 
 
 def select_due(
-    conn: Connection, now: datetime, global_limit: Decimal, *, seed: int = 0
+    conn: Connection,
+    now: datetime,
+    global_limit: Decimal,
+    *,
+    seed: int = 0,
+    owner_id: uuid.UUID | None = None,
+    manual_key: str | None = None,
 ) -> uuid.UUID | None:
     now, slot = utc_slot(now)
     lock_interactions(conn)
+    manual_dedupe = None
+    if manual_key is not None:
+        if owner_id is None:
+            raise ValueError("Manual scheduling requires an owner")
+        digest = hashlib.sha256(manual_key.encode()).hexdigest()
+        manual_dedupe = f"manual:{owner_id}:{digest}"
+        existing = conn.execute(
+            text(
+                "select id from public.background_jobs "
+                "where kind='conversation.run' and dedupe_key=:key"
+            ),
+            {"key": manual_dedupe},
+        ).scalar_one_or_none()
+        if existing is not None:
+            return uuid.UUID(str(existing))
     agents = eligible_agents(conn)
     choices = []
     for a, b in itertools.combinations(agents, 2):
+        if owner_id is not None and owner_id not in (a["owner_id"], b["owner_id"]):
+            continue
         pair = (a["id"], b["id"])
-        if not pair_allowed(conn, pair, now):
+        if not pair_allowed(conn, pair, now, ignore_daily_limit=manual_key is not None):
             continue
         count = (
             conn.execute(
@@ -44,7 +68,7 @@ def select_due(
         rank = pair_rank(pair, (a["interests"], b["interests"]), count, seed)
         choices.append((*rank, a, b))
     for _, _, a, b in sorted(choices, key=lambda x: (x[0], x[1])):
-        key = f"{now.date()}:{slot}:{a['id']}:{b['id']}"
+        key = manual_dedupe or f"{now.date()}:{slot}:{a['id']}:{b['id']}"
         if conn.execute(
             text(
                 "select 1 from public.background_jobs "

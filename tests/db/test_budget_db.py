@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 from alter_domain.budget import BudgetExceeded, LedgerConflict, exposure, reserve
-from alter_domain.llm import FakeLLM
+from alter_domain.llm import ConversationTurn, FakeLLM
 from sqlalchemy import Engine, text
 
 
@@ -312,7 +312,9 @@ def test_shared_conversation_execution_uses_only_approved_profile_and_session_re
                 release_session(conn, ai_pair[0], conv, model_price())
             return
         for _ in range(4):
-            result = service.conversation_turn(ai_pair[0], conv, ["最近の本"])
+            result = service.conversation_turn(
+                ai_pair[0], conv, [ConversationTurn(ai_pair[1], 1, "最近の本")]
+            )
             assert result.utterance == "本について話しましょう"
         before = len(requests)
         with pytest.raises(BudgetExceeded):

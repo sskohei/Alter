@@ -256,3 +256,27 @@ previewも正式settings routerを再利用し、Patchの厳密型・null/未知
 #22のWorker生成を#25の正式な記憶・関係性APIへ統合する。`Relationship.blocked`は本人からだけのブロック。
 記憶の出典NULL対応・保持期限・可視性・本人の削除再送は維持し、削除処理は`memory_read`を共用する。
 各ターンへの記憶／要約入力と会話パージ連動は[記憶契約](10-memory-relationship.md)に従う。
+
+
+## ローカルデモの手動交流（#89）
+
+- `GET /conversations/start` (`get_manual_interaction_options`): 招待認可後、
+  `{enabled, unlimited_daily_count}`を返す。両値ともlocal/live/明示フラグの条件が揃った場合だけtrue。
+- `POST /conversations/start` (`start_conversation`): bodyなし。必須`Idempotency-Key`で1会話を予約し、
+  202 `{id: conversation_id}`を返す。生成はWorkerが非同期で担当する。応答はno-store。
+- 無効な環境/フラグは403、キーなし/不正は422、LLM無効/資格情報未設定は503、
+  相手不在・本人または相手の条件不成立・予算不足・進行中会話がある場合は409。招待拒否/未認証は通常契約を維持。
+- クライアントからowner/agent/相手のIDは受け取らず、JWT本人のAIを含む候補だけを選ぶ。
+  同じ本人・キーの再送は新規予約や課金を作らず、完了済みでも同じIDを返す。
+- 手動開始は日次回数と15分slotを除外する。交流OFF・頻度0・未承認・ブロック・削除/失効・
+  課金不明・同時1会話・AI/全体の費用制限は除外しない。設定値や同意を自動変更しない。
+- APIは認可対象をロックする前にScheduler/Workerと同じ招待→profiles→agents→settings→予算の
+  順序でロックし、異なる本人からの同時開始や招待失効と整合させる。
+
+
+## 会話要約の非同期生成（#95）
+
+既存のConversationSummary/ConversationDetailのsummaryフィールドは引き続きstring|null。
+completedでも生成/安全判定待ちや残予算不足ではnullとなる。発言の列挙を要約の代わりに返さない。
+成功した要約だけを同じフィールドへ保存し、Webは直近の完了会話を一定期間再読込して反映する。
+新しいAPI経路や入力/応答schemaの変更はない。

@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from typing import Annotated
 
 from alter_domain.auth_admin import AuthAdminUnavailable
+from alter_domain.interaction import lock_interactions
 from alter_domain.invitations import AccessDecision, InvitationDataError, evaluate_access
 from fastapi import Depends, Request
 from sqlalchemy import Connection, text
@@ -14,13 +15,18 @@ from alter_api.auth.jwt import authorization_unavailable
 from alter_api.errors import ApiError
 
 
-def business_connection(request: Request, principal: CurrentPrincipal) -> Iterator[Connection]:
+def _business_connection(
+    request: Request, principal: CurrentPrincipal, *, interaction: bool = False
+) -> Iterator[Connection]:
     settings = request.app.state.settings
     if settings.alter_mode != "live":
         raise ApiError(503, "SERVICE_UNAVAILABLE", "Business persistence requires live mode")
     try:
         auth_user = request.app.state.auth_admin.get_user(principal.sub)
         with request.app.state.db_engine.begin() as conn:
+            if interaction:
+                # Acquire the scheduler's complete lock order before caller-specific locks.
+                lock_interactions(conn)
             # Match invitation revocation's lock order; writes cannot race past revocation.
             invitation = conn.execute(
                 text("select id,status from public.invitations where auth_user_id=:id for update"),
@@ -49,4 +55,13 @@ def business_connection(request: Request, principal: CurrentPrincipal) -> Iterat
         raise authorization_unavailable() from None
 
 
+def business_connection(request: Request, principal: CurrentPrincipal) -> Iterator[Connection]:
+    yield from _business_connection(request, principal)
+
+
+def interaction_connection(request: Request, principal: CurrentPrincipal) -> Iterator[Connection]:
+    yield from _business_connection(request, principal, interaction=True)
+
+
 BusinessConnection = Annotated[Connection, Depends(business_connection, scope="function")]
+InteractionConnection = Annotated[Connection, Depends(interaction_connection, scope="function")]

@@ -8,10 +8,11 @@ import {
   conversationStatus,
   dateLabel,
   costLabel,
-  isOngoing,
+  needsConversationRefresh,
 } from "../lib/activity";
 import { BlockControl } from "./block-control";
 import { DataState } from "./data-state";
+import { Button } from "./ui/button";
 export function ConversationDetail({ id }: { id: string }) {
   const load = useCallback(
     (signal: AbortSignal) =>
@@ -32,7 +33,7 @@ export function ConversationDetail({ id }: { id: string }) {
     [],
   );
   const own = useResource(ownLoad);
-  const resource = useResource(load, 15_000, isOngoing);
+  const resource = useResource(load, 2_000, needsConversationRefresh);
   const detail = resource.data;
   return (
     <>
@@ -66,7 +67,12 @@ export function ConversationDetail({ id }: { id: string }) {
             {detail.status === "cancelled" && (
               <p className="notice">この交流は停止しました。</p>
             )}
-            <p>{detail.summary ?? "要約は完了後に表示します。"}</p>
+            <p>{detail.summary ?? (detail.status === "completed"
+              ? "要約はまだ作成されていません。"
+              : "要約は完了後に表示します。")}</p>
+            {detail.status === "completed" && !detail.summary && (
+              <Button variant="outline" onClick={resource.refresh}>要約を再読み込み</Button>
+            )}
             {own.data && (
               <BlockControl
                 key={detail.partner.id}

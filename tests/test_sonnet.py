@@ -5,6 +5,7 @@ import httpx
 import pytest
 from alter_domain.agent_models import AgentDraftInput, ProfileInput, SuggestionInput
 from alter_domain.llm import (
+    DialogueTurn,
     PromptMessage,
     RateLimitedLLMError,
     SafetyModerator,
@@ -21,6 +22,7 @@ from alter_domain.llm_selection import (
     MODEL,
     call_reservation,
     session_reservation,
+    summary_reservation,
 )
 from alter_domain.settings import Settings
 from alter_domain.sonnet import LLMUnavailable, SonnetClient, wire_schema
@@ -171,13 +173,21 @@ def test_context_trim_preserves_profile_system_and_schema():
         bodies.append(json.loads(req.content))
         return httpx.Response(200, json={"input_tokens": 2500 if len(bodies) < 4 else 100})
 
-    messages = build_prompt(ProfileInput(**PROFILE), ["old turn"], ["old memory"], "old summary")
+    turns = [
+        DialogueTurn(turn_no=1, speaker="partner", content="old turn"),
+        DialogueTurn(turn_no=2, speaker="self", content="読書が好きです。"),
+        DialogueTurn(turn_no=3, speaker="partner", content="どんな本が好きですか？"),
+    ]
+    messages = build_prompt(ProfileInput(**PROFILE), turns, ["old memory"], "old summary")
     original = messages[1].content
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         SonnetClient(configured(), http).prepare(messages, Utterance)
     data = json.loads(bodies[-1]["messages"][0]["content"])
     assert data["quoted_summary"] is None
-    assert data["quoted_memories"] == [] and data["quoted_turns"] == []
+    assert data["quoted_memories"] == []
+    assert data["quoted_turns"] == [turn.model_dump() for turn in turns[1:]]
+    assert data["conversation"]["next_turn"] == 4
+    assert data["conversation"]["reply_to_turn"] == 3
     assert data["approved_profile"]["personality"] == "穏やか"
     assert bodies[0]["system"] == bodies[-1]["system"]
     assert bodies[0]["output_config"] == bodies[-1]["output_config"]
@@ -263,3 +273,22 @@ def test_independent_moderation_uses_supported_sonnet_thinking_and_small_bounds(
     assert call.body["output_config"]["effort"] == "low"
     assert call.input_bound == 228 and call.output_bound == 16
     assert call.body["max_tokens"] == 16
+
+
+def test_summary_review_has_its_own_reserved_bound_without_changing_conversation_limits():
+    from alter_domain.llm_execution import SafetyVerdict
+    from alter_domain.llm_selection import model_price
+
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"input_tokens": 500}))
+    ) as http:
+        regular = SonnetClient(configured(), http)
+        with pytest.raises(UnsafeOutput):
+            regular.prepare(
+                [PromptMessage(role="user", content="要約")], SafetyVerdict, moderation=True
+            )
+        reviewed = regular.for_summary().prepare(
+            [PromptMessage(role="user", content="要約")], SafetyVerdict, moderation=True
+        )
+    assert reviewed.input_bound == 628 and reviewed.output_bound == 16
+    assert summary_reservation() == model_price().cost(3072, 512) + model_price().cost(768, 16)
