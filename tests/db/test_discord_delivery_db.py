@@ -636,3 +636,140 @@ def test_bot_loop_posts_thread_and_dms_end_to_end(
         channel = bot.rest.dm_channels[p.discord_id]
         assert bot.rest.messages[channel] == [f"新しい交流があります: {WEB}/conversations/{cid}"]
     assert {r.status for r in _dm_rows(engine, cid)} == {"sent"}
+
+
+# -- 公開の撤回と送信の競合（#32） ----------------------------------------------------------
+# 取り出し（Bot）と撤回（Web・Discord の操作）が同時に起きても、行き詰まらず（デッドロックや
+# 長い待ちにならず）、次のどちらかに必ず決まる（docs/11「投稿と同期」）。
+# - 撤回が先: その行は取り出されず cancelled になる
+# - 取り出しが先: sending になった行は送信を続け、撤回は pending の行だけを取り消す
+
+
+def _publish_off(conn: Connection, a: Person, b: Person) -> None:
+    settings.update_settings(
+        conn,
+        a.profile,
+        a.agent,
+        {"discord_publish": False},
+        max_daily_budget_usd=Decimal("1.00"),
+        consent_version="v1",
+    )
+
+
+def _block(conn: Connection, a: Person, b: Person) -> None:
+    settings.block_agent(conn, b.profile, b.agent, a.agent)
+
+
+def _unlink(conn: Connection, a: Person, b: Person) -> None:
+    from alter_domain import discord_link
+
+    discord_link.disconnect(conn, a.profile)
+
+
+def _dm_off(conn: Connection, a: Person, b: Person) -> None:
+    settings.update_preferences(conn, a.profile, {"discord_dm_notifications": False})
+
+
+WITHDRAWALS: dict[str, tuple[str, Callable[[Connection, Person, Person], None]]] = {
+    "post-publish-off": ("post", _publish_off),
+    "post-block": ("post", _block),
+    "post-unlink": ("post", _unlink),
+    "dm-off": ("dm", _dm_off),
+    "dm-unlink": ("dm", _unlink),
+}
+
+
+@pytest.fixture
+def withdrawal_audits(engine: Engine, world: tuple[Person, Person]) -> Iterator[None]:
+    """連携解除が残す監査を消す（運用のテストが Discord の監査を数えるため）。"""
+    yield
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "delete from public.audit_events where action like 'discord.%' "
+                "and actor_profile_id = any(:p)"
+            ),
+            {"p": [p.profile for p in world]},
+        )
+
+
+def _claim(conn: Connection, kind: str, a: Person) -> Any:
+    if kind == "post":
+        return dd.claim_next_post(conn)
+    # 撤回するのは a の DM。b の DM は対象外なので、a の行が出るまで取り出す
+    while (job := dd.claim_next_dm(conn)) is not None:
+        if job.discord_user_id == a.discord_id:
+            return job
+    return None
+
+
+def _status(engine: Engine, kind: str, cid: uuid.UUID, a: Person) -> str:
+    if kind == "post":
+        return str(_post_rows(engine, cid)[0].status)
+    return next(str(r.status) for r in _dm_rows(engine, cid) if r.discord_user_id == a.discord_id)
+
+
+@pytest.mark.parametrize("name", WITHDRAWALS)
+def test_withdrawal_first_wins_over_claim(
+    engine: Engine, world: tuple[Person, Person], withdrawal_audits: None, name: str
+) -> None:
+    kind, withdraw = WITHDRAWALS[name]
+    a, b = world
+    cid = _conversation(engine, a, b)
+    run(engine, dd.enqueue_after_completion, cid)
+    with engine.connect() as web, engine.connect() as bot:
+        with web.begin():
+            withdraw(web, a, b)
+            with bot.begin():
+                # 撤回の確定前でも、取り出しは待たずに（skip locked）その行を飛ばす
+                bot.execute(text("set local lock_timeout = '2s'"))
+                assert _claim(bot, kind, a) is None
+    assert _status(engine, kind, cid, a) == "cancelled"
+    with engine.begin() as conn:
+        assert _claim(conn, kind, a) is None
+
+
+@pytest.mark.parametrize("name", WITHDRAWALS)
+def test_claim_first_keeps_sending_and_withdrawal_waits(
+    engine: Engine, world: tuple[Person, Person], withdrawal_audits: None, name: str
+) -> None:
+    import threading
+
+    kind, withdraw = WITHDRAWALS[name]
+    a, b = world
+    cid = _conversation(engine, a, b)
+    run(engine, dd.enqueue_after_completion, cid)
+    errors: list[BaseException] = []
+    finished = threading.Event()
+
+    def web_side() -> None:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("set local lock_timeout = '10s'"))
+                withdraw(conn, a, b)
+        except BaseException as exc:  # noqa: BLE001 - 主スレッドで判定する
+            errors.append(exc)
+        finally:
+            finished.set()
+
+    with engine.connect() as bot:
+        with bot.begin():
+            job = _claim(bot, kind, a)
+            assert job is not None
+            worker = threading.Thread(target=web_side)
+            worker.start()
+            # 撤回は取り出し中の行のロックを待つ（先に進んで行を取り消さない）
+            assert not finished.wait(0.5)
+        worker.join(15)
+    assert not worker.is_alive() and errors == []
+    # 先に取り出された行は送信を続け、結果を記録できる
+    assert _status(engine, kind, cid, a) == "sending"
+    if kind == "post":
+        run(engine, dd.mark_post_sent, job.delivery_id, "600000000000000009", "700000000000000009")
+        assert _status(engine, kind, cid, a) == "sent"
+    else:
+        run(engine, dd.mark_dm_sent, job.delivery_id, "700000000000000009")
+        assert _status(engine, kind, cid, a) == "sent"
+    # 撤回のあとは、残りを取り出さない
+    with engine.begin() as conn:
+        assert _claim(conn, kind, a) is None
